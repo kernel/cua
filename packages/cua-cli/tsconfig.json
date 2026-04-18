@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "include": ["src/**/*"],
+  "references": [
+    { "path": "../cua-translator" },
+    { "path": "../cua-openai" },
+    { "path": "../cua-anthropic" },
+    { "path": "../cua-gemini" },
+    { "path": "../ptywright" }
+  ]
+}

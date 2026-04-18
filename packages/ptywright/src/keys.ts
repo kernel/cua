@@ -1,0 +1,19 @@
+export type Key = string;
+
+export const KeyEnter: Key = "\r";
+export const KeyCtrlC: Key = "\x03";
+export const KeyCtrlD: Key = "\x04";
+export const KeyTab: Key = "\t";
+export const KeyBacktab: Key = "\x1b[Z";
+export const KeyEscape: Key = "\x1b";
+export const KeyBackspace: Key = "\x7f";
+export const KeyInsert: Key = "\x1b[2~";
+export const KeyDelete: Key = "\x1b[3~";
+export const KeyHome: Key = "\x1b[H";
+export const KeyEnd: Key = "\x1b[F";
+export const KeyPageUp: Key = "\x1b[5~";
+export const KeyPageDown: Key = "\x1b[6~";
+export const KeyArrowUp: Key = "\x1b[A";
+export const KeyArrowDown: Key = "\x1b[B";
+export const KeyArrowLeft: Key = "\x1b[D";
+export const KeyArrowRight: Key = "\x1b[C";

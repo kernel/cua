@@ -1,0 +1,26 @@
+{
+  "model": "fixture-model",
+  "browserSession": "fixture-session-123456",
+  "liveUrl": "https://fixture.invalid/live",
+  "interactions": [
+    {
+      "match": { "equals": "say hi" },
+      "steps": [
+        { "type": "assistant_text", "text": "fixture response", "chunkSize": 8, "chunkMs": 5 }
+      ]
+    },
+    {
+      "match": { "equals": "first line\nsecond line" },
+      "steps": [
+        { "type": "assistant_text", "text": "multiline ok" }
+      ]
+    },
+    {
+      "match": { "equals": "please run forever" },
+      "steps": [
+        { "type": "assistant_text", "text": "working...", "chunkSize": 5, "chunkMs": 10 },
+        { "type": "await_abort" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/cua-translator" },
+    { "path": "./packages/cua-openai" },
+    { "path": "./packages/cua-anthropic" },
+    { "path": "./packages/cua-gemini" },
+    { "path": "./packages/ptywright" },
+    { "path": "./packages/cua-cli" }
+  ]
+}

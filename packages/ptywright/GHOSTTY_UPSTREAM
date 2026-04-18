@@ -1,0 +1,8 @@
+{
+  "repo": "https://github.com/ghostty-org/ghostty",
+  "commit": "ca7516bea60190ee2e9a4f9182b61d318d107c6e",
+  "archiveUrl": "https://codeload.github.com/ghostty-org/ghostty/tar.gz/ca7516bea60190ee2e9a4f9182b61d318d107c6e",
+  "sha256": "6787008388f6781a564d18e7d594d48505809e8d2b35e3d9ff3e2b14b0905de2",
+  "version": "1.3.2-dev",
+  "zigVersion": "0.15.2"
+}

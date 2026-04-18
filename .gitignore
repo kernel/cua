@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.cursor/
+.dev/
+.refs/
+*.log
+.DS_Store
+*.tsbuildinfo
+packages/*/dist/
+packages/*/*.tsbuildinfo
+packages/*/native/build/
+packages/ptywright/.cache/

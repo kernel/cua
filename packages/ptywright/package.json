@@ -1,0 +1,28 @@
+{
+  "name": "@onkernel/ptywright",
+  "version": "0.1.0",
+  "description": "PTY-backed TUI regression harness using libghostty-vt",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "GHOSTTY_UPSTREAM",
+    "scripts",
+    "native/binding.gyp",
+    "native/src",
+    "native/build/Release"
+  ],
+  "scripts": {
+    "build": "tsc -b && npm run build:native",
+    "build:native": "node ./scripts/build-ghostty.mjs && node-gyp rebuild --directory native",
+    "clean": "tsc -b --clean",
+    "clean:native": "node-gyp clean --directory native",
+    "test": "node --test dist/test/*.test.js"
+  },
+  "gypfile": false,
+  "dependencies": {
+    "node-addon-api": "^8.7.0",
+    "node-pty": "^1.1.0"
+  }
+}
