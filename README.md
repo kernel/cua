@@ -1,18 +1,12 @@
 # cua
 
-A computer-use agent for the terminal: drive a real cloud browser with
-[GPT-5.4](https://platform.openai.com/),
-[Claude Opus 4.7](https://platform.claude.com/), or
-[Gemini 2.5 Pro](https://ai.google.dev/gemini-api/docs)
-from a single CLI.
+A computer-use CLI for agents (and TUI for humans) built on [pi-agent](https://github.com/badlogic/pi-mono/tree/main/packages/agent). 
 
 ```bash
 cua "go to news.ycombinator.com and tell me the top 3 story titles"
 ```
 
-`cua` provisions a [Kernel cloud browser](https://kernel.sh/), turns the
-model's computer-use tool calls into real mouse/keyboard/scroll/screenshot
-actions, and streams the result back to your terminal.
+`cua` provisions a [Kernel cloud browser](https://kernel.sh/), turns the model's computer-use tool calls into real mouse/keyboard/scroll/screenshot actions, and streams the result back to your terminal.
 
 ---
 
@@ -34,14 +28,10 @@ All three expect you to:
 
 1. Run a real browser somewhere (locally is annoying, on a server is hard).
 2. Translate every action into an actual SDK call against that browser.
-3. Capture a fresh screenshot after each action and feed it back to the
-   model so it can verify what happened and plan the next step.
+3. Capture a fresh screenshot after each action and feed it back to the model so it can verify what happened and plan the next step.
 4. Keep doing this in a loop until the task is done.
 
-`cua` does all of that for you with one CLI. The repo is structured as
-several focused npm packages so the per-provider plumbing is also
-reusable outside of this binary (e.g. by
-[`kernel/cli`](https://github.com/kernel/cli) templates).
+`cua` does all of this for you. The repo is structured as several focused npm packages so the per-provider plumbing is also reusable outside of this binary (e.g. by agents of your own spun up via [`kernel/cli`](https://github.com/kernel/cli) templates).
 
 ---
 
