@@ -3,6 +3,26 @@
 This document explains how `cua` is wired together. It's aimed at
 someone who wants to read the code, contribute, or fork.
 
+## Design goals and invariants
+
+- Provider packages are generic glue between a model provider and Kernel
+  browsers. Their package roots expose provider-neutral helpers, tool
+  specs, and execution functions that can be embedded in non-`pi` loops.
+- `pi-agent-core` integrations live behind explicit `/pi` subpaths:
+  `@onkernel/cua-openai/pi`, `@onkernel/cua-anthropic/pi`, and
+  `@onkernel/cua-gemini/pi`. Keep `AgentTool`, `pi-ai`, payload-hook,
+  and stream-wrapper compatibility code out of the package roots.
+- `@onkernel/cua-translator` owns the canonical `ModelAction[]`
+  vocabulary and the Kernel SDK execution path. Provider packages adapt
+  provider-native action shapes into that vocabulary before dispatch.
+- `@onkernel/cua-cli` owns orchestration: config, model routing,
+  provider `/pi` bindings, coding tools, skills, sessions, output modes,
+  and the TUI. It should compose providers, not define their wire
+  schemas.
+- `@onkernel/ptywright` is development/test infrastructure for terminal
+  and TUI regression tests. It is part of the monorepo build graph, but
+  not part of the runtime browser/model/provider path.
+
 ## Layers
 
 `cua` is a thin TypeScript monorepo on top of the
@@ -10,10 +30,13 @@ someone who wants to read the code, contribute, or fork.
 
 ```text
 @onkernel/cua-cli (the binary)
-├── @onkernel/cua-openai
-├── @onkernel/cua-anthropic       (depend on @onkernel/cua-translator)
-├── @onkernel/cua-gemini
+├── @onkernel/cua-openai          (root = generic; /pi = pi-agent-core bindings)
+├── @onkernel/cua-anthropic       (root = generic; /pi = pi-agent-core bindings)
+├── @onkernel/cua-gemini          (root = generic; /pi = pi-agent-core bindings)
 └── @onkernel/cua-translator      (the only package that talks to @onkernel/sdk directly)
+
+Dev/test:
+└── @onkernel/ptywright           (PTY-backed TUI regression harness)
 
 External:
 ├── @mariozechner/pi-agent-core   # Agent loop, tool execution, streaming, steering
@@ -31,6 +54,7 @@ flowchart LR
   ant[("@onkernel/cua-anthropic")]
   gem[("@onkernel/cua-gemini")]
   cli[("@onkernel/cua-cli")]
+  pty[("@onkernel/ptywright")]
   pi[("pi-agent-core / pi-ai / pi-tui / pi-coding-agent")]
   sdk[("@onkernel/sdk")]
   trans --> oai
@@ -41,12 +65,15 @@ flowchart LR
   ant --> cli
   gem --> cli
   pi --> cli
+  pty --> cli
 ```
 
 `tsc -b` from the repo root builds packages in dependency order via
-TypeScript project references; `npm install` symlinks workspace
-packages so each package's `@onkernel/cua-*` import resolves to the
-local `dist/`.
+TypeScript project references, including `@onkernel/ptywright` before
+`@onkernel/cua-cli`. `npm install` symlinks workspace packages so each
+package's `@onkernel/cua-*` import resolves to the local `dist/`.
+The root `npm run build` also runs `@onkernel/ptywright`'s native
+Ghostty-backed addon build when present.
 
 ## Per-package responsibilities
 
@@ -80,6 +107,10 @@ calling `executeBatch`.
 
 OpenAI adapter.
 
+- Package root is provider-neutral: `openai(modelId)`, tool specs,
+  execution helpers, official action schemas, and prompt constants.
+- `/pi` subpath owns `pi-agent-core` bindings:
+  `createOpenAIComputerTools`.
 - `official.ts` — TypeBox schemas + types for OpenAI's official 9
   computer actions (`click`, `double_click`, `scroll`, `type`, `wait`,
   `keypress`, `drag`, `move`, `screenshot`) with the optional `keys`
@@ -100,6 +131,12 @@ OpenAI adapter.
 
 Anthropic Claude adapter.
 
+- Package root is provider-neutral: `anthropic(modelId)`, built-in
+  computer/batch execution helpers, tool specs, and prompt builders.
+- `/pi` subpath owns `pi-agent-core` bindings and transport glue:
+  `createAnthropicComputerTools`, `anthropicComputerOnPayload`,
+  `composeOnPayload`, `wrapAnthropicStream`, and
+  `registerAnthropicProvider`.
 - `official.ts` — action types for `computer_20241022`,
   `computer_20250124`, `computer_20251124` plus `ANTHROPIC_COMPUTER_TOOL`
   spec const + `ANTHROPIC_COMPUTER_USE_BETA` header value. Cites
@@ -123,6 +160,11 @@ Anthropic Claude adapter.
 
 Google Gemini adapter.
 
+- Package root is provider-neutral: `gemini(modelId)`, Gemini function
+  declarations, execution helpers, coordinate helpers, and prompt
+  builders.
+- `/pi` subpath owns `pi-agent-core` bindings:
+  `createGeminiComputerTools`.
 - `official.ts` — `GeminiAction` enum +
   `PREDEFINED_COMPUTER_USE_FUNCTIONS` + `GeminiFunctionArgs`. Cites
   [ai.google.dev/gemini-api/docs/computer-use](https://ai.google.dev/gemini-api/docs/computer-use).
@@ -170,6 +212,20 @@ The `cua` binary itself. Wires the four packages above into a
 - `output/jsonl.ts` — JSONL event sink for `-o jsonl`.
 - `tui/` — pi-tui Terminal + Editor + container layout, screenshot
   widget, status line, capabilities banner, message list.
+
+### `@onkernel/ptywright`
+
+PTY-backed TUI regression harness used by `@onkernel/cua-cli` tests.
+It is a workspace package and `cua-cli` dev dependency, not a runtime
+browser or provider adapter.
+
+- `terminal.ts` — in-memory Ghostty VT parser wrapper for rendered
+  terminal snapshots.
+- `session.ts` — PTY child-process driver for end-to-end TUI/CLI tests.
+- `keys.ts` — key helpers for driving terminal sessions.
+- `native-loader.ts` — loads the native Ghostty-backed addon.
+- `scripts/build-ghostty.mjs` — downloads, verifies, and builds the
+  pinned Ghostty `libghostty-vt` source used by the native addon.
 
 ## The canonical `batch_computer_actions` action union
 
@@ -282,6 +338,11 @@ The seam is in `packages/cua-cli/src/agent.ts:createCuaAgent`, which:
 5. Composes the per-provider `onPayload` hooks and wraps `streamSimple`
    with `wrapAnthropicStream`.
 
+That seam is intentionally `pi`-specific. Consumers that do not want the
+`pi-agent-core` loop should use package-root helpers such as
+`openai(...)`, `anthropic(...)`, or `gemini(...)` with
+`runComputerUse()` instead of importing from `/pi`.
+
 ## Component map
 
 ```mermaid
@@ -310,6 +371,7 @@ flowchart LR
   cli --> namedSessionsMod["cua-cli/src/named-sessions.ts"]
   cli --> skillsMod["cua-cli/src/skills.ts (loadSkills)"]
   cli --> jsonl["cua-cli/src/output/jsonl.ts"]
+  pty["ptywright (dev/test only)"] --> tui
 ```
 
 ## Provider-specific gotchas
