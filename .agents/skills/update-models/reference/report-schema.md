@@ -32,6 +32,13 @@ Use this shape for JSON reports and the same fields when writing a Markdown summ
       "created_at": "2026-04-01T00:00:00.000Z",
       "raw": {},
       "supports_generation": true,
+      "model_docs": {
+        "url": "https://developers.openai.com/api/docs/models/gpt-5.5",
+        "streaming": "supported",
+        "function_calling": "supported",
+        "computer_use": "supported",
+        "responses_endpoint": "supported"
+      },
       "computer_use": {
         "status": "pass",
         "tool_name": "computer",
@@ -81,6 +88,7 @@ Use this order:
 5. CUA support changes needed:
    - default model update
    - `pi-ai` registry present or dynamic fallback needed
+   - model-specific docs do not block required runtime features
    - provider routing update
    - adapter action/tool version update
    - docs/config examples update

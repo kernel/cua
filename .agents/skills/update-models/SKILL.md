@@ -50,6 +50,7 @@ Use all four evidence sources when possible:
 
 - Provider metadata APIs: tells us what models are available to this API key.
 - Official docs: tells us intended tool names, dated beta headers, and documented action vocabularies.
+- Model-specific docs: tells us endpoint, streaming, feature, and tool support for a specific model ID.
 - Official example repos: shows real response parsing, action execution, safety handling, and follow-up payload shapes.
 - Live smoke tests: confirms the current model/API combination can emit provider-native computer-use tool calls.
 
@@ -70,6 +71,9 @@ OpenAI:
 
 - Discover with `OpenAI().models.list()` and optionally `models.retrieve(modelId)`.
 - OpenAI model metadata is sparse (`id`, `created`, `owned_by`), so computer-use support must be smoke-tested.
+- Check the model-specific docs page at `https://developers.openai.com/api/docs/models/<model>` before adding support. For aliases/snapshots, check the canonical family page too, e.g. `gpt-5.5-pro-2026-04-23` -> `gpt-5.5-pro`.
+- For CUA CLI support, require `Responses` endpoint support, `Streaming` support, and `Function calling` support. Do not list models like `gpt-5.5-pro` that say `Streaming: Not supported`.
+- For provider-native OpenAI computer use, require `Computer use: Supported`. If a model supports function calling but not native `computer`, label it custom-tool-only and do not treat it as provider-native computer-use support.
 - Smoke-test `responses.create` with `tools: [{ type: "computer" }]` and `tool_choice: { type: "computer" }`.
 - Pass condition: response output contains `type: "computer_call"` with `actions[]` or legacy `action`.
 - Audit official examples for `computer_call`, `actions`, `computer_call_output`, `pending_safety_checks`, and screenshot payload handling.
@@ -112,6 +116,7 @@ The probe does not execute browser actions. It elicits tool calls for screenshot
 Recommend a model as a CUA default only if:
 
 - It appears in the provider metadata API for the available key.
+- Its model-specific docs do not rule out required CUA runtime features such as streaming.
 - Its provider-native computer-use smoke test passes.
 - Official docs or examples support the same tool mechanism, or the smoke result clearly supersedes stale docs.
 - The model is added to the exact supported model table that powers `cua models`, either via `pi-ai` registry filtering or a CUA override.

@@ -31,6 +31,7 @@ interface ModelResult {
 	raw?: unknown;
 	supports_generation?: boolean;
 	computer_use?: SmokeResult | Record<string, unknown>;
+	model_docs?: Record<string, unknown>;
 	cua?: Record<string, unknown>;
 }
 
@@ -147,6 +148,7 @@ async function discoverOpenAI(args: Args): Promise<Record<string, unknown>> {
 		.sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")));
 
 	const candidates = explicitOrCandidates(args, models.filter((m) => m.supports_generation).map((m) => m.id));
+	await annotateOpenAIModelDocs(models.filter((m) => candidates.includes(m.id)));
 	if (args.smoke) {
 		await Promise.all(candidates.map(async (id) => {
 			const model = models.find((m) => m.id === id) ?? { id, display_name: id, supports_generation: true };
@@ -162,6 +164,51 @@ function likelyOpenAIGenerationModel(id: string): boolean {
 	const lower = id.toLowerCase();
 	if (OPENAI_EXCLUDE.some((needle) => lower.includes(needle))) return false;
 	return lower.startsWith("gpt-") || /^o\d/.test(lower) || lower.includes("computer-use");
+}
+
+async function annotateOpenAIModelDocs(models: ModelResult[]): Promise<void> {
+	await Promise.all(models.map(async (model) => {
+		model.model_docs = await fetchOpenAIModelDocs(model.id);
+	}));
+}
+
+async function fetchOpenAIModelDocs(modelId: string): Promise<Record<string, unknown>> {
+	const docId = canonicalOpenAIModelDocId(modelId);
+	const url = `https://developers.openai.com/api/docs/models/${docId}`;
+	try {
+		const response = await fetch(url);
+		const text = await response.text();
+		return {
+			url,
+			ok: response.ok,
+			streaming: supportStatus(text, "Streaming"),
+			function_calling: supportStatus(text, "Function calling"),
+			computer_use: supportStatus(text, "Computer use"),
+			responses_endpoint: text.includes("v1/responses") ? "supported" : "unknown",
+		};
+	} catch (err) {
+		return {
+			url,
+			ok: false,
+			error: publicError(err),
+		};
+	}
+}
+
+function canonicalOpenAIModelDocId(modelId: string): string {
+	return modelId.replace(/-\d{4}-\d{2}-\d{2}$/, "");
+}
+
+function supportStatus(text: string, label: string): "supported" | "not_supported" | "unknown" {
+	const compact = text.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ");
+	const re = new RegExp(`${escapeRegex(label)}\\s+(Supported|Not supported)`, "i");
+	const match = compact.match(re);
+	if (!match) return "unknown";
+	return match[1]?.toLowerCase() === "supported" ? "supported" : "not_supported";
+}
+
+function escapeRegex(value: string): string {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 async function smokeOpenAI(client: any, model: string): Promise<SmokeResult> {

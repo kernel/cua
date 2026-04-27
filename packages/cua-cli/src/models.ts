@@ -21,8 +21,6 @@ const CUA_MODEL_OVERRIDES: Record<ProviderId, SupportedModel[]> = {
 	openai: [
 		{ provider: "openai", model: "gpt-5.5", name: "GPT-5.5", origin: "cua-override", default: true },
 		{ provider: "openai", model: "gpt-5.5-2026-04-23", name: "GPT-5.5 (2026-04-23)", origin: "cua-override" },
-		{ provider: "openai", model: "gpt-5.5-pro", name: "GPT-5.5 Pro", origin: "cua-override" },
-		{ provider: "openai", model: "gpt-5.5-pro-2026-04-23", name: "GPT-5.5 Pro (2026-04-23)", origin: "cua-override" },
 	],
 	anthropic: [],
 	gemini: [
