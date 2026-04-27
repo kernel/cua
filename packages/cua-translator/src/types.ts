@@ -3,7 +3,7 @@
  *
  * `ModelAction` is the high-level shape any provider adapter normalizes to
  * before handing it to the translator. It happens to mirror the shape that
- * OpenAI's `gpt-5.4` `computer` tool emits today (`{type:"click", x, y, ...}`)
+ * OpenAI's `computer` tool emits today (`{type:"click", x, y, ...}`)
  * because that schema has the broadest action vocabulary, but it is in no
  * way OpenAI-specific — provider packages map their own action shape to it.
  *

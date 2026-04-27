@@ -14,7 +14,7 @@ cua "go to news.ycombinator.com and tell me the top 3 story titles"
 
 Every frontier model now ships its own first-party "computer use" tool:
 
-- **OpenAI gpt-5.4**: a built-in `computer` tool that emits actions like
+- **OpenAI gpt-5.5**: a built-in `computer` tool that emits actions like
   `{type:"click", x, y}`, `{type:"scroll", x, y, scroll_x, scroll_y}`,
   `{type:"keypress", keys:[...]}`, …
 - **Anthropic claude-opus-4-7**: a built-in `computer_20251124` tool that
@@ -40,7 +40,7 @@ All three expect you to:
 ```
 packages/
 ├── cua-translator/   # @onkernel/cua-translator   - shared SDK types + translator + browser-session
-├── cua-openai/       # @onkernel/cua-openai       - gpt-5.4 (batch_computer_actions + computer_use_extra)
+├── cua-openai/       # @onkernel/cua-openai       - gpt-* (batch_computer_actions + computer_use_extra)
 ├── cua-anthropic/    # @onkernel/cua-anthropic    - claude-* (computer_20251124 + batch_computer_actions + onPayload)
 ├── cua-gemini/       # @onkernel/cua-gemini       - gemini-* (predefined functions + batch_computer_actions)
 └── cua-cli/          # @onkernel/cua-cli          - the CLI; depends on all four above
@@ -68,7 +68,7 @@ flowchart LR
 | Package                                               | What it ships                                                                                                                            |
 | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | [`@onkernel/cua-translator`](packages/cua-translator) | Provider-agnostic `ComputerTranslator`, key/scroll/drag math, `goto`/`back`/`forward`/`url` builders, browser-session helper.            |
-| [`@onkernel/cua-openai`](packages/cua-openai)         | `batch_computer_actions` + `computer_use_extra` AgentTools and JSON Schemas for OpenAI gpt-5.4.                                          |
+| [`@onkernel/cua-openai`](packages/cua-openai)         | `batch_computer_actions` + `computer_use_extra` AgentTools and JSON Schemas for OpenAI computer-use models.                              |
 | [`@onkernel/cua-anthropic`](packages/cua-anthropic)   | `computer` (built-in `computer_20251124`) + `batch_computer_actions` AgentTools, beta-header stream wrapper, payload hook.               |
 | [`@onkernel/cua-gemini`](packages/cua-gemini)         | 13 per-action AgentTools matching Gemini's predefined computer-use functions, plus `batch_computer_actions`. Coordinate denormalization. |
 | [`@onkernel/cua-cli`](packages/cua-cli)               | The `cua` binary: argv parsing, config, sessions, skills, JSONL output, pi-tui front-end.                                                |
@@ -92,13 +92,16 @@ ln -s "$(pwd)/bin/cua" ~/.local/bin/cua
 cua config init                              # interactive: profile name + API keys
 
 # ...or rely on env vars
-export OPENAI_API_KEY=sk-...                 # for gpt-5.4
+export OPENAI_API_KEY=sk-...                 # for gpt-5.5
 export ANTHROPIC_API_KEY=sk-ant-...          # for claude-opus-4-7
 export GOOGLE_API_KEY=...                    # for gemini-3-flash-preview
 export KERNEL_API_KEY=sk_...                 # always required
 
 # single-shot
 cua -p "Open https://news.ycombinator.com and tell me the top story"
+
+# list supported model ids
+cua models
 
 # Claude
 cua -p --model claude-opus-4-7 "Same prompt"
@@ -154,7 +157,7 @@ cua -p -o jsonl "open example.com and tell me the heading"
 
 Per-provider differences in one place:
 
-|                       | OpenAI gpt-5.4                                           | Anthropic claude-opus-4-7                                           | Google gemini-2.5-pro                                                 |
+|                       | OpenAI gpt-5.5                                           | Anthropic claude-opus-4-7                                           | Google gemini-3-flash-preview                                         |
 | --------------------- | -------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | Transport             | HTTP SSE (`api.openai.com/v1/responses`)                 | HTTP SSE (`api.anthropic.com/v1/messages`)                          | HTTP SSE (`generativelanguage.googleapis.com`)                        |
 | Beta header           | none                                                     | `anthropic-beta: computer-use-2025-11-24`                           | none                                                                  |
@@ -175,7 +178,8 @@ full CLI reference, configuration schema, and provider routing rules.
 Highlights:
 
 - `-p`/`--print` for single-shot mode; `-o jsonl` for structured output.
-- `-m`/`--model <id>` plus optional `--provider openai|anthropic|gemini`.
+- `cua models` to list supported `-m`/`--model` values and their providers.
+- `-m`/`--model <id>` to choose one of those supported models.
 - `-s`/`--session-name <name>` to reuse a `cua session start`-allocated
   Kernel browser across calls.
 - `-c`/`--continue`, `-r`/`--resume`, `--session <ref>` for transcript
@@ -357,7 +361,7 @@ packages/
 │       └── browser-session.ts  # @onkernel/sdk wrapper (open + attach)
 ├── cua-openai/
 │   └── src/
-│       ├── official.ts         # OpenAI gpt-5.4 official 9 actions (TypeBox + JSDoc citations)
+│       ├── official.ts         # OpenAI computer-use official 9 actions (TypeBox + JSDoc citations)
 │       ├── cua-extras.ts       # cua-added actions schema
 │       ├── batch-tool.ts       # batch_computer_actions AgentTool
 │       ├── extra-tool.ts       # computer_use_extra AgentTool

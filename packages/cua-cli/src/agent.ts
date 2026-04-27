@@ -9,7 +9,6 @@ import {
 import {
 	type Api,
 	type Model,
-	getModel,
 	registerApiProvider,
 	streamGoogle,
 	streamOpenAIResponses,
@@ -57,15 +56,14 @@ import {
 	resolveGeminiModelConfig,
 	resolveOpenAIModelConfig,
 } from "./config.js";
+import {
+	DEFAULT_MODEL_ID,
+	type ProviderId,
+	loadModel as loadSupportedModel,
+} from "./models.js";
 import { appendSkillsToSystemPrompt, type Skill } from "./skills.js";
 
 let providersRegistered = false;
-
-/**
- * Supported provider ids. Drives tool selection, system prompt, payload
- * hooks, and API-key routing.
- */
-export type ProviderId = "openai" | "anthropic" | "gemini";
 
 /**
  * Eagerly register the providers we use. pi-ai's lazy dynamic-import
@@ -85,21 +83,6 @@ export function registerProviders(): void {
 		streamSimple: streamSimpleGoogle,
 	});
 	providersRegistered = true;
-}
-
-/**
- * Resolve which provider to route a model id to. Explicit override wins;
- * otherwise we infer from the model id prefix.
- *   gemini-*, google/gemini-*, models/gemini-* → gemini
- *   claude-*, anthropic.*                      → anthropic
- *   everything else                            → openai
- */
-export function resolveProvider(modelId: string, override?: ProviderId): ProviderId {
-	if (override) return override;
-	const id = modelId.trim().toLowerCase();
-	if (id.startsWith("claude-") || id.startsWith("anthropic.")) return "anthropic";
-	if (id.startsWith("gemini-") || id.startsWith("models/gemini-") || id.startsWith("google/gemini-")) return "gemini";
-	return "openai";
 }
 
 function mapReasoningEffort(effort: string | undefined): ThinkingLevel {
@@ -127,8 +110,7 @@ export interface CuaAgentOptions {
 	cwd: string;
 	browser: BrowserSession;
 	config: Config;
-	modelId?: string; // default "gpt-5.4"
-	provider?: ProviderId; // explicit override; otherwise inferred from model id
+	modelId?: string; // default DEFAULT_MODEL_ID
 	additionalSystemPrompt?: string;
 	skills?: Skill[];
 	sessionId?: string;
@@ -153,9 +135,8 @@ export interface CuaAgentHandle {
 export function createCuaAgent(opts: CuaAgentOptions): CuaAgentHandle {
 	registerProviders();
 
-	const modelId = opts.modelId ?? "gpt-5.4";
-	const provider = resolveProvider(modelId, opts.provider);
-	const model = loadModel(provider, modelId);
+	const modelId = opts.modelId ?? DEFAULT_MODEL_ID;
+	const { provider, model } = loadSupportedModel(modelId);
 
 	const modelConfig = resolveModelConfigForProvider(provider, opts.config, modelId);
 	const thinkingLevel = mapReasoningEffort(modelConfig.reasoningEffort);
@@ -306,33 +287,6 @@ function resolveModelConfigForProvider(
 	}
 }
 
-/**
- * Map cua's `ProviderId` to pi-ai's provider field. They mostly match, but
- * pi-ai uses `"google"` for Gemini Generative AI models while we use
- * `"gemini"` to keep the LLM provider name aligned with the model family.
- */
-function piProviderFor(provider: ProviderId): string {
-	switch (provider) {
-		case "openai":
-			return "openai";
-		case "anthropic":
-			return "anthropic";
-		case "gemini":
-			return "google";
-	}
-}
-
-function loadModel(provider: ProviderId, modelId: string): Model<Api> {
-	const piProvider = piProviderFor(provider);
-	// pi-ai's getModel is typed against its known model registry; cast
-	// to allow user-supplied ids that pi-ai may know about even if they
-	// aren't in the literal union. It returns undefined (NOT throws) for
-	// unknown ids.
-	const fromRegistry = getModel(piProvider as never, modelId as never) as Model<Api> | undefined;
-	if (fromRegistry) return fromRegistry;
-	throw new Error(`unknown ${provider} model "${modelId}" (not in pi-ai registry)`);
-}
-
 function resolveApiKey(provider: ProviderId, cfg: Config): string | undefined {
 	switch (provider) {
 		case "openai":
@@ -361,3 +315,5 @@ function injectContextManagement(payload: unknown, compactThreshold: number): un
 }
 
 export type { Agent, AgentEvent, AgentMessage };
+export { DEFAULT_MODEL_ID };
+export type { ProviderId };

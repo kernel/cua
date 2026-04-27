@@ -1,8 +1,8 @@
 /**
- * OpenAI gpt-5.4 system-prompt preamble for the batch_computer_actions /
+ * OpenAI computer-use system-prompt preamble for the batch_computer_actions /
  * computer_use_extra tool surface.
  *
- * Why a preamble at all? OpenAI's gpt-5.4 documentation tells the model
+ * Why a preamble at all? OpenAI's computer-use documentation tells the model
  * how the native `computer` tool works, but we register custom function
  * tools instead (see `./official.ts` for why). The preamble teaches the
  * model how to use our function tools, when to prefer batched actions,

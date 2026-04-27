@@ -38,7 +38,7 @@ import { openai } from "@onkernel/cua-openai";
 const browser = await browserSession.open({ apiKey: process.env.KERNEL_API_KEY! });
 
 const result = await runComputerUse({
-  model: openai("gpt-5.4"),
+  model: openai("gpt-5.5"),
   browser,
   prompt: "Open https://example.com and tell me the heading.",
 });
@@ -85,15 +85,15 @@ await agent.prompt("Open https://example.com and tell me the heading.");
 
 | Action         | Source                  | Notes                                                                                          |
 | -------------- | ----------------------- | ---------------------------------------------------------------------------------------------- |
-| `click`        | official (gpt-5.4)      | `{x, y, button?, hold_keys?}`. [Docs](https://platform.openai.com/docs/guides/tools-computer-use). |
-| `double_click` | official (gpt-5.4)      | `{x, y, hold_keys?}`.                                                                          |
-| `scroll`       | official (gpt-5.4)      | `{x, y, scroll_x?, scroll_y?, hold_keys?}`. Pixel deltas (~120 per wheel notch).               |
-| `type`         | official (gpt-5.4)      | `{text}`.                                                                                      |
-| `wait`         | official (gpt-5.4)      | `{ms?}`. Default 1000ms.                                                                       |
-| `keypress`     | official (gpt-5.4)      | `{keys: string[]}`. Right-most non-modifier becomes primary; rest are modifiers.               |
-| `drag`         | official (gpt-5.4)      | `{path: {x, y}[]}`. Two or more points.                                                        |
-| `move`         | official (gpt-5.4)      | `{x, y}`. Hover.                                                                               |
-| `screenshot`   | official (gpt-5.4)      | Read step. Returns a fresh PNG in tool result.                                                 |
+| `click`        | official (OpenAI)       | `{x, y, button?, hold_keys?}`. [Docs](https://platform.openai.com/docs/guides/tools-computer-use). |
+| `double_click` | official (OpenAI)       | `{x, y, hold_keys?}`.                                                                          |
+| `scroll`       | official (OpenAI)       | `{x, y, scroll_x?, scroll_y?, hold_keys?}`. Pixel deltas (~120 per wheel notch).               |
+| `type`         | official (OpenAI)       | `{text}`.                                                                                      |
+| `wait`         | official (OpenAI)       | `{ms?}`. Default 1000ms.                                                                       |
+| `keypress`     | official (OpenAI)       | `{keys: string[]}`. Right-most non-modifier becomes primary; rest are modifiers.               |
+| `drag`         | official (OpenAI)       | `{path: {x, y}[]}`. Two or more points.                                                        |
+| `move`         | official (OpenAI)       | `{x, y}`. Hover.                                                                               |
+| `screenshot`   | official (OpenAI)       | Read step. Returns a fresh PNG in tool result.                                                 |
 | `goto`         | cua extension           | `{url}`. Compiles to ctrl+l → ctrl+a → type → Enter.                                           |
 | `back`         | cua extension           | Alt+Left.                                                                                      |
 | `forward`      | cua extension           | Alt+Right.                                                                                     |
@@ -185,7 +185,7 @@ const translator = new ComputerTranslator({ client: browser.client, sessionId: b
 
 const openai = new OpenAI();
 const response = await openai.responses.create({
-  model: "gpt-5.4",
+  model: "gpt-5.5",
   tools: openaiTools({ includeNativeComputer: false }) as any,
   input: [{ role: "user", content: "Open https://example.com" }],
 });

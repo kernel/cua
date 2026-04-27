@@ -17,8 +17,9 @@ import type { BrowserSession } from "@onkernel/cua-translator";
 import { homedir } from "node:os";
 import { relative } from "node:path";
 import { stderr } from "node:process";
-import { type ProviderId, createCuaAgent, resolveProvider } from "../agent.js";
+import { createCuaAgent } from "../agent.js";
 import type { Config } from "../config.js";
+import { DEFAULT_MODEL_ID, resolveProvider } from "../models.js";
 import {
 	appendBrowserMetadata,
 	persistAgentEvents,
@@ -39,7 +40,6 @@ export interface InteractiveOptions {
 	browser: BrowserSession;
 	config: Config;
 	modelId?: string;
-	provider?: ProviderId;
 	initialPrompt?: string;
 	verbose?: boolean;
 	/** Image protocol override: kitty | iterm2 | none | auto (default: auto). */
@@ -68,7 +68,7 @@ export async function runInteractive(opts: InteractiveOptions): Promise<number> 
 	const { summary: capsSummary, overridden } = applyAndSummarizeImageProtocol(opts.imageProtocol);
 	const debug = opts.debugTui ? openTuiDebugLog() : undefined;
 	debug?.log("interactive_init", {
-		model: opts.modelId ?? "gpt-5.4",
+		model: opts.modelId ?? DEFAULT_MODEL_ID,
 		browserSession: opts.browser.sessionId,
 		liveUrl: opts.browser.liveUrl,
 		capsSummary,
@@ -99,7 +99,6 @@ export async function runInteractive(opts: InteractiveOptions): Promise<number> 
 				browser: opts.browser,
 				config: opts.config,
 				modelId: opts.modelId,
-				provider: opts.provider,
 				sessionId: opts.browser.sessionId,
 				skills: opts.skills,
 			});
@@ -107,13 +106,13 @@ export async function runInteractive(opts: InteractiveOptions): Promise<number> 
 	const messages = new MessageList();
 	const screenshot = new ScreenshotWidget();
 	const status = new StatusLine({
-		model: opts.modelId ?? "gpt-5.4",
+		model: opts.modelId ?? DEFAULT_MODEL_ID,
 		browserSession: opts.browser.sessionId,
 		liveUrl: opts.browser.liveUrl,
 	});
 	const footer = new TelemetryFooter({
-		provider: liveHandle?.provider ?? resolveProvider(opts.modelId ?? "gpt-5.4", opts.provider),
-		model: liveHandle?.model.id ?? (opts.modelId ?? "gpt-5.4"),
+		provider: liveHandle?.provider ?? (opts.driver ? "fixture" : resolveProvider(opts.modelId ?? DEFAULT_MODEL_ID)),
+		model: liveHandle?.model.id ?? (opts.modelId ?? DEFAULT_MODEL_ID),
 		thinkingLevel: liveHandle?.thinkingLevel,
 		contextWindow: liveHandle?.model.contextWindow,
 		autoCompactEnabled: isAutoCompactEnabled(liveHandle),

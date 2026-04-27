@@ -37,10 +37,11 @@ cua observe "what page is loaded?"
 cua screenshot --out shot.png
 cua do "buy a pair of socks on amazon" --max-steps 20
 
-# Pick a provider explicitly (otherwise inferred from model id):
-cua --print --model claude-opus-4-7                          "..."  # → anthropic
-cua --print --model gemini-3-flash-preview                   "..."  # → gemini
-cua --print --provider openai                                "..."
+# List and pick supported models:
+cua models
+cua models -p openai
+cua --print --model claude-opus-4-7 "..."
+cua --print --model gemini-3-flash-preview "..."
 
 # Named sessions (browser stays alive across calls):
 cua session start login                       # provisions Kernel browser
@@ -58,15 +59,14 @@ cua --resume                                  # picker
 cua --session abc12345                        # by id prefix
 ```
 
-## Provider routing
+## Models
 
-| `--model` prefix          | Provider    | API key env / config field                                    |
-| ------------------------- | ----------- | ------------------------------------------------------------- |
-| `gpt-*`                   | `openai`    | `OPENAI_API_KEY` / `openai_api_key`                           |
-| `claude-*`, `anthropic.*` | `anthropic` | `ANTHROPIC_API_KEY` / `anthropic_api_key`                     |
-| `gemini-*`                | `gemini`    | `GOOGLE_API_KEY` (or `GEMINI_API_KEY`) / `google_api_key`     |
+Run `cua models` to list every supported `-m` / `--model` value and the
+provider it routes to. Filter by provider with `cua models -p openai`,
+`cua models -p anthropic`, or `cua models -p gemini`.
 
-Override the inferred provider with `--provider openai|anthropic|gemini`.
+CUA routes by exact model id from this supported model table. Unknown model
+ids fail fast with a pointer to `cua models`.
 
 Recommended Gemini model id (from
 [Google's Computer Use docs](https://ai.google.dev/gemini-api/docs/computer-use)):
@@ -105,7 +105,7 @@ reasoning_effort  = "low"
 tool_preamble     = true
 
 [[profiles.default.openai.models]]
-name              = "gpt-5.4"
+name              = "gpt-5.5"
 reasoning_effort  = "medium"
 ```
 

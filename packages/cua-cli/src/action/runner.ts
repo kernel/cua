@@ -4,7 +4,7 @@ import { type BrowserSession, ComputerTranslator } from "@onkernel/cua-translato
 import { writeFile } from "node:fs/promises";
 import { stderr, stdout } from "node:process";
 import { promptWithScreenshot } from "../agent-prompt.js";
-import { type CuaAgentHandle, createCuaAgent, type ProviderId } from "../agent.js";
+import { type CuaAgentHandle, createCuaAgent } from "../agent.js";
 import type { Config } from "../config.js";
 import { persistAgentEvents, seedAgentFromSession } from "../sessions.js";
 import { type ActionRequest, buildPrompt, DEFAULT_MAX_TURNS } from "./prompts.js";
@@ -15,7 +15,6 @@ export interface RunOptions {
 	browser: BrowserSession;
 	config: Config;
 	modelId?: string;
-	provider?: ProviderId;
 	verbose?: boolean;
 	maxTurns?: number;
 	/**
@@ -60,7 +59,6 @@ export async function runAction(
 		browser: opts.browser,
 		config: opts.config,
 		modelId: opts.modelId,
-		provider: opts.provider,
 		sessionId: opts.browser.sessionId,
 	});
 

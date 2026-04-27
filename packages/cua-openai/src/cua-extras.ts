@@ -1,5 +1,5 @@
 /**
- * cua extension actions for the OpenAI gpt-5.4 batch tool.
+ * cua extension actions for the OpenAI batch tool.
  *
  * These four actions (`goto`, `back`, `forward`, `url`) are NOT part of
  * OpenAI's official `computer` tool action set — they are convenience

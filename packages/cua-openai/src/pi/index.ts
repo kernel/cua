@@ -11,7 +11,7 @@ export interface OpenAIComputerToolsOptions {
 }
 
 /**
- * Build the OpenAI gpt-5.4 computer-use tool set for `pi-agent-core`.
+ * Build the OpenAI computer-use tool set for `pi-agent-core`.
  * Pair with `OPENAI_BATCH_INSTRUCTIONS` from the root package.
  */
 export function createOpenAIComputerTools(

@@ -4,9 +4,16 @@ import { stderr, stdout } from "node:process";
 import { parseArgs } from "node:util";
 import { type ActionRequest, type ActionType } from "./action/prompts.js";
 import { emitCompact, runAction, type RunActionResult } from "./action/runner.js";
-import { createCuaAgent, type ProviderId, resolveProvider } from "./agent.js";
+import { createCuaAgent } from "./agent.js";
 import { promptWithScreenshot } from "./agent-prompt.js";
 import * as configMod from "./config.js";
+import {
+	DEFAULT_MODEL_ID,
+	SUPPORTED_PROVIDERS,
+	type ProviderId,
+	listSupportedModels,
+	resolveProvider,
+} from "./models.js";
 import {
 	attachNamedSession,
 	formatRelativeAge,
@@ -45,19 +52,17 @@ Usage:
   cua url
   cua screenshot [--out file|-]
   cua do "<instruction>"
+  cua models [-p provider]
   cua session start [name] | stop <name> | list | show <name>
   cua config init|show
 
 Options:
   -p, --print                    Run a single prompt and exit
-  -m, --model <id>               Model id (default: gpt-5.4)
+  -m, --model <id>               Model id (default: ${DEFAULT_MODEL_ID})
                                  Recommended:
-                                   openai:    gpt-5.4
+                                   openai:    ${DEFAULT_MODEL_ID}
                                    anthropic: claude-opus-4-7
-                                   gemini:    gemini-3-flash-preview (built-in computer use)
-      --provider <id>            Provider override: openai | anthropic | gemini
-                                 (auto-inferred from model id if omitted:
-                                  claude-* → anthropic, gemini-* → gemini, else openai)
+                                   gemini:    gemini-3-flash-preview
       --config-profile <p>       Config profile to load (default: from default_profile)
       --profile <name|id>        Kernel browser profile to load
       --profile-no-save-changes  Do not persist changes back to the profile
@@ -111,7 +116,6 @@ interface CliFlags {
 	jsonlIncludeDeltas: boolean;
 	jsonlIncludeImages: boolean;
 	model?: string;
-	provider?: ProviderId;
 	configProfile?: string;
 	browserProfile?: string;
 	browserTimeout?: number;
@@ -124,13 +128,6 @@ interface CliFlags {
 	sessionDir?: string;
 	skillPaths: string[];
 	positionals: string[];
-}
-
-function parseProvider(value?: string): ProviderId | undefined {
-	if (!value) return undefined;
-	const v = value.trim().toLowerCase();
-	if (v === "openai" || v === "anthropic" || v === "gemini") return v;
-	throw new Error(`unknown provider "${value}" (expected: openai | anthropic | gemini)`);
 }
 
 function parseCliArgs(argv: string[]): CliFlags {
@@ -147,7 +144,6 @@ function parseCliArgs(argv: string[]): CliFlags {
 				print: { type: "boolean", short: "p", default: false },
 				verbose: { type: "boolean", short: "v", default: false },
 				model: { type: "string", short: "m" },
-				provider: { type: "string" },
 				"config-profile": { type: "string" },
 				profile: { type: "string" },
 				"profile-no-save-changes": { type: "boolean", default: false },
@@ -191,7 +187,6 @@ function parseCliArgs(argv: string[]): CliFlags {
 		noSkills: !!parsed.values["no-skills"],
 		debugTui: !!parsed.values["debug-tui"],
 		model: parsed.values.model as string | undefined,
-		provider: parseProvider(parsed.values.provider as string | undefined),
 		configProfile: parsed.values["config-profile"] as string | undefined,
 		browserProfile: parsed.values.profile as string | undefined,
 		browserTimeout: Number.isFinite(browserTimeout) ? browserTimeout : undefined,
@@ -211,14 +206,13 @@ function parseCliArgs(argv: string[]): CliFlags {
 
 /**
  * Load the cua config and verify the keys we need for the requested
- * provider. The provider is inferred from the model id when not
- * explicitly overridden, matching what {@link createCuaAgent} will end up
- * using at run time.
+ * provider. The provider comes from the supported model table, matching
+ * what {@link createCuaAgent} will use at run time.
  */
 async function loadConfigOrFail(flags: CliFlags): Promise<configMod.Config> {
 	const cfg = await configMod.load(flags.configProfile);
-	const modelId = flags.model ?? "gpt-5.4";
-	const provider = resolveProvider(modelId, flags.provider);
+	const modelId = flags.model ?? DEFAULT_MODEL_ID;
+	const provider = resolveProvider(modelId);
 	if (provider === "openai" && !cfg.openaiApiKey) {
 		throw new Error("missing OpenAI API key (set in profile or OPENAI_API_KEY)");
 	}
@@ -232,6 +226,128 @@ async function loadConfigOrFail(flags: CliFlags): Promise<configMod.Config> {
 		throw new Error("missing Kernel API key (set in profile or KERNEL_API_KEY)");
 	}
 	return cfg;
+}
+
+const MODELS_HELP = `cua models — list supported -m/--model values
+
+Usage:
+  cua models
+  cua models -p openai
+  cua models --provider anthropic
+  cua models --json
+
+Options:
+  -p, --provider <id>  Filter by provider: openai | anthropic | gemini
+      --json           Output JSON
+  -h, --help           Show this help
+`;
+
+interface ModelsFlags {
+	provider?: ProviderId;
+	json: boolean;
+	help: boolean;
+}
+
+function parseModelsProvider(value?: string): ProviderId | undefined {
+	if (!value) return undefined;
+	const v = value.trim().toLowerCase();
+	if (SUPPORTED_PROVIDERS.includes(v as ProviderId)) return v as ProviderId;
+	throw new Error(`unknown provider "${value}" (expected: ${SUPPORTED_PROVIDERS.join(" | ")})`);
+}
+
+function parseModelsArgs(argv: string[]): ModelsFlags {
+	const parsed = parseArgs({
+		args: argv,
+		options: {
+			provider: { type: "string", short: "p" },
+			json: { type: "boolean", default: false },
+			help: { type: "boolean", short: "h", default: false },
+		},
+		allowPositionals: true,
+		strict: true,
+	});
+	const positionalProvider = parsed.positionals[0];
+	if (parsed.positionals.length > 1) {
+		throw new Error(`unexpected arguments: ${parsed.positionals.slice(1).join(" ")}`);
+	}
+	return {
+		provider: parseModelsProvider((parsed.values.provider as string | undefined) ?? positionalProvider),
+		json: !!parsed.values.json,
+		help: !!parsed.values.help,
+	};
+}
+
+async function runModelsSubcommand(args: string[]): Promise<number> {
+	let flags: ModelsFlags;
+	try {
+		flags = parseModelsArgs(args);
+	} catch (err) {
+		stderr.write(`${(err as Error).message}\n\n${MODELS_HELP}`);
+		return 2;
+	}
+	if (flags.help) {
+		stdout.write(MODELS_HELP);
+		return 0;
+	}
+
+	const models = listSupportedModels(flags.provider);
+	if (flags.json) {
+		stdout.write(`${JSON.stringify(models, null, 2)}\n`);
+		return 0;
+	}
+
+	stdout.write(formatModelsTable(models));
+	return 0;
+}
+
+function formatModelsTable(models: ReturnType<typeof listSupportedModels>): string {
+	const rows = models.map((model) => ({
+		provider: model.provider,
+		model: model.model,
+		default: model.default ? "yes" : "",
+		name: model.name,
+	}));
+	const headers = {
+		provider: "PROVIDER",
+		model: "MODEL",
+		default: "DEFAULT",
+		name: "NAME",
+	};
+	const widths = {
+		provider: columnWidth(headers.provider, rows.map((row) => row.provider)),
+		model: columnWidth(headers.model, rows.map((row) => row.model)),
+		default: columnWidth(headers.default, rows.map((row) => row.default)),
+		name: columnWidth(headers.name, rows.map((row) => row.name)),
+	};
+	const lines = [
+		[
+			headers.provider.padEnd(widths.provider),
+			headers.model.padEnd(widths.model),
+			headers.default.padEnd(widths.default),
+			headers.name,
+		].join("  "),
+		[
+			"-".repeat(widths.provider),
+			"-".repeat(widths.model),
+			"-".repeat(widths.default),
+			"-".repeat(widths.name),
+		].join("  "),
+	];
+	for (const row of rows) {
+		lines.push(
+			[
+				row.provider.padEnd(widths.provider),
+				row.model.padEnd(widths.model),
+				row.default.padEnd(widths.default),
+				row.name,
+			].join("  "),
+		);
+	}
+	return `${lines.join("\n")}\n`;
+}
+
+function columnWidth(header: string, values: string[]): number {
+	return Math.max(header.length, ...values.map((value) => value.length));
 }
 
 /**
@@ -499,7 +615,6 @@ async function runPrint(prompt: string, flags: CliFlags): Promise<number> {
 		browser,
 		config: cfg,
 		modelId: flags.model,
-		provider: flags.provider,
 		sessionId: browser.sessionId,
 		skills,
 	});
@@ -619,7 +734,6 @@ async function runActionSub(action: ActionType, rest: string[], flags: CliFlags)
 				browser,
 				config: cfg,
 				modelId: flags.model,
-				provider: flags.provider,
 				verbose: flags.verbose,
 				sessionManager: sm,
 			},
@@ -659,6 +773,10 @@ function buildActionRequest(action: ActionType, rest: string[]): ActionRequest {
 const SUBCOMMANDS = new Set(["open", "click", "type", "press", "observe", "url", "screenshot", "do"]);
 
 export async function main(argv: string[]): Promise<number> {
+	if (argv[0] === "models") {
+		return await runModelsSubcommand(argv.slice(1));
+	}
+
 	let flags: CliFlags;
 	try {
 		flags = parseCliArgs(argv);
@@ -751,7 +869,6 @@ async function runInteractiveCli(initialPrompt: string, flags: CliFlags): Promis
 		browser,
 		config: cfg,
 		modelId: flags.model,
-		provider: flags.provider,
 		initialPrompt: initialPrompt || undefined,
 		verbose: flags.verbose,
 		debugTui: flags.debugTui,

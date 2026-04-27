@@ -10,7 +10,7 @@ import {
 } from "./batch.js";
 
 /**
- * Build the `batch_computer_actions` AgentTool for OpenAI gpt-5.4.
+ * Build the `batch_computer_actions` AgentTool for OpenAI computer-use models.
  *
  * The tool's parameter schema is the union of OpenAI's official action set
  * ({@link OPENAI_OFFICIAL_ACTION_TYPES}) and the cua extension actions

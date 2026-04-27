@@ -267,9 +267,11 @@ user prompt
 
 The seam is in `packages/cua-cli/src/agent.ts:createCuaAgent`, which:
 
-1. Resolves the provider from the model id (or `--provider` flag).
-2. Loads the `Model<Api>` from `pi-ai`'s registry (mapping cua's
-   `gemini` provider to pi-ai's `google` provider).
+1. Resolves the provider from the exact supported model table in
+   `packages/cua-cli/src/models.ts`.
+2. Loads the `Model<Api>` from `pi-ai`'s registry when present, or from
+   CUA's conservative dynamic fallback while `pi-ai` catches up to new
+   provider model IDs.
 3. Builds the per-provider tool list via the explicit `/pi` bindings:
    `@onkernel/cua-openai/pi`,
    `@onkernel/cua-anthropic/pi`,

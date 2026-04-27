@@ -1,7 +1,7 @@
 /**
- * Official OpenAI gpt-5.4 computer-use action set.
+ * Official OpenAI computer-use action set.
  *
- * Source of truth: OpenAI's "Computer Use (gpt-5.4)" docs.
+ * Source of truth: OpenAI's "Computer Use" docs.
  *   https://platform.openai.com/docs/guides/tools-computer-use
  *   https://platform.openai.com/docs/api-reference/responses/object#tools-computer
  *
@@ -22,7 +22,7 @@
 import { type Static, Type } from "@sinclair/typebox";
 
 /**
- * The action `type` enum field on every gpt-5.4 computer action. All nine
+ * The action `type` enum field on every OpenAI computer action. All nine
  * actions are documented at the URLs above.
  */
 export const OPENAI_OFFICIAL_ACTION_TYPES = [
@@ -54,7 +54,7 @@ export const OpenAIPointSchema = Type.Object(
 export type OpenAIPoint = Static<typeof OpenAIPointSchema>;
 
 /**
- * Schema for ONE official OpenAI gpt-5.4 computer action. Used as one
+ * Schema for ONE official OpenAI computer action. Used as one
  * member of the `batch_computer_actions.actions[]` array in our custom
  * function tool. The fields are a superset of all per-action fields the
  * native `computer` tool defines, gated by the `type` discriminator at

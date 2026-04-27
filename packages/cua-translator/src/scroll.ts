@@ -1,7 +1,7 @@
 /**
  * Scroll-delta math.
  *
- * Models that emit pixel-style scroll deltas (OpenAI gpt-5.4, where one
+ * Models that emit pixel-style scroll deltas (OpenAI computer-use, where one
  * mouse wheel "tick" is conventionally 120 pixels) call
  * {@link modelScrollDeltaToWheelTicks} to convert their pixel value into
  * the wheel-notch count Kernel's `browsers.computer.scroll` API wants.
