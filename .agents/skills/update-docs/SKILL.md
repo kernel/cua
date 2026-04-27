@@ -41,7 +41,7 @@ For every doc update:
 Start with these source-of-truth checks:
 
 - Package topology: `package.json`, `tsconfig.json`, and `packages/*/package.json`.
-- Design invariants: provider package roots stay generic, provider `/pi` subpaths isolate `pi-agent-core` bindings, `@onkernel/cua-translator` owns canonical actions, and `@onkernel/cua-cli` owns orchestration.
+- Design invariants: provider package roots stay generic, provider `/pi` subpaths isolate `pi-agent-core` bindings, provider packages expose relatively consistent APIs, `@onkernel/cua-translator` owns canonical actions, and `@onkernel/cua-cli` gets provider-specific behavior through translator/provider packages while owning orchestration.
 - Translator flow: `packages/cua-translator/src/types.ts`, `translator.ts`, `cua-extras.ts`, `browser-session.ts`, and `computer-use.ts`.
 - Provider root surfaces: each provider's `src/index.ts`, `model.ts`, `official.ts`, `batch.ts`, `computer.ts` or `extra.ts`, `cua-extras.ts`, and `system-prompt.ts`.
 - Provider `/pi` bindings: each provider's `src/pi/index.ts` plus `*-tool.ts`; for Anthropic also check `payload-hook.ts` and `stream-wrapper.ts`.
@@ -54,6 +54,7 @@ Questions `architecture.md` should answer after each update:
 
 - What owns the canonical action vocabulary?
 - Which packages are generic provider glue, and which entry points are `pi-agent-core` specific?
+- Do provider packages expose consistent root and `/pi` APIs for the CLI to compose?
 - Where does Kernel SDK browser execution happen?
 - What does the CLI compose at runtime?
 - Which package is dev/test infrastructure only?

@@ -15,6 +15,11 @@ someone who wants to read the code, contribute, or fork.
 - `@onkernel/cua-translator` owns the canonical `ModelAction[]`
   vocabulary and the Kernel SDK execution path. Provider packages adapt
   provider-native action shapes into that vocabulary before dispatch.
+- `@onkernel/cua-cli` should get provider-specific behavior only by
+  depending on `@onkernel/cua-translator` and the relevant
+  `@onkernel/cua-<provider>` package. Provider packages should expose
+  relatively consistent root and `/pi` APIs so CLI wiring stays
+  provider-shaped, not provider-special-cased.
 - `@onkernel/cua-cli` owns orchestration: config, model routing,
   provider `/pi` bindings, coding tools, skills, sessions, output modes,
   and the TUI. It should compose providers, not define their wire
