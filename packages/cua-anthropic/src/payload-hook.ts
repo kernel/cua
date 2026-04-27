@@ -1,13 +1,13 @@
 import type { Api, Model } from "@mariozechner/pi-ai";
-import { ANTHROPIC_COMPUTER_TOOL } from "./official.js";
+import { anthropicComputerToolForModel } from "./official.js";
 
 /**
  * onPayload hook for Anthropic Messages requests.
  *
  * Replaces the locally registered `computer` function tool entry on the
- * wire with Anthropic's built-in `computer_20251124` spec, so the model
- * emits real `tool_use` blocks for the `computer` tool and we get the
- * documented action vocabulary.
+ * wire with Anthropic's model-compatible built-in computer spec, so the
+ * model emits real `tool_use` blocks for the `computer` tool and we get
+ * the documented action vocabulary.
  *
  * Returning `undefined` for non-Anthropic providers leaves the payload
  * untouched. For Anthropic, returns a shallow-copied payload with `tools`
@@ -18,12 +18,13 @@ export function anthropicComputerOnPayload(payload: unknown, model: Model<Api>):
 	if (model.api !== "anthropic-messages") return undefined;
 	if (!payload || typeof payload !== "object") return undefined;
 	const next = { ...(payload as Record<string, unknown>) };
+	const computerTool = anthropicComputerToolForModel(model.id);
 	const tools = Array.isArray(next.tools) ? [...(next.tools as unknown[])] : [];
 	const idx = tools.findIndex((t) => isToolNamed(t, "computer"));
 	if (idx >= 0) {
-		tools[idx] = ANTHROPIC_COMPUTER_TOOL;
+		tools[idx] = computerTool;
 	} else {
-		tools.push(ANTHROPIC_COMPUTER_TOOL);
+		tools.push(computerTool);
 	}
 	next.tools = tools;
 	return next;

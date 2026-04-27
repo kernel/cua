@@ -4,7 +4,7 @@ import {
 	streamAnthropic,
 	streamSimpleAnthropic,
 } from "@mariozechner/pi-ai";
-import { ANTHROPIC_COMPUTER_USE_BETA } from "./official.js";
+import { anthropicComputerUseBetaForModel } from "./official.js";
 
 /**
  * Eagerly register the Anthropic Messages provider with `pi-ai`. pi-ai
@@ -24,9 +24,9 @@ export function registerAnthropicProvider(): void {
 }
 
 /**
- * Wrap a `StreamFn` so that Anthropic requests carry the computer-use
- * beta header (`computer-use-2025-11-24`) merged with whatever beta
- * tokens pi-ai is already sending (e.g. fine-grained tool streaming).
+ * Wrap a `StreamFn` so that Anthropic requests carry the model-compatible
+ * computer-use beta header merged with whatever beta tokens pi-ai is
+ * already sending (e.g. fine-grained tool streaming).
  *
  * Other providers (OpenAI etc.) pass through unchanged.
  *
@@ -40,7 +40,8 @@ export function wrapAnthropicStream(base: StreamFn): StreamFn {
 			return base(model, context, options);
 		}
 		const existing = options?.headers?.["anthropic-beta"];
-		const merged = combineBetas(existing, ANTHROPIC_COMPUTER_USE_BETA, "fine-grained-tool-streaming-2025-05-14");
+		const computerBeta = anthropicComputerUseBetaForModel(model.id);
+		const merged = combineBetas(existing, computerBeta, "fine-grained-tool-streaming-2025-05-14");
 		const nextOptions = {
 			...options,
 			headers: {

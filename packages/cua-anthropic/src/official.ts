@@ -7,19 +7,18 @@
  *
  * Anthropic ships THREE versions of the built-in `computer` tool. The action
  * vocabulary grows monotonically across versions. We register the latest
- * (computer_20251124) for Claude Opus 4.7 / 4.6 / Sonnet 4.6 / Opus 4.5
- * and translate every action up through `zoom` (with a few we mark
- * unsupported because the Kernel browser does not expose them today).
+ * compatible version for each model and translate every action up through
+ * `zoom` (with a few we mark unsupported because the Kernel browser does not
+ * expose them today).
  *
  * Model → tool version pairing (per Anthropic docs):
  *   computer_20241022 → claude-3-5-sonnet (oct 22)
- *   computer_20250124 → claude-3-7-sonnet, claude-sonnet-4, claude-opus-4-1
- *   computer_20251124 → claude-sonnet-4-5+, claude-opus-4-5+, claude-opus-4-7+
+ *   computer_20250124 → claude-3-7-sonnet, claude-sonnet-4, claude-opus-4,
+ *                        claude-opus-4-1, claude-sonnet-4-5, claude-haiku-4-5
+ *   computer_20251124 → claude-opus-4-5+, claude-opus-4-6+, claude-opus-4-7+,
+ *                        claude-sonnet-4-6+
  *
- * This package always sends the latest (`computer_20251124`) tool spec to
- * the model; the action set is the union of the three. The beta header
- * `computer-use-2025-11-24` is automatically merged in by
- * {@link wrapAnthropicStream}.
+ * The beta header is automatically merged in by {@link wrapAnthropicStream}.
  */
 
 export type AnthropicComputerToolVersion =
@@ -67,22 +66,62 @@ export const ANTHROPIC_DISPLAY = {
 	number: 1,
 } as const;
 
+function buildAnthropicComputerTool(type: AnthropicComputerToolVersion) {
+	return {
+		type,
+		name: "computer",
+		display_width_px: ANTHROPIC_DISPLAY.width,
+		display_height_px: ANTHROPIC_DISPLAY.height,
+		display_number: ANTHROPIC_DISPLAY.number,
+		...(type === "computer_20251124" ? { enable_zoom: false } : {}),
+	} as const;
+}
+
+export const ANTHROPIC_COMPUTER_TOOL_20250124 = buildAnthropicComputerTool("computer_20250124");
+export const ANTHROPIC_COMPUTER_TOOL_20251124 = buildAnthropicComputerTool("computer_20251124");
+
 /**
- * Built-in computer_20251124 tool spec. Sent in the Anthropic Messages API
+ * Default built-in computer tool spec. Sent in the Anthropic Messages API
  * `tools` array. Not a JSON schema — Anthropic accepts a small fixed set
  * of named built-in tools; the model knows the per-action shape internally.
  */
-export const ANTHROPIC_COMPUTER_TOOL = {
-	type: "computer_20251124",
-	name: "computer",
-	display_width_px: ANTHROPIC_DISPLAY.width,
-	display_height_px: ANTHROPIC_DISPLAY.height,
-	display_number: ANTHROPIC_DISPLAY.number,
-	enable_zoom: false,
-} as const;
+export const ANTHROPIC_COMPUTER_TOOL = ANTHROPIC_COMPUTER_TOOL_20251124;
+
+export function anthropicComputerToolForModel(modelId: string): typeof ANTHROPIC_COMPUTER_TOOL_20250124 | typeof ANTHROPIC_COMPUTER_TOOL_20251124 {
+	return anthropicComputerToolVersionForModel(modelId) === "computer_20251124"
+		? ANTHROPIC_COMPUTER_TOOL_20251124
+		: ANTHROPIC_COMPUTER_TOOL_20250124;
+}
+
+export function anthropicComputerToolVersionForModel(modelId: string): Exclude<AnthropicComputerToolVersion, "computer_20241022"> {
+	const id = modelId.toLowerCase();
+	if (
+		id.startsWith("claude-opus-4-7") ||
+		id.startsWith("claude-opus-4-6") ||
+		id.startsWith("claude-opus-4-5") ||
+		id.startsWith("claude-sonnet-4-6")
+	) {
+		return "computer_20251124";
+	}
+	return "computer_20250124";
+}
 
 /**
- * Computer-use beta header value for `computer_20251124`. Required to
- * enable the latest computer tool until it leaves beta.
+ * Computer-use beta headers. The value must match the selected built-in
+ * computer tool version for the target model.
  */
-export const ANTHROPIC_COMPUTER_USE_BETA = "computer-use-2025-11-24";
+export const ANTHROPIC_COMPUTER_USE_BETA_20250124 = "computer-use-2025-01-24";
+export const ANTHROPIC_COMPUTER_USE_BETA_20251124 = "computer-use-2025-11-24";
+
+export function anthropicComputerUseBetaForModel(modelId: string): typeof ANTHROPIC_COMPUTER_USE_BETA_20250124 | typeof ANTHROPIC_COMPUTER_USE_BETA_20251124 {
+	return anthropicComputerToolVersionForModel(modelId) === "computer_20251124"
+		? ANTHROPIC_COMPUTER_USE_BETA_20251124
+		: ANTHROPIC_COMPUTER_USE_BETA_20250124;
+}
+
+/**
+ * Latest computer-use beta header value. Kept for callers that do not have a
+ * model ID available; runtime paths should prefer
+ * {@link anthropicComputerUseBetaForModel}.
+ */
+export const ANTHROPIC_COMPUTER_USE_BETA = ANTHROPIC_COMPUTER_USE_BETA_20251124;

@@ -260,7 +260,9 @@ async function discoverAnthropic(args: Args): Promise<Record<string, unknown>> {
 	return { provider: "anthropic", metadata_source: "client.models.list({ limit: 1000 })", models, candidates };
 }
 
-const ANTHROPIC_TOOL_PAIRS = [
+type AnthropicToolPair = { tool: string; beta: string };
+
+const ANTHROPIC_TOOL_PAIRS: AnthropicToolPair[] = [
 	{ tool: "computer_20251124", beta: "computer-use-2025-11-24" },
 	{ tool: "computer_20250124", beta: "computer-use-2025-01-24" },
 	{ tool: "computer_20241022", beta: "computer-use-2024-10-22" },
@@ -268,7 +270,8 @@ const ANTHROPIC_TOOL_PAIRS = [
 
 async function smokeAnthropic(client: any, model: string): Promise<Record<string, unknown>> {
 	const attempts: Record<string, unknown>[] = [];
-	for (const pair of ANTHROPIC_TOOL_PAIRS) {
+	const runtimePair = anthropicRuntimeToolPair(model);
+	for (const pair of orderAnthropicPairs(runtimePair)) {
 		try {
 			const response = await client.beta.messages.create({
 				model,
@@ -291,6 +294,9 @@ async function smokeAnthropic(client: any, model: string): Promise<Record<string
 				tool_name: "computer",
 				tool_version: pair.tool,
 				beta_header: pair.beta,
+				runtime_tool_version: runtimePair.tool,
+				runtime_beta_header: runtimePair.beta,
+				runtime_compatible: calls.length > 0 && pair.tool === runtimePair.tool && pair.beta === runtimePair.beta,
 				observed_actions: unique(actions),
 				response_item_types: unique(content.map((block) => block?.type).filter(Boolean)),
 				stop_reason: response.stop_reason ?? null,
@@ -303,6 +309,24 @@ async function smokeAnthropic(client: any, model: string): Promise<Record<string
 		}
 	}
 	return { status: "fail", attempts, error: attempts.at(-1)?.error ?? "all tool versions failed" };
+}
+
+function orderAnthropicPairs(runtimePair: AnthropicToolPair): AnthropicToolPair[] {
+	const rest = ANTHROPIC_TOOL_PAIRS.filter((pair) => pair.tool !== runtimePair.tool || pair.beta !== runtimePair.beta);
+	return [runtimePair, ...rest];
+}
+
+function anthropicRuntimeToolPair(model: string): AnthropicToolPair {
+	const id = model.toLowerCase();
+	if (
+		id.startsWith("claude-opus-4-7") ||
+		id.startsWith("claude-opus-4-6") ||
+		id.startsWith("claude-opus-4-5") ||
+		id.startsWith("claude-sonnet-4-6")
+	) {
+		return { tool: "computer_20251124", beta: "computer-use-2025-11-24" };
+	}
+	return { tool: "computer_20250124", beta: "computer-use-2025-01-24" };
 }
 
 async function discoverGemini(args: Args): Promise<Record<string, unknown>> {
@@ -339,13 +363,22 @@ async function annotateCuaSupport(provider: Provider, models: ModelResult[]): Pr
 	const getModel = await import("@mariozechner/pi-ai").then((mod) => mod.getModel).catch(() => undefined);
 	for (const model of models) {
 		const inRegistry = getModel ? !!getModel(piProvider as never, model.id as never) : false;
+		const localAdapterSupport = localAdapterSupportStatus(provider, model);
 		model.cua = {
 			provider_inference: provider,
 			pi_ai_registry: inRegistry ? "present" : "missing",
 			dynamic_model_fallback: "available",
-			local_adapter_support: model.computer_use && "status" in model.computer_use && model.computer_use.status === "pass" ? "passes-smoke" : "needs-check",
+			local_adapter_support: localAdapterSupport,
 		};
 	}
+}
+
+function localAdapterSupportStatus(provider: Provider, model: ModelResult): string {
+	if (!model.computer_use || !("status" in model.computer_use) || model.computer_use.status !== "pass") {
+		return "needs-check";
+	}
+	if (provider !== "anthropic") return "passes-smoke";
+	return model.computer_use.runtime_compatible === true ? "passes-smoke" : "smoke-pass-runtime-mismatch";
 }
 
 function hasGenerateContent(model: any): boolean {

@@ -10,7 +10,10 @@ import {
 	type AnthropicComputerInput,
 	executeAnthropicComputerAction,
 } from "./computer.js";
-import { ANTHROPIC_COMPUTER_TOOL, ANTHROPIC_COMPUTER_USE_BETA } from "./official.js";
+import {
+	anthropicComputerToolForModel,
+	anthropicComputerUseBetaForModel,
+} from "./official.js";
 import { buildAnthropicSystemPrompt } from "./system-prompt.js";
 
 export interface AnthropicModelOptions {
@@ -46,6 +49,8 @@ export function anthropic(modelId: string, opts: AnthropicModelOptions = {}): Co
 				includeBatchNudge: opts.includeBatchTool !== false,
 			});
 			const system = opts.systemPromptSuffix ? `${systemText}\n\n${opts.systemPromptSuffix}` : systemText;
+			const computerTool = anthropicComputerToolForModel(modelId);
+			const computerBeta = anthropicComputerUseBetaForModel(modelId);
 
 			for (let turn = 0; turn < maxTurns; turn++) {
 				const response: any = await client.beta.messages.create({
@@ -55,9 +60,9 @@ export function anthropic(modelId: string, opts: AnthropicModelOptions = {}): Co
 					system: [{ type: "text", text: system }],
 					tools:
 						opts.includeBatchTool === false
-							? [ANTHROPIC_COMPUTER_TOOL]
-							: [ANTHROPIC_COMPUTER_TOOL, ANTHROPIC_BATCH_TOOL_WIRE_SPEC],
-					betas: [ANTHROPIC_COMPUTER_USE_BETA],
+							? [computerTool]
+							: [computerTool, ANTHROPIC_BATCH_TOOL_WIRE_SPEC],
+					betas: [computerBeta],
 					...(opts.thinkingBudgetTokens
 						? { thinking: { type: "enabled", budget_tokens: opts.thinkingBudgetTokens } }
 						: {}),

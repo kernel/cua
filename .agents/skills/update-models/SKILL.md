@@ -53,6 +53,7 @@ Use all four evidence sources when possible:
 - Model-specific docs: tells us endpoint, streaming, feature, and tool support for a specific model ID.
 - Official example repos: shows real response parsing, action execution, safety handling, and follow-up payload shapes.
 - Live smoke tests: confirms the current model/API combination can emit provider-native computer-use tool calls.
+- Local CLI smoke tests: confirms CUA's adapter chooses the same provider beta/tool shape and the model emits executable CUA tool calls.
 
 Treat example repos as strongest when they are provider-owned or linked from official docs. If discovered through search only, mark them lower confidence until verified.
 
@@ -84,6 +85,7 @@ Anthropic:
 - Record `id`, `display_name`, `created_at`, token limits, and `capabilities`.
 - Smoke-test `client.beta.messages.create` with discovered computer tool and beta pairs, newest first.
 - Pass condition: `stop_reason === "tool_use"` and a `tool_use` block named `computer`.
+- For CUA support, the passing pair must match the Anthropic tool version and beta header that the local adapter will send for that model. A fallback pass with a different pair is provider support, not local runtime support.
 - Watch for dated drift: `computer_YYYYMMDD` tool names and `computer-use-YYYY-MM-DD` beta headers.
 
 Google/Gemini:
@@ -118,6 +120,7 @@ Recommend a model as a CUA default only if:
 - It appears in the provider metadata API for the available key.
 - Its model-specific docs do not rule out required CUA runtime features such as streaming.
 - Its provider-native computer-use smoke test passes.
+- Its local `cua -p -m <model>` or `node packages/cua-cli/dist/cli.js --print -m <model>` smoke test emits a browser tool call and completes a simple navigation/read task.
 - Official docs or examples support the same tool mechanism, or the smoke result clearly supersedes stale docs.
 - The model is added to the exact supported model table that powers `cua models`, either via `pi-ai` registry filtering or a CUA override.
 
