@@ -1,7 +1,7 @@
 {
   "name": "cua",
   "version": "0.1.0",
-  "description": "Kernel-cloud-browser computer-use monorepo: shared translator + per-provider adapters + CLI",
+  "description": "Kernel-cloud-browser computer-use: CLI and SDKs",
   "type": "module",
   "private": true,
   "workspaces": [
@@ -14,6 +14,7 @@
   ],
   "scripts": {
     "build": "tsc -b && npm run build:native --workspace @onkernel/ptywright --if-present",
+    "build:cli": "npm run build --workspace @onkernel/cua-cli",
     "dev": "tsc -b --watch",
     "typecheck": "tsc -b",
     "clean": "tsc -b --clean && npm run clean:native --workspace @onkernel/ptywright --if-present"
