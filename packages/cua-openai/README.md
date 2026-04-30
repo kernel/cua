@@ -17,6 +17,13 @@ keeps today's custom `batch_computer_actions` / `computer_use_extra`
 tools because `pi-ai`'s OpenAI Responses parser still doesn't surface
 native `computer_call` items directly.
 
+`openai(modelId)` uses `previous_response_id` chaining by default inside
+the tool loop, disables parallel tool calls, and enables OpenAI
+server-side compaction with a 200k token threshold. Pass
+`usePreviousResponseId: false` for stateless input-array chaining,
+`previousResponseId` to resume an existing chain, or
+`compactThreshold: false` to disable server-side compaction.
+
 ## Install
 
 ```bash
@@ -38,7 +45,10 @@ import { openai } from "@onkernel/cua-openai";
 const browser = await browserSession.open({ apiKey: process.env.KERNEL_API_KEY! });
 
 const result = await runComputerUse({
-  model: openai("gpt-5.5"),
+  model: openai("gpt-5.5", {
+    // Optional: tune or disable server-side compaction.
+    compactThreshold: 200_000,
+  }),
   browser,
   prompt: "Open https://example.com and tell me the heading.",
 });

@@ -2,12 +2,11 @@
  * OpenAI computer-use system-prompt preamble for the batch_computer_actions /
  * computer_use_extra tool surface.
  *
- * Why a preamble at all? OpenAI's computer-use documentation tells the model
- * how the native `computer` tool works, but we register custom function
- * tools instead (see `./official.ts` for why). The preamble teaches the
- * model how to use our function tools, when to prefer batched actions,
- * and how to read intermediate state via `url()` and `screenshot()` reads
- * embedded in a batch.
+ * Why a preamble at all? The root `openai()` helper registers OpenAI's
+ * native `computer` tool and can optionally register our custom function
+ * tools too. The preamble teaches the model when to use those helper tools,
+ * when to prefer batched actions, and how to read intermediate state via
+ * `url()` and `screenshot()` reads embedded in a batch.
  */
 
 export const OPENAI_BATCH_INSTRUCTIONS = `You have two ways to perform actions:

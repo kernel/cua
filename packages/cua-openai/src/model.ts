@@ -11,6 +11,7 @@ import type {
 	ResponseComputerToolCallOutputItem,
 	ResponseFunctionToolCallItem,
 	ResponseFunctionToolCallOutputItem,
+	Response,
 	ResponseInputItem,
 	ResponseItem,
 	ResponseOutputMessage,
@@ -22,6 +23,7 @@ import { OPENAI_BATCH_INSTRUCTIONS, OPENAI_NATIVE_COMPUTER_INSTRUCTIONS } from "
 
 const OPENAI_COMPUTER_TOOL = { type: "computer" } as const;
 const POST_ACTION_SETTLE_MS = 300;
+const DEFAULT_COMPACT_THRESHOLD = 200_000;
 const OPENAI_BATCH_ONLY_INSTRUCTIONS = `You also have batch_computer_actions for predictable multi-step sequences.
 
 Prefer batch_computer_actions when:
@@ -45,6 +47,14 @@ export interface OpenAIModelOptions {
 	includeBatchTool?: boolean;
 	includeExtraTool?: boolean;
 	reasoningEffort?: "low" | "medium" | "high";
+	/** Seed a Responses API chain. Use the prior response id returned in run details. */
+	previousResponseId?: string;
+	/** Set false to use stateless input-array chaining. Defaults to true. */
+	usePreviousResponseId?: boolean;
+	/** Server-side compaction threshold in rendered tokens. Set false to disable. Defaults to 200000. */
+	compactThreshold?: number | false;
+	/** Forwarded to OpenAI Responses. Leave undefined to use the API default. */
+	store?: boolean;
 }
 
 export interface OpenAIToolCallResultDetails {
@@ -100,49 +110,69 @@ export function openai(modelId: string, opts: OpenAIModelOptions = {}): Computer
 				...(opts.baseUrl ? { baseURL: opts.baseUrl } : {}),
 			});
 
-			const inputs: ResponseInputItem[] = [
-				{
-					role: "system",
-					content: [makeTextInput(composeInstructions(opts))],
-				} as unknown as ResponseInputItem,
+			const instructions = composeInstructions(opts);
+			const initialInput: ResponseInputItem[] = [
 				{
 					role: "user",
 					content: [makeTextInput(prompt)],
 				} as unknown as ResponseInputItem,
 			];
+			const statelessInput = initialInput;
 			const followUps: ResponseItem[] = [];
+			const usePreviousResponseId = opts.usePreviousResponseId !== false;
+			let previousResponseId = opts.previousResponseId;
+			let nextInput = initialInput;
 
 			for (let turn = 0; turn < maxTurns; turn++) {
-				const response = await client.responses.create({
+				const request = {
 					model: modelId,
-					input: [...inputs, ...followUps] as ResponseInputItem[],
+					instructions,
+					input: usePreviousResponseId ? nextInput : ([...statelessInput, ...followUps] as ResponseInputItem[]),
 					tools: openaiTools({
 						includeNativeComputer: true,
 						includeBatchTool: opts.includeBatchTool !== false,
 						includeExtraTool: opts.includeExtraTool !== false,
 					}) as unknown as Tool[],
+					parallel_tool_calls: false,
 					truncation: "auto",
 					reasoning: {
 						effort: opts.reasoningEffort ?? "low",
 						summary: "concise",
 					},
-				});
+					...(usePreviousResponseId && previousResponseId ? { previous_response_id: previousResponseId } : {}),
+					...(opts.store !== undefined ? { store: opts.store } : {}),
+					...contextManagementOption(opts.compactThreshold),
+				};
+
+				const response = (await client.responses.create(
+					request as Parameters<typeof client.responses.create>[0],
+				)) as Response;
+				if (response.id) previousResponseId = response.id;
+				nextInput = [];
 
 				const output = response.output ?? [];
 				let sawToolCall = false;
 
 				for (const item of output) {
-					followUps.push(item as ResponseItem);
+					if (!usePreviousResponseId) followUps.push(item as ResponseItem);
 					if (item.type === "computer_call") {
 						sawToolCall = true;
 						const toolOutputs = await handleComputerCall(translator, item as ResponseComputerToolCall);
-						followUps.push(...toolOutputs);
+						if (usePreviousResponseId) {
+							nextInput.push(...(toolOutputs as unknown as ResponseInputItem[]));
+						} else {
+							followUps.push(...toolOutputs);
+						}
 						continue;
 					}
 					if (item.type === "function_call") {
 						sawToolCall = true;
 						const toolOutput = await handleFunctionCall(translator, item as ResponseFunctionToolCallItem);
-						followUps.push(toolOutput);
+						if (usePreviousResponseId) {
+							nextInput.push(toolOutput as unknown as ResponseInputItem);
+						} else {
+							followUps.push(toolOutput);
+						}
 					}
 				}
 
@@ -164,6 +194,18 @@ export function openai(modelId: string, opts: OpenAIModelOptions = {}): Computer
 				turns: maxTurns,
 			};
 		},
+	};
+}
+
+function contextManagementOption(compactThreshold: OpenAIModelOptions["compactThreshold"]): Record<string, unknown> {
+	if (compactThreshold === false) return {};
+	return {
+		context_management: [
+			{
+				type: "compaction",
+				compact_threshold: compactThreshold ?? DEFAULT_COMPACT_THRESHOLD,
+			},
+		],
 	};
 }
 

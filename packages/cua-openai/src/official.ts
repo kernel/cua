@@ -5,12 +5,12 @@
  *   https://platform.openai.com/docs/guides/tools-computer-use
  *   https://platform.openai.com/docs/api-reference/responses/object#tools-computer
  *
- * The Responses-API-native `{type:"computer"}` tool emits `computer_call`
- * items shaped like `{action: {type:"click", x, y, ...}, ...}`. We do NOT
- * register that native tool today (pi-ai's stock OpenAI Responses parser
- * does not surface `computer_call` items via SSE). Instead we ship the
- * exact same action vocabulary as a custom function tool
- * (`batch_computer_actions`) that any model can call.
+ * The root `openai()` helper registers the Responses-API-native
+ * `{type:"computer"}` tool and handles `computer_call` output directly.
+ * The `/pi` binding still exposes the same action vocabulary as custom
+ * function tools (`batch_computer_actions` / `computer_use_extra`) because
+ * pi-ai's stock OpenAI Responses parser does not surface native
+ * `computer_call` items via SSE.
  *
  * The nine actions OpenAI documents are:
  *   click, double_click, scroll, type, wait, keypress, drag, move, screenshot
