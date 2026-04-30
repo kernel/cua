@@ -11,7 +11,9 @@ Use this shape for JSON reports and the same fields when writing a Markdown summ
   "providers": {
     "openai": {},
     "anthropic": {},
-    "gemini": {}
+    "gemini": {},
+    "tzafon": {},
+    "yutori": {}
   },
   "example_evidence": {},
   "drift": {},
@@ -37,7 +39,12 @@ Use this shape for JSON reports and the same fields when writing a Markdown summ
         "streaming": "supported",
         "function_calling": "supported",
         "computer_use": "supported",
-        "responses_endpoint": "supported"
+        "responses_endpoint": "supported",
+        "navigator_docs": "https://docs.yutori.com/reference/navigator",
+        "tool_set": "browser_tools_core-20260403",
+        "disable_tools": "supported",
+        "coordinate_space": "1000x1000",
+        "model_list_endpoint": "@tzafon/lightcone models.list()"
       },
       "computer_use": {
         "status": "pass",
@@ -46,6 +53,7 @@ Use this shape for JSON reports and the same fields when writing a Markdown summ
         "beta_header": null,
         "observed_actions": ["screenshot"],
         "response_item_types": ["computer_call"],
+        "accepts_image_tool_results": "assumed-from-docs",
         "error": null
       },
       "cua": {

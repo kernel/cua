@@ -13,7 +13,12 @@ import {
 import {
 	anthropicComputerToolForModel,
 	anthropicComputerUseBetaForModel,
+	ANTHROPIC_COMPACTION_BETA,
+	ANTHROPIC_COMPACTION_EDIT_TYPE,
+	ANTHROPIC_COMPACTION_MIN_TRIGGER_TOKENS,
+	anthropicSupportsCompaction,
 } from "./official.js";
+import { compactAnthropicMessagesForRequest } from "./context.js";
 import { buildAnthropicSystemPrompt } from "./system-prompt.js";
 
 export interface AnthropicModelOptions {
@@ -23,6 +28,7 @@ export interface AnthropicModelOptions {
 	includeBatchTool?: boolean;
 	maxTokens?: number;
 	thinkingBudgetTokens?: number;
+	compactThreshold?: number | false;
 }
 
 export interface AnthropicModelRunDetails {
@@ -51,18 +57,26 @@ export function anthropic(modelId: string, opts: AnthropicModelOptions = {}): Co
 			const system = opts.systemPromptSuffix ? `${systemText}\n\n${opts.systemPromptSuffix}` : systemText;
 			const computerTool = anthropicComputerToolForModel(modelId);
 			const computerBeta = anthropicComputerUseBetaForModel(modelId);
+			const useCompaction = opts.compactThreshold !== false && anthropicSupportsCompaction(modelId);
 
 			for (let turn = 0; turn < maxTurns; turn++) {
 				const response: any = await client.beta.messages.create({
 					model: modelId,
 					max_tokens: opts.maxTokens ?? 4096,
-					messages,
+					messages: compactAnthropicMessagesForRequest(messages),
 					system: [{ type: "text", text: system }],
 					tools:
 						opts.includeBatchTool === false
 							? [computerTool]
 							: [computerTool, ANTHROPIC_BATCH_TOOL_WIRE_SPEC],
-					betas: [computerBeta],
+					betas: useCompaction ? [computerBeta, ANTHROPIC_COMPACTION_BETA] : [computerBeta],
+					...(useCompaction
+						? {
+								context_management: anthropicCompactionContextManagement(
+									typeof opts.compactThreshold === "number" ? opts.compactThreshold : undefined,
+								),
+							}
+						: {}),
 					...(opts.thinkingBudgetTokens
 						? { thinking: { type: "enabled", budget_tokens: opts.thinkingBudgetTokens } }
 						: {}),
@@ -125,6 +139,17 @@ export function anthropic(modelId: string, opts: AnthropicModelOptions = {}): Co
 			};
 		},
 	};
+}
+
+function anthropicCompactionContextManagement(compactThreshold: number | undefined): Record<string, unknown> {
+	const edit: Record<string, unknown> = { type: ANTHROPIC_COMPACTION_EDIT_TYPE };
+	if (typeof compactThreshold === "number" && Number.isFinite(compactThreshold)) {
+		edit.trigger = {
+			type: "input_tokens",
+			value: Math.max(ANTHROPIC_COMPACTION_MIN_TRIGGER_TOKENS, Math.trunc(compactThreshold)),
+		};
+	}
+	return { edits: [edit] };
 }
 
 function toAnthropicToolResult(

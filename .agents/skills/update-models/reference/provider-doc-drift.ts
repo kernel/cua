@@ -2,7 +2,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import process from "node:process";
 
-type Provider = "openai" | "anthropic" | "gemini";
+type Provider = "openai" | "anthropic" | "gemini" | "yutori";
 
 interface Args {
 	examples: string;
@@ -30,18 +30,26 @@ const DOCS: Record<Provider, string[]> = {
 		"https://ai.google.dev/gemini-api/docs/computer-use",
 		"https://ai.google.dev/api/models",
 	],
+	yutori: [
+		"https://docs.yutori.com/reference/navigator",
+		"https://docs.yutori.com/reference/n1",
+		"https://docs.yutori.com/reference/n1-5",
+		"https://docs.yutori.com/openapi.json",
+	],
 };
 
 const LOCAL_FILES: Record<Provider, string> = {
 	openai: "packages/cua-openai/src/official.ts",
 	anthropic: "packages/cua-anthropic/src/official.ts",
 	gemini: "packages/cua-gemini/src/official.ts",
+	yutori: "packages/cua-yutori/src/official.ts",
 };
 
 const ACTION_REGEXES: Record<Provider, RegExp> = {
 	openai: /\b(click|double_click|scroll|type|wait|keypress|drag|move|screenshot)\b/g,
 	anthropic: /\b(screenshot|left_click|right_click|middle_click|double_click|triple_click|left_click_drag|mouse_move|key|type|scroll|hold_key|wait|left_mouse_down|left_mouse_up|cursor_position|zoom)\b/g,
 	gemini: /\b(open_web_browser|open_web|wait_5_seconds|go_back|go_forward|search|navigate|click_at|hover_at|type_text_at|key_combination|scroll_document|scroll_at|drag_and_drop)\b/g,
+	yutori: /\b(left_click|double_click|triple_click|right_click|scroll|type|key_press|hover|drag|wait|refresh|go_back|go_forward|goto_url|mouse_move|middle_click|mouse_down|mouse_up|hold_key|extract_elements|find|set_element_value|execute_js)\b/g,
 };
 
 function parseArgs(argv: string[]): Args {
@@ -145,6 +153,10 @@ function notesFor(provider: Provider, documentedToolVersions: string[], exampleT
 	}
 	if (provider === "gemini") {
 		notes.push("Gemini official computer use emits predefined function-call names; keep this separate from CUA custom function declarations.");
+	}
+	if (provider === "yutori") {
+		notes.push("Yutori Navigator emits OpenAI-compatible tool_calls for built-in browser actions; local AgentTools should execute those names but outbound payloads should not duplicate the built-in browser schemas.");
+		notes.push("Track n1 vs n1.5 separately because n1.5 can add tool_set/disable_tools and expanded browser actions.");
 	}
 	return notes;
 }

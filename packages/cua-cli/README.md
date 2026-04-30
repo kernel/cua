@@ -4,7 +4,8 @@ The CLI / TUI binary for the [`cua`](../../README.md) monorepo. Wires
 [`@onkernel/cua-translator`](../cua-translator),
 [`@onkernel/cua-openai`](../cua-openai),
 [`@onkernel/cua-anthropic`](../cua-anthropic), and
-[`@onkernel/cua-gemini`](../cua-gemini)
+[`@onkernel/cua-gemini`](../cua-gemini), and
+[`@onkernel/cua-yutori`](../cua-yutori)
 into a [`pi-agent-core`](https://www.npmjs.com/package/@mariozechner/pi-agent-core)
 agent with a [`pi-tui`](https://www.npmjs.com/package/@mariozechner/pi-tui)
 interactive front-end.
@@ -42,6 +43,7 @@ cua models
 cua models -p openai
 cua --print --model claude-opus-4-7 "..."
 cua --print --model gemini-3-flash-preview "..."
+cua --print --model n1.5-latest "..."
 
 # Named sessions (browser stays alive across calls):
 cua session start login                       # provisions Kernel browser
@@ -63,7 +65,8 @@ cua --session abc12345                        # by id prefix
 
 Run `cua models` to list every supported `-m` / `--model` value and the
 provider it routes to. Filter by provider with `cua models -p openai`,
-`cua models -p anthropic`, or `cua models -p gemini`.
+`cua models -p anthropic`, `cua models -p gemini`, or
+`cua models -p yutori`.
 
 CUA routes by exact model id from this supported model table. Unknown model
 ids fail fast with a pointer to `cua models`.
@@ -89,6 +92,7 @@ default_profile = "default"
 openai_api_key      = "sk-..."
 anthropic_api_key   = "sk-ant-..."
 google_api_key      = "..."
+yutori_api_key      = "yt_..."
 kernel_api_key      = "kk_..."
 
 [profiles.default.openai.default]
@@ -101,6 +105,10 @@ reasoning_effort  = "low"
 tool_preamble     = true
 
 [profiles.default.gemini.default]
+reasoning_effort  = "low"
+tool_preamble     = true
+
+[profiles.default.yutori.default]
 reasoning_effort  = "low"
 tool_preamble     = true
 
@@ -123,6 +131,8 @@ Env var overrides:
 | `GOOGLE_API_KEY`     | `google_api_key`                               |
 | `GEMINI_API_KEY`     | alias of `GOOGLE_API_KEY`                      |
 | `GOOGLE_BASE_URL`    | `google_base_url`                              |
+| `YUTORI_API_KEY`     | `yutori_api_key`                               |
+| `YUTORI_BASE_URL`    | `yutori_base_url`                              |
 | `KERNEL_API_KEY`     | `kernel_api_key`                               |
 | `KERNEL_BASE_URL`    | `kernel_base_url`                              |
 | `XDG_CONFIG_HOME`    | config dir base (defaults to `~/.config`)      |

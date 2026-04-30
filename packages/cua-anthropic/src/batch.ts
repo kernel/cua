@@ -54,7 +54,7 @@ export type AnthropicBatchToolInput = Static<typeof AnthropicBatchSchema>;
 export interface AnthropicBatchToolDetails {
 	statusText: string;
 	actionDescriptions: string[];
-	readResults: Array<{ type: "url"; url: string } | { type: "screenshot"; bytes: number }>;
+	readResults: Array<{ type: "url"; url: string } | { type: "screenshot"; bytes: number } | { type: "cursor_position"; x: number; y: number }>;
 	error?: string;
 }
 
@@ -131,9 +131,11 @@ export async function executeAnthropicBatch(
 		for (const r of result.readResults) {
 			if (r.type === "url") {
 				readResults.push({ type: "url", url: r.url });
-			} else {
+			} else if (r.type === "screenshot") {
 				readResults.push({ type: "screenshot", bytes: r.pngBytes.length });
 				hasScreenshotInResults = true;
+			} else {
+				readResults.push({ type: "cursor_position", x: r.x, y: r.y });
 			}
 		}
 		statusText = "Actions executed successfully.";
@@ -141,12 +143,14 @@ export async function executeAnthropicBatch(
 		for (const r of result.readResults) {
 			if (r.type === "url") {
 				content.push({ type: "text", text: `url(): ${r.url}` });
-			} else {
+			} else if (r.type === "screenshot") {
 				content.push({
 					type: "image",
 					data: r.pngBytes.toString("base64"),
 					mimeType: "image/png",
 				});
+			} else {
+				content.push({ type: "text", text: `cursor_position(): ${r.x},${r.y}` });
 			}
 		}
 	} catch (err) {

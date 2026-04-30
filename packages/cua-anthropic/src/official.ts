@@ -112,6 +112,9 @@ export function anthropicComputerToolVersionForModel(modelId: string): Exclude<A
  */
 export const ANTHROPIC_COMPUTER_USE_BETA_20250124 = "computer-use-2025-01-24";
 export const ANTHROPIC_COMPUTER_USE_BETA_20251124 = "computer-use-2025-11-24";
+export const ANTHROPIC_COMPACTION_BETA = "compact-2026-01-12";
+export const ANTHROPIC_COMPACTION_EDIT_TYPE = "compact_20260112";
+export const ANTHROPIC_COMPACTION_MIN_TRIGGER_TOKENS = 50_000;
 
 export function anthropicComputerUseBetaForModel(modelId: string): typeof ANTHROPIC_COMPUTER_USE_BETA_20250124 | typeof ANTHROPIC_COMPUTER_USE_BETA_20251124 {
 	return anthropicComputerToolVersionForModel(modelId) === "computer_20251124"
@@ -125,3 +128,13 @@ export function anthropicComputerUseBetaForModel(modelId: string): typeof ANTHRO
  * {@link anthropicComputerUseBetaForModel}.
  */
 export const ANTHROPIC_COMPUTER_USE_BETA = ANTHROPIC_COMPUTER_USE_BETA_20251124;
+
+export function anthropicSupportsCompaction(modelId: string): boolean {
+	const id = modelId.toLowerCase();
+	return (
+		id.startsWith("claude-mythos-preview") ||
+		id.startsWith("claude-opus-4-7") ||
+		id.startsWith("claude-opus-4-6") ||
+		id.startsWith("claude-sonnet-4-6")
+	);
+}

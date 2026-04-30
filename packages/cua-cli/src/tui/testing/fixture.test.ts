@@ -68,8 +68,22 @@ test("fixture TUI can abort a running turn and recover", async (t) => {
 	await exitFixture(session);
 });
 
+test("fixture TUI renders assistant errors", async (t) => {
+	const session = spawnFixture();
+	t.after(() => session.close());
+
+	await waitForFixtureReady(session);
+	session.line("please fail");
+	await session.waitForVisible("fixture provider failed", { timeoutMs: 10_000 });
+
+	const snapshot = session.snapshot();
+	assert.match(snapshot.visible, /error fixture provider failed/);
+
+	await exitFixture(session);
+});
+
 async function waitForFixtureReady(session: ReturnType<typeof spawnFixture>) {
-	await session.waitForVisible("openai/fixture-model", { timeoutMs: 10_000 });
+	await session.waitForVisible("fixture/fixture-model", { timeoutMs: 10_000 });
 }
 
 async function exitFixture(session: ReturnType<typeof spawnFixture>) {

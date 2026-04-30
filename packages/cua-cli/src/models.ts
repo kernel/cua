@@ -5,8 +5,8 @@ import {
 	getModels,
 } from "@mariozechner/pi-ai";
 
-export type ProviderId = "openai" | "anthropic" | "gemini";
-export const SUPPORTED_PROVIDERS: ProviderId[] = ["openai", "anthropic", "gemini"];
+export type ProviderId = "openai" | "anthropic" | "gemini" | "tzafon" | "yutori";
+export const SUPPORTED_PROVIDERS: ProviderId[] = ["openai", "anthropic", "gemini", "tzafon", "yutori"];
 export const DEFAULT_MODEL_ID = "gpt-5.5";
 
 export interface SupportedModel {
@@ -25,6 +25,15 @@ const CUA_MODEL_OVERRIDES: Record<ProviderId, SupportedModel[]> = {
 	anthropic: [],
 	gemini: [
 		{ provider: "gemini", model: "gemini-2.5-computer-use-preview-10-2025", name: "Gemini 2.5 Computer Use Preview", origin: "cua-override" },
+	],
+	tzafon: [
+		{ provider: "tzafon", model: "tzafon.northstar-cua-fast", name: "Tzafon Northstar CUA Fast", origin: "cua-override" },
+	],
+	yutori: [
+		{ provider: "yutori", model: "n1.5-latest", name: "Yutori Navigator n1.5", origin: "cua-override" },
+		{ provider: "yutori", model: "n1.5-20260428", name: "Yutori Navigator n1.5 (2026-04-28)", origin: "cua-override" },
+		{ provider: "yutori", model: "n1-latest", name: "Yutori Navigator n1", origin: "cua-override" },
+		{ provider: "yutori", model: "n1-20260203", name: "Yutori Navigator n1 (2026-02-03)", origin: "cua-override" },
 	],
 };
 
@@ -82,6 +91,10 @@ export function piProviderFor(provider: ProviderId): string {
 			return "anthropic";
 		case "gemini":
 			return "google";
+		case "tzafon":
+			return "tzafon";
+		case "yutori":
+			return "yutori";
 	}
 }
 
@@ -99,6 +112,10 @@ function supportsCuaProvider(provider: ProviderId, modelId: string): boolean {
 			);
 		case "gemini":
 			return id === "gemini-3-flash-preview" || id === "gemini-2.5-computer-use-preview-10-2025";
+		case "tzafon":
+			return id === "tzafon.northstar-cua-fast";
+		case "yutori":
+			return id === "n1-latest" || id === "n1-20260203" || id === "n1.5-latest" || id === "n1.5-20260428";
 	}
 }
 
@@ -130,6 +147,32 @@ function dynamicModel(provider: ProviderId, modelId: string): Model<Api> {
 				cost: zeroCost(),
 				contextWindow: 1_048_576,
 				maxTokens: 65_536,
+			};
+		case "tzafon":
+			return {
+				id: modelId,
+				name: modelId,
+				api: "tzafon-responses",
+				provider: piProvider,
+				baseUrl: "https://api.lightcone.ai",
+				reasoning: false,
+				input: ["text", "image"],
+				cost: zeroCost(),
+				contextWindow: 128_000,
+				maxTokens: 4_096,
+			};
+		case "yutori":
+			return {
+				id: modelId,
+				name: modelId,
+				api: "yutori-chat-completions",
+				provider: piProvider,
+				baseUrl: "https://api.yutori.com/v1",
+				reasoning: false,
+				input: ["text", "image"],
+				cost: zeroCost(),
+				contextWindow: 128_000,
+				maxTokens: 4_096,
 			};
 		case "openai":
 		default:

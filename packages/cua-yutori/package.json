@@ -1,0 +1,43 @@
+{
+  "name": "@onkernel/cua-yutori",
+  "version": "0.1.0",
+  "description": "Provider-neutral Yutori Navigator computer-use helpers with explicit /pi bindings",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./pi": {
+      "types": "./dist/pi/index.d.ts",
+      "import": "./dist/pi/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "tsc -b --clean"
+  },
+  "dependencies": {
+    "@onkernel/cua-translator": "0.1.0",
+    "@sinclair/typebox": "0.34.49",
+    "openai": "^6.26.0"
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-agent-core": "0.67.6",
+    "@mariozechner/pi-ai": "0.67.6"
+  },
+  "peerDependenciesMeta": {
+    "@mariozechner/pi-agent-core": {
+      "optional": true
+    },
+    "@mariozechner/pi-ai": {
+      "optional": true
+    }
+  }
+}

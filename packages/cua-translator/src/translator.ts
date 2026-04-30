@@ -58,6 +58,16 @@ function toIntPath(v: unknown): number[][] {
 	});
 }
 
+function hasPoint(action: ModelAction): boolean {
+	return isFiniteNumberLike(action.x) && isFiniteNumberLike(action.y);
+}
+
+function isFiniteNumberLike(value: unknown): boolean {
+	if (typeof value === "number") return Number.isFinite(value);
+	if (typeof value === "string" && value.trim() !== "") return Number.isFinite(Number(value));
+	return false;
+}
+
 function validateDragPath(path: number[][], idx: number, scope: ActionValidationScope): void {
 	if (path.length >= 2) return;
 	const reason = `drag action requires path with at least two points; got ${path.length} (${formatPath(path)})`;
@@ -111,6 +121,20 @@ export function translateToBatchAction(actionType: string, action: ModelAction, 
 				},
 			};
 		}
+		case "mouse_down":
+		case "mouse_up": {
+			const holdKeys = readHoldKeys(action.hold_keys);
+			return {
+				type: "click_mouse",
+				clickMouse: {
+					x: toInt(action.x),
+					y: toInt(action.y),
+					button: stringOr(action.button, "left"),
+					clickType: actionType === "mouse_down" ? "down" : "up",
+					...(holdKeys ? { holdKeys } : {}),
+				},
+			};
+		}
 		case "double_click": {
 			const holdKeys = readHoldKeys(action.hold_keys);
 			return {
@@ -130,7 +154,15 @@ export function translateToBatchAction(actionType: string, action: ModelAction, 
 			};
 		case "keypress": {
 			const { holdKeys, primaryKeys } = splitKeypress(toStringSlice(action.keys));
-			return { type: "press_key", pressKey: { keys: primaryKeys, holdKeys } };
+			const durationMs = typeof action.duration_ms === "number" ? Math.max(0, Math.trunc(action.duration_ms)) : undefined;
+			return {
+				type: "press_key",
+				pressKey: {
+					keys: primaryKeys,
+					holdKeys,
+					...(durationMs !== undefined ? { durationMs } : {}),
+				},
+			};
 		}
 		case "scroll": {
 			const holdKeys = readHoldKeys(action.hold_keys);
@@ -150,7 +182,15 @@ export function translateToBatchAction(actionType: string, action: ModelAction, 
 		case "drag": {
 			const path = toIntPath(action.path);
 			validateDragPath(path, idx, "batch");
-			return { type: "drag_mouse", dragMouse: { path } };
+			const holdKeys = readHoldKeys(action.hold_keys);
+			return {
+				type: "drag_mouse",
+				dragMouse: {
+					path,
+					...(typeof action.button === "string" ? { button: action.button } : {}),
+					...(holdKeys ? { holdKeys } : {}),
+				},
+			};
 		}
 		case "wait": {
 			const ms = typeof action.ms === "number" ? Math.trunc(action.ms) : 1000;
@@ -180,6 +220,7 @@ export function toSdkAction(action: BatchAction): SdkBatchAction {
 					x: op.x,
 					y: op.y,
 					...(op.button ? { button: op.button as "left" | "right" | "middle" | "back" | "forward" } : {}),
+					...(op.clickType ? { click_type: op.clickType } : {}),
 					...(op.numClicks && op.numClicks > 1 ? { num_clicks: op.numClicks } : {}),
 					...(op.holdKeys && op.holdKeys.length ? { hold_keys: op.holdKeys } : {}),
 				},
@@ -189,7 +230,11 @@ export function toSdkAction(action: BatchAction): SdkBatchAction {
 		case "move_mouse":
 			return {
 				type: "move_mouse",
-				move_mouse: { x: action.moveMouse!.x, y: action.moveMouse!.y },
+				move_mouse: {
+					x: action.moveMouse!.x,
+					y: action.moveMouse!.y,
+					...(action.moveMouse!.holdKeys && action.moveMouse!.holdKeys.length ? { hold_keys: action.moveMouse!.holdKeys } : {}),
+				},
 			};
 		case "type_text":
 			return {
@@ -203,6 +248,7 @@ export function toSdkAction(action: BatchAction): SdkBatchAction {
 				press_key: {
 					keys: op.keys,
 					...(op.holdKeys && op.holdKeys.length ? { hold_keys: op.holdKeys } : {}),
+					...(op.durationMs !== undefined ? { duration: op.durationMs } : {}),
 				},
 			};
 		}
@@ -222,7 +268,11 @@ export function toSdkAction(action: BatchAction): SdkBatchAction {
 		case "drag_mouse":
 			return {
 				type: "drag_mouse",
-				drag_mouse: { path: action.dragMouse!.path },
+				drag_mouse: {
+					path: action.dragMouse!.path,
+					...(action.dragMouse!.button ? { button: action.dragMouse!.button as "left" | "middle" | "right" } : {}),
+					...(action.dragMouse!.holdKeys && action.dragMouse!.holdKeys.length ? { hold_keys: action.dragMouse!.holdKeys } : {}),
+				},
 			};
 		case "sleep":
 			return {
@@ -301,6 +351,17 @@ export class ComputerTranslator {
 		}
 	}
 
+	/** Read the current mouse cursor position. */
+	async currentMousePosition(): Promise<{ x: number; y: number }> {
+		const done = this.logger("cursor_position()");
+		try {
+			const pos = await this.client.browsers.computer.getMousePosition(this.sessionId);
+			return { x: toInt(pos.x), y: toInt(pos.y) };
+		} finally {
+			done();
+		}
+	}
+
 	/**
 	 * Execute a batch of model-level actions against the Kernel browser.
 	 *
@@ -345,9 +406,15 @@ export class ComputerTranslator {
 					result.readResults.push({ type: "url", url });
 					continue;
 				}
+				case "cursor_position": {
+					await flush();
+					const pos = await this.currentMousePosition();
+					result.readResults.push({ type: "cursor_position", x: pos.x, y: pos.y });
+					continue;
+				}
 			}
 
-			pending.push(translateToBatchAction(actionType, action, idx));
+			pending.push(translateToBatchAction(actionType, await this.resolveCurrentPosition(actionType, action), idx));
 		}
 
 		await flush();
@@ -365,6 +432,37 @@ export class ComputerTranslator {
 			done();
 		}
 	}
+
+	private async resolveCurrentPosition(actionType: string, action: ModelAction): Promise<ModelAction> {
+		if (needsCurrentPoint(actionType, action)) {
+			const pos = await this.currentMousePosition();
+			return { ...action, x: pos.x, y: pos.y };
+		}
+		if (actionType === "drag" && Array.isArray(action.path)) {
+			let changed = false;
+			const nextPath: unknown[] = [];
+			for (const point of action.path) {
+				if (isCurrentPointMarker(point)) {
+					const pos = await this.currentMousePosition();
+					nextPath.push({ x: pos.x, y: pos.y });
+					changed = true;
+				} else {
+					nextPath.push(point);
+				}
+			}
+			if (changed) return { ...action, path: nextPath };
+		}
+		return action;
+	}
+}
+
+function needsCurrentPoint(actionType: string, action: ModelAction): boolean {
+	if (hasPoint(action)) return false;
+	return actionType === "click" || actionType === "double_click" || actionType === "mouse_down" || actionType === "mouse_up" || actionType === "scroll";
+}
+
+function isCurrentPointMarker(value: unknown): boolean {
+	return Boolean(value && typeof value === "object" && (value as { current?: unknown }).current === true);
 }
 
 // ─── Describe (for logging) ────────────────────────────────────────────────
@@ -374,6 +472,8 @@ export function describeBatch(actions: BatchAction[]): string {
 		switch (a.type) {
 			case "click_mouse": {
 				const op = a.clickMouse!;
+				if (op.clickType === "down") return `mouse_down(${op.x},${op.y})`;
+				if (op.clickType === "up") return `mouse_up(${op.x},${op.y})`;
 				if ((op.numClicks ?? 0) > 1) return `double_click(${op.x},${op.y})`;
 				return `click(${op.x},${op.y})`;
 			}
@@ -414,6 +514,10 @@ export function describeSingleAction(actionType: string, a: ModelAction): string
 		}
 		case "double_click":
 			return `double_click(${toInt(a.x)}, ${toInt(a.y)})`;
+		case "mouse_down":
+			return `mouse_down(${toInt(a.x)}, ${toInt(a.y)})`;
+		case "mouse_up":
+			return `mouse_up(${toInt(a.x)}, ${toInt(a.y)})`;
 		case "type": {
 			const text = typeof a.text === "string" ? a.text : "";
 			const t = text.length > 60 ? `${text.slice(0, 57)}...` : text;
@@ -437,6 +541,8 @@ export function describeSingleAction(actionType: string, a: ModelAction): string
 			return "forward()";
 		case "url":
 			return "url()";
+		case "cursor_position":
+			return "cursor_position()";
 		case "screenshot":
 			return "screenshot()";
 		default:

@@ -33,9 +33,13 @@ export {
 export type { AnthropicComputerInput, AnthropicComputerDetails } from "./computer.js";
 export {
 	ANTHROPIC_COMPUTER_TOOL,
+	ANTHROPIC_COMPACTION_BETA,
+	ANTHROPIC_COMPACTION_EDIT_TYPE,
+	ANTHROPIC_COMPACTION_MIN_TRIGGER_TOKENS,
 	ANTHROPIC_DISPLAY,
 	ANTHROPIC_COMPUTER_USE_BETA,
 	ANTHROPIC_OFFICIAL_ACTION_TYPES,
+	anthropicSupportsCompaction,
 } from "./official.js";
 export type {
 	AnthropicComputerToolVersion,
@@ -48,6 +52,10 @@ export type {
 	AnthropicModelOptions,
 	AnthropicModelRunDetails,
 } from "./model.js";
+export {
+	compactAnthropicMessagesForRequest,
+	hasAnthropicCompactionBlock,
+} from "./context.js";
 export {
 	buildAnthropicSystemPrompt,
 	ANTHROPIC_INSTRUCTIONS_RAW,

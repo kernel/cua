@@ -63,6 +63,8 @@ Options:
                                    openai:    ${DEFAULT_MODEL_ID}
                                    anthropic: claude-opus-4-7
                                    gemini:    gemini-3-flash-preview
+                                   tzafon:    tzafon.northstar-cua-fast
+                                   yutori:    n1.5-latest
       --config-profile <p>       Config profile to load (default: from default_profile)
       --profile <name|id>        Kernel browser profile to load
       --profile-no-save-changes  Do not persist changes back to the profile
@@ -93,10 +95,13 @@ Environment:
   ANTHROPIC_API_KEY     Overrides the profile's Anthropic key
   GOOGLE_API_KEY        Overrides the profile's Google (Gemini) key
   GEMINI_API_KEY        Alias for GOOGLE_API_KEY
+  TZAFON_API_KEY        Overrides the profile's Tzafon key
+  YUTORI_API_KEY        Overrides the profile's Yutori key
   KERNEL_API_KEY        Overrides the profile's Kernel key
   OPENAI_BASE_URL       Override OpenAI base URL
   ANTHROPIC_BASE_URL    Override Anthropic base URL
   GOOGLE_BASE_URL       Override Google base URL
+  YUTORI_BASE_URL       Override Yutori base URL
   KERNEL_BASE_URL       Override Kernel base URL
   XDG_DATA_HOME         Sessions are stored under \$XDG_DATA_HOME/cua/sessions
                         (defaults to ~/.local/share/cua/sessions)
@@ -222,6 +227,12 @@ async function loadConfigOrFail(flags: CliFlags): Promise<configMod.Config> {
 	if (provider === "gemini" && !cfg.googleApiKey) {
 		throw new Error("missing Google API key (set in profile or GOOGLE_API_KEY / GEMINI_API_KEY)");
 	}
+	if (provider === "tzafon" && !cfg.tzafonApiKey) {
+		throw new Error("missing Tzafon API key (set in profile or TZAFON_API_KEY)");
+	}
+	if (provider === "yutori" && !cfg.yutoriApiKey) {
+		throw new Error("missing Yutori API key (set in profile or YUTORI_API_KEY)");
+	}
 	if (!cfg.kernelApiKey) {
 		throw new Error("missing Kernel API key (set in profile or KERNEL_API_KEY)");
 	}
@@ -237,7 +248,7 @@ Usage:
   cua models --json
 
 Options:
-  -p, --provider <id>  Filter by provider: openai | anthropic | gemini
+  -p, --provider <id>  Filter by provider: openai | anthropic | gemini | tzafon | yutori
       --json           Output JSON
   -h, --help           Show this help
 `;
@@ -664,6 +675,10 @@ async function runPrint(prompt: string, flags: CliFlags): Promise<number> {
 			prompt: expanded,
 			options: { skipInitialScreenshot: sessionPolicy.resumed },
 		});
+		const agentError = (handle.agent.state as { errorMessage?: string }).errorMessage;
+		if (agentError) {
+			throw new Error(agentError);
+		}
 		if (!jsonlMode) stdout.write("\n");
 	} catch (err) {
 		if (jsonlMode) {

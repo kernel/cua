@@ -10,8 +10,10 @@ import {
 	type Api,
 	type Model,
 	registerApiProvider,
+	streamOpenAICompletions,
 	streamGoogle,
 	streamOpenAIResponses,
+	streamSimpleOpenAICompletions,
 	streamSimple,
 	streamSimpleGoogle,
 	streamSimpleOpenAIResponses,
@@ -31,6 +33,7 @@ import {
 import {
 	anthropicComputerOnPayload,
 	composeOnPayload,
+	createAnthropicContextManagementOnPayload,
 	createAnthropicComputerTools,
 	registerAnthropicProvider,
 	wrapAnthropicStream,
@@ -48,13 +51,32 @@ import {
 	ComputerTranslator,
 } from "@onkernel/cua-translator";
 import {
+	buildTzafonSystemPrompt,
+} from "@onkernel/cua-tzafon";
+import {
+	createTzafonComputerTools,
+	registerTzafonProvider,
+} from "@onkernel/cua-tzafon/pi";
+import {
+	buildYutoriSystemPrompt,
+} from "@onkernel/cua-yutori";
+import {
+	createYutoriComputerTools,
+	registerYutoriProvider,
+	yutoriBuiltinToolsOnPayload,
+} from "@onkernel/cua-yutori/pi";
+import {
 	type AnthropicModelConfig,
 	type Config,
 	type GeminiModelConfig,
 	type OpenAIModelConfig,
+	type TzafonModelConfig,
+	type YutoriModelConfig,
 	resolveAnthropicModelConfig,
 	resolveGeminiModelConfig,
 	resolveOpenAIModelConfig,
+	resolveTzafonModelConfig,
+	resolveYutoriModelConfig,
 } from "./config.js";
 import {
 	DEFAULT_MODEL_ID,
@@ -76,12 +98,19 @@ export function registerProviders(): void {
 		stream: streamOpenAIResponses,
 		streamSimple: streamSimpleOpenAIResponses,
 	});
+	registerApiProvider({
+		api: "openai-completions",
+		stream: streamOpenAICompletions,
+		streamSimple: streamSimpleOpenAICompletions,
+	});
 	registerAnthropicProvider();
 	registerApiProvider({
 		api: "google-generative-ai",
 		stream: streamGoogle,
 		streamSimple: streamSimpleGoogle,
 	});
+	registerYutoriProvider();
+	registerTzafonProvider();
 	providersRegistered = true;
 }
 
@@ -122,7 +151,7 @@ export interface CuaAgentHandle {
 	translator: ComputerTranslator;
 	model: Model<Api>;
 	provider: ProviderId;
-	modelConfig: OpenAIModelConfig | AnthropicModelConfig | GeminiModelConfig;
+	modelConfig: OpenAIModelConfig | AnthropicModelConfig | GeminiModelConfig | TzafonModelConfig | YutoriModelConfig;
 	thinkingLevel: ThinkingLevel;
 	dispose(): Promise<void>;
 }
@@ -136,12 +165,13 @@ export function createCuaAgent(opts: CuaAgentOptions): CuaAgentHandle {
 	registerProviders();
 
 	const modelId = opts.modelId ?? DEFAULT_MODEL_ID;
-	const { provider, model } = loadSupportedModel(modelId);
+	const { provider, model: loadedModel } = loadSupportedModel(modelId);
 
 	const modelConfig = resolveModelConfigForProvider(provider, opts.config, modelId);
+	const model = applyProviderBaseUrl(provider, loadedModel, opts.config);
 	const thinkingLevel = mapReasoningEffort(modelConfig.reasoningEffort);
 	const toolPreamble = modelConfig.toolPreamble ?? true;
-	const compactThreshold = (modelConfig as OpenAIModelConfig).compactThreshold;
+	const compactThreshold = (modelConfig as OpenAIModelConfig | AnthropicModelConfig).compactThreshold;
 
 	const translator = new ComputerTranslator({
 		client: opts.browser.client,
@@ -163,12 +193,18 @@ export function createCuaAgent(opts: CuaAgentOptions): CuaAgentHandle {
 
 	const onPayload = composeOnPayload(
 		// OpenAI auto-compaction (no-op for Anthropic/Gemini per the model.api guard).
-		compactThreshold && compactThreshold > 0
+		typeof compactThreshold === "number" && compactThreshold > 0
 			? (payload, m) =>
 					m.api === "openai-responses" ? injectContextManagement(payload, compactThreshold) : undefined
 			: undefined,
+		provider === "anthropic"
+			? createAnthropicContextManagementOnPayload({
+					compactThreshold: (modelConfig as AnthropicModelConfig).compactThreshold,
+				})
+			: undefined,
 		// Anthropic computer-tool spec injection.
 		anthropicComputerOnPayload,
+		provider === "yutori" ? yutoriBuiltinToolsOnPayload : undefined,
 	);
 
 	const agent = new Agent({
@@ -180,7 +216,9 @@ export function createCuaAgent(opts: CuaAgentOptions): CuaAgentHandle {
 		},
 		sessionId: opts.sessionId,
 		getApiKey: () => resolveApiKey(provider, opts.config),
-		streamFn: wrapAnthropicStream(streamSimple as unknown as StreamFn),
+		streamFn: wrapAnthropicStream(streamSimple as unknown as StreamFn, {
+			compactThreshold: provider === "anthropic" ? (modelConfig as AnthropicModelConfig).compactThreshold : undefined,
+		}),
 		onPayload,
 	});
 
@@ -215,6 +253,12 @@ function buildAgentTools(opts: ToolFactoryOptions): AgentTool<any, any>[] {
 			break;
 		case "gemini":
 			tools.push(...createGeminiComputerTools(opts.translator));
+			break;
+		case "tzafon":
+			tools.push(...createTzafonComputerTools(opts.translator));
+			break;
+		case "yutori":
+			tools.push(...createYutoriComputerTools(opts.translator));
 			break;
 		case "openai":
 		default:
@@ -256,6 +300,12 @@ function buildSystemPromptForProvider(provider: ProviderId, opts: SystemPromptOp
 		case "gemini":
 			preamble = buildGeminiSystemPrompt();
 			break;
+		case "tzafon":
+			preamble = buildTzafonSystemPrompt();
+			break;
+		case "yutori":
+			preamble = buildYutoriSystemPrompt({ toolPreamble: false });
+			break;
 		case "openai":
 		default:
 			preamble = OPENAI_BATCH_INSTRUCTIONS;
@@ -275,12 +325,16 @@ function resolveModelConfigForProvider(
 	provider: ProviderId,
 	cfg: Config,
 	modelId: string,
-): OpenAIModelConfig | AnthropicModelConfig | GeminiModelConfig {
+): OpenAIModelConfig | AnthropicModelConfig | GeminiModelConfig | TzafonModelConfig | YutoriModelConfig {
 	switch (provider) {
 		case "anthropic":
 			return resolveAnthropicModelConfig(cfg, modelId);
 		case "gemini":
 			return resolveGeminiModelConfig(cfg, modelId);
+		case "tzafon":
+			return resolveTzafonModelConfig(cfg, modelId);
+		case "yutori":
+			return resolveYutoriModelConfig(cfg, modelId);
 		case "openai":
 		default:
 			return resolveOpenAIModelConfig(cfg, modelId);
@@ -295,7 +349,18 @@ function resolveApiKey(provider: ProviderId, cfg: Config): string | undefined {
 			return cfg.anthropicApiKey || process.env.ANTHROPIC_API_KEY || undefined;
 		case "gemini":
 			return cfg.googleApiKey || process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY || undefined;
+		case "tzafon":
+			return cfg.tzafonApiKey || process.env.TZAFON_API_KEY || undefined;
+		case "yutori":
+			return cfg.yutoriApiKey || process.env.YUTORI_API_KEY || undefined;
 	}
+}
+
+function applyProviderBaseUrl(provider: ProviderId, model: Model<Api>, cfg: Config): Model<Api> {
+	if (provider === "yutori" && cfg.yutoriBaseUrl) {
+		return { ...model, baseUrl: cfg.yutoriBaseUrl };
+	}
+	return model;
 }
 
 /**

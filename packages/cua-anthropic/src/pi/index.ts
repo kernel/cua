@@ -35,4 +35,6 @@ export {
 export {
 	anthropicComputerOnPayload,
 	composeOnPayload,
+	createAnthropicContextManagementOnPayload,
 } from "../payload-hook.js";
+export type { AnthropicContextManagementOptions } from "../payload-hook.js";

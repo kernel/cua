@@ -23,8 +23,11 @@ Every frontier model now ships its own first-party "computer use" tool:
 - **Google gemini-2.5-pro / gemini-3.x**: a set of predefined
   computer-use functions (`click_at`, `type_text_at`, `scroll_at`,
   `navigate`, `go_back`, …) with 0-1000 normalized coordinates.
+- **Yutori Navigator n1 / n1.5**: OpenAI-compatible `chat.completions`
+  responses with built-in browser action `tool_calls` like `left_click`,
+  `goto_url`, `type`, and `scroll` in 0-1000 normalized coordinates.
 
-All three expect you to:
+All of them expect you to:
 
 1. Run a real browser somewhere (locally is annoying, on a server is hard).
 2. Translate every action into an actual SDK call against that browser.
@@ -43,7 +46,8 @@ packages/
 ├── cua-openai/       # @onkernel/cua-openai       - gpt-* (batch_computer_actions + computer_use_extra)
 ├── cua-anthropic/    # @onkernel/cua-anthropic    - claude-* (computer_20251124 + batch_computer_actions + onPayload)
 ├── cua-gemini/       # @onkernel/cua-gemini       - gemini-* (predefined functions + batch_computer_actions)
-└── cua-cli/          # @onkernel/cua-cli          - the CLI; depends on all four above
+├── cua-yutori/       # @onkernel/cua-yutori       - n1* (Navigator browser actions)
+└── cua-cli/          # @onkernel/cua-cli          - the CLI; depends on all providers above
 ```
 
 ```mermaid
@@ -52,16 +56,19 @@ flowchart LR
   oai[("@onkernel/cua-openai")]
   ant[("@onkernel/cua-anthropic")]
   gem[("@onkernel/cua-gemini")]
+  yut[("@onkernel/cua-yutori")]
   cli[("@onkernel/cua-cli")]
   pi[("pi-agent-core / pi-ai / pi-tui / pi-coding-agent")]
   sdk[("@onkernel/sdk")]
   trans --> oai
   trans --> ant
   trans --> gem
+  trans --> yut
   trans --> sdk
   oai --> cli
   ant --> cli
   gem --> cli
+  yut --> cli
   pi --> cli
 ```
 
@@ -71,6 +78,7 @@ flowchart LR
 | [`@onkernel/cua-openai`](packages/cua-openai)         | `batch_computer_actions` + `computer_use_extra` AgentTools and JSON Schemas for OpenAI computer-use models.                              |
 | [`@onkernel/cua-anthropic`](packages/cua-anthropic)   | `computer` (built-in `computer_20251124`) + `batch_computer_actions` AgentTools, beta-header stream wrapper, payload hook.               |
 | [`@onkernel/cua-gemini`](packages/cua-gemini)         | 13 per-action AgentTools matching Gemini's predefined computer-use functions, plus `batch_computer_actions`. Coordinate denormalization. |
+| [`@onkernel/cua-yutori`](packages/cua-yutori)         | AgentTools matching Yutori Navigator browser actions, with outbound payload filtering so Yutori uses its built-in action set.             |
 | [`@onkernel/cua-cli`](packages/cua-cli)               | The `cua` binary: argv parsing, config, sessions, skills, JSONL output, pi-tui front-end.                                                |
 
 ---
@@ -95,6 +103,7 @@ cua config init                              # interactive: profile name + API k
 export OPENAI_API_KEY=sk-...                 # for gpt-5.5
 export ANTHROPIC_API_KEY=sk-ant-...          # for claude-opus-4-7
 export GOOGLE_API_KEY=...                    # for gemini-3-flash-preview
+export YUTORI_API_KEY=yt_...                 # for n1.5-latest
 export KERNEL_API_KEY=sk_...                 # always required
 
 # single-shot
@@ -108,6 +117,9 @@ cua -p --model claude-opus-4-7 "Same prompt"
 
 # Gemini 3 Flash (built-in computer use)
 cua -p --model gemini-3-flash-preview "Same prompt"
+
+# Yutori Navigator
+cua -p --model n1.5-latest "Same prompt"
 
 # interactive TUI (default mode)
 cua
@@ -335,6 +347,7 @@ copy-pasteable "embed in your own agent" snippet:
 - [`@onkernel/cua-openai`](packages/cua-openai/README.md)
 - [`@onkernel/cua-anthropic`](packages/cua-anthropic/README.md)
 - [`@onkernel/cua-gemini`](packages/cua-gemini/README.md)
+- [`@onkernel/cua-yutori`](packages/cua-yutori/README.md)
 
 The cua-added actions (`goto`, `back`, `forward`, `url`, plus the
 `batch_computer_actions` tool itself) are clearly marked as "cua
@@ -383,6 +396,12 @@ packages/
 │       ├── computer-tool.ts    # 13 per-action AgentTools dispatching to translator.executeBatch
 │       ├── batch-tool.ts       # batch_computer_actions (Gemini FunctionDeclaration)
 │       └── system-prompt.ts    # GEMINI_COMPUTER_INSTRUCTIONS + batch nudge
+├── cua-yutori/
+│   └── src/
+│       ├── official.ts         # Yutori Navigator action enum + supported n1/n1.5 ids
+│       ├── coords.ts           # denormalize 0-1000 → pixels
+│       ├── computer-tool.ts    # per-action AgentTools dispatching to translator.executeBatch
+│       └── system-prompt.ts    # minimal Yutori runtime note
 └── cua-cli/
     └── src/
         ├── cli.ts              # argv parsing, mode dispatch

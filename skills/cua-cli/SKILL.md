@@ -25,9 +25,9 @@ Each call below provisions a fresh Kernel browser by default, runs the action, a
 Useful flags:
 
 - `-m <model>` — pick the LLM (default `gpt-5.5`). Other good picks:
-  `claude-opus-4-7`, `gemini-3-flash-preview`.
+  `claude-opus-4-7`, `gemini-3-flash-preview`, `n1.5-latest`.
 - `cua models` — list supported `-m` values and their providers; filter
-  with `cua models -p openai|anthropic|gemini`.
+  with `cua models -p openai|anthropic|gemini|yutori`.
 - `--max-steps <n>` — bound the agent loop on `cua do` (default 3).
 - `--profile <profile-id-or-name>` — load a Kernel browser profile for cookies /
   storage. Existing ids or names are reused; a non-id name is created if it

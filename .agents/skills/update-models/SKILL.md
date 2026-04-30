@@ -1,6 +1,6 @@
 ---
 name: update-models
-description: Discover latest OpenAI, Anthropic, and Google/Gemini models and verify computer-use support. Use when updating CUA model defaults, checking new model releases, auditing provider-native computer tool actions, or comparing provider metadata, official examples, and smoke-test results.
+description: Discover latest OpenAI, Anthropic, Google/Gemini, Tzafon, and Yutori models and verify computer-use support. Use when updating CUA model defaults, checking new model releases, auditing provider-native computer tool actions, or comparing provider metadata, official examples, and smoke-test results.
 ---
 
 # Update Models
@@ -9,14 +9,14 @@ Use this workflow to keep CUA current with provider model releases and computer-
 
 ## Quick Start
 
-1. Verify credentials are available: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, and `GOOGLE_API_KEY` or `GEMINI_API_KEY`.
+1. Verify credentials are available: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY` or `GEMINI_API_KEY`, `TZAFON_API_KEY`, and `YUTORI_API_KEY`.
 2. If credentials live in `~/AGENTS.md`, load them into the current shell without printing them:
 
 ```bash
 eval "$(python3 - <<'PY'
 import pathlib, re, shlex
 text = pathlib.Path('~/AGENTS.md').expanduser().read_text()
-for key in ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY']:
+for key in ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY', 'TZAFON_API_KEY', 'YUTORI_API_KEY']:
     m = re.search(r'export\s+' + re.escape(key) + r'=(?:"([^"]+)"|([^\s\n]+))', text)
     if m:
         print(f'export {key}={shlex.quote(m.group(1) or m.group(2))}')
@@ -61,7 +61,7 @@ Treat example repos as strongest when they are provider-owned or linked from off
 
 There are two enumeration layers:
 
-- Live provider availability: `reference/discover-models.ts` uses provider APIs (`OpenAI().models.list()`, `Anthropic().models.list({ limit: 1000 })`, and `GoogleGenAI().models.list()` / documented Gemini computer-use IDs) to discover what the current API key can access.
+- Live provider availability: `reference/discover-models.ts` uses provider APIs and docs (`OpenAI().models.list()`, `Anthropic().models.list({ limit: 1000 })`, `GoogleGenAI().models.list()` / documented Gemini computer-use IDs, Tzafon's `Lightcone().models.list()` with known-model fallback, and Yutori OpenAPI/docs model enums) to discover what the current API key can access.
 - CUA-supported flags: `cua models` reads `packages/cua-cli/src/models.ts` and prints the exact `-m` / `--model` values CUA accepts, plus their provider. This table is also what runtime provider routing uses.
 
 When live discovery finds a new model with passing smoke tests, update `packages/cua-cli/src/models.ts`; then verify it appears in `cua models -p <provider>`.
@@ -95,6 +95,22 @@ Google/Gemini:
 - Pass condition: response contains provider-native `functionCall.name` values such as `open_web_browser`, `click_at`, or `type_text_at`.
 - Do not infer official computer-use support from CUA's custom Gemini `functionDeclarations`; those are a separate compatibility path.
 
+Tzafon:
+
+- Discover with `new Lightcone({ apiKey }).models.list()` from `@tzafon/lightcone` when available.
+- If model listing is unavailable or returns an undocumented shape, record the error/shape and fall back to known smoke-test candidates such as `tzafon.northstar-cua-fast`.
+- Smoke-test `responses.create` with explicit function tools matching the Tzafon template: `click`, `double_click`, `point_and_type`, `key`, `scroll`, `drag`, and `done`.
+- Pass condition: response output contains `type: "function_call"` with one of those tool names, or a documented `computer_call` action if Lightcone switches to native computer-use output.
+- Track coordinate convention separately from Gemini/Yutori: Tzafon uses a 0-999 grid.
+
+Yutori:
+
+- Discover model IDs from `https://docs.yutori.com/openapi.json` plus the Navigator docs. Current expected IDs include `n1.5-latest`, `n1.5-20260428`, `n1-latest`, and `n1-20260203`.
+- Smoke-test the OpenAI-compatible `chat.completions` endpoint with `baseURL: "https://api.yutori.com/v1"` and `YUTORI_API_KEY`.
+- Pass condition: response `choices[0].message.tool_calls[]` contains browser action function names such as `left_click`, `goto_url`, `type`, `scroll`, or `wait`.
+- Track action-space differences between n1 and n1.5. n1 uses the legacy fixed tool set; n1.5 supports `tool_set`, `disable_tools`, expanded actions, and structured JSON output.
+- Do not send duplicate browser action schemas when testing local CUA behavior. The local adapter registers matching AgentTools for execution but filters Yutori's built-in browser tool definitions out of the outbound API payload.
+
 ## Native Action Discovery
 
 Run action probes when updating adapters or when docs/examples show drift:
@@ -103,6 +119,8 @@ Run action probes when updating adapters or when docs/examples show drift:
 npx tsx .agents/skills/update-models/reference/native-action-probe.ts --provider openai --model gpt-5.5
 npx tsx .agents/skills/update-models/reference/native-action-probe.ts --provider anthropic --model claude-opus-4-7
 npx tsx .agents/skills/update-models/reference/native-action-probe.ts --provider gemini --model gemini-3-flash-preview
+npx tsx .agents/skills/update-models/reference/native-action-probe.ts --provider tzafon --model tzafon.northstar-cua-fast
+npx tsx .agents/skills/update-models/reference/native-action-probe.ts --provider yutori --model n1.5-latest
 ```
 
 The probe does not execute browser actions. It elicits tool calls for screenshot, click, type, keypress, scroll, drag, hover/move, wait, back/forward, and navigation. Compare:
@@ -147,6 +165,8 @@ When a new model is discovered, decide which layer needs changing:
   - OpenAI: update `packages/cua-openai/src/official.ts`, related schemas/tools, translator mapping if the canonical action set changes, and docs in `packages/cua-openai/README.md`.
   - Anthropic: update `packages/cua-anthropic/src/official.ts`, `computer-tool.ts`, `payload-hook.ts` / stream wrapper beta handling, and docs.
   - Gemini: update `packages/cua-gemini/src/official.ts`, `computer-tool.ts`, coordinate handling if needed, and docs.
+  - Tzafon: update `packages/cua-tzafon/src/official.ts`, `computer.ts`, `system-prompt.ts`, `pi/index.ts`, coordinate/action handling, and docs.
+  - Yutori: update `packages/cua-yutori/src/official.ts`, `computer.ts`, payload filtering in `pi/index.ts`, coordinate/action handling, and docs.
   - Shared action semantics go in `packages/cua-translator/src/types.ts`, `translator.ts`, and related helper files.
 
 - New provider or routing rule:

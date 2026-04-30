@@ -26,6 +26,7 @@ export interface ClickMouseOp {
 	x: number;
 	y: number;
 	button?: string;
+	clickType?: "down" | "up" | "click";
 	numClicks?: number;
 	holdKeys?: string[];
 }
@@ -33,6 +34,7 @@ export interface ClickMouseOp {
 export interface MoveMouseOp {
 	x: number;
 	y: number;
+	holdKeys?: string[];
 }
 
 export interface TypeTextOp {
@@ -42,6 +44,7 @@ export interface TypeTextOp {
 export interface PressKeyOp {
 	keys: string[];
 	holdKeys?: string[];
+	durationMs?: number;
 }
 
 export interface ScrollOp {
@@ -54,6 +57,8 @@ export interface ScrollOp {
 
 export interface DragMouseOp {
 	path: number[][];
+	button?: string;
+	holdKeys?: string[];
 }
 
 export interface SleepOp {
@@ -71,7 +76,7 @@ export interface BatchAction {
 	sleep?: SleepOp;
 }
 
-export type BatchReadType = "screenshot" | "url";
+export type BatchReadType = "screenshot" | "url" | "cursor_position";
 
 export interface ScreenshotReadResult {
 	type: "screenshot";
@@ -83,7 +88,13 @@ export interface UrlReadResult {
 	url: string;
 }
 
-export type BatchReadResult = ScreenshotReadResult | UrlReadResult;
+export interface CursorPositionReadResult {
+	type: "cursor_position";
+	x: number;
+	y: number;
+}
+
+export type BatchReadResult = ScreenshotReadResult | UrlReadResult | CursorPositionReadResult;
 
 export interface BatchExecutionResult {
 	readResults: BatchReadResult[];
@@ -120,11 +131,13 @@ export class ActionValidationError extends Error {
  * understands. Includes both the provider-official primitives (`click`,
  * `double_click`, `type`, `keypress`, `scroll`, `move`, `drag`, `wait`,
  * `screenshot`) and the cua-added extensions (`goto`, `back`, `forward`,
- * `url`).
+ * `url`, `cursor_position`).
  */
 export const ALLOWED_MODEL_ACTION_TYPES = [
 	"click",
 	"double_click",
+	"mouse_down",
+	"mouse_up",
 	"type",
 	"keypress",
 	"scroll",
@@ -136,6 +149,7 @@ export const ALLOWED_MODEL_ACTION_TYPES = [
 	"back",
 	"forward",
 	"url",
+	"cursor_position",
 ] as const;
 
 export type AllowedModelActionType = (typeof ALLOWED_MODEL_ACTION_TYPES)[number];

@@ -5,6 +5,8 @@
     { "path": "./packages/cua-openai" },
     { "path": "./packages/cua-anthropic" },
     { "path": "./packages/cua-gemini" },
+    { "path": "./packages/cua-tzafon" },
+    { "path": "./packages/cua-yutori" },
     { "path": "./packages/ptywright" },
     { "path": "./packages/cua-cli" }
   ]

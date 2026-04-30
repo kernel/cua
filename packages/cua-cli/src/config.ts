@@ -9,7 +9,7 @@ export interface OpenAIModelConfig {
 	name?: string;
 	reasoningEffort?: string;
 	toolPreamble?: boolean;
-	compactThreshold?: number;
+	compactThreshold?: number | false;
 }
 
 export interface OpenAIConfig {
@@ -21,6 +21,7 @@ export interface AnthropicModelConfig {
 	name?: string;
 	reasoningEffort?: string;
 	toolPreamble?: boolean;
+	compactThreshold?: number | false;
 }
 
 export interface AnthropicConfig {
@@ -39,6 +40,28 @@ export interface GeminiConfig {
 	models: GeminiModelConfig[];
 }
 
+export interface YutoriModelConfig {
+	name?: string;
+	reasoningEffort?: string;
+	toolPreamble?: boolean;
+}
+
+export interface YutoriConfig {
+	default: YutoriModelConfig;
+	models: YutoriModelConfig[];
+}
+
+export interface TzafonModelConfig {
+	name?: string;
+	reasoningEffort?: string;
+	toolPreamble?: boolean;
+}
+
+export interface TzafonConfig {
+	default: TzafonModelConfig;
+	models: TzafonModelConfig[];
+}
+
 export interface Config {
 	openaiApiKey: string;
 	openaiBaseUrl: string;
@@ -46,11 +69,16 @@ export interface Config {
 	anthropicBaseUrl: string;
 	googleApiKey: string;
 	googleBaseUrl: string;
+	tzafonApiKey: string;
+	yutoriApiKey: string;
+	yutoriBaseUrl: string;
 	kernelApiKey: string;
 	kernelBaseUrl: string;
 	openai: OpenAIConfig;
 	anthropic: AnthropicConfig;
 	gemini: GeminiConfig;
+	tzafon: TzafonConfig;
+	yutori: YutoriConfig;
 }
 
 export function configDir(): string {
@@ -71,6 +99,9 @@ const ENV_KEYS: Array<{ env: string; key: keyof Config }> = [
 	{ env: "GOOGLE_API_KEY", key: "googleApiKey" },
 	{ env: "GEMINI_API_KEY", key: "googleApiKey" },
 	{ env: "GOOGLE_BASE_URL", key: "googleBaseUrl" },
+	{ env: "TZAFON_API_KEY", key: "tzafonApiKey" },
+	{ env: "YUTORI_API_KEY", key: "yutoriApiKey" },
+	{ env: "YUTORI_BASE_URL", key: "yutoriBaseUrl" },
 	{ env: "KERNEL_API_KEY", key: "kernelApiKey" },
 	{ env: "KERNEL_BASE_URL", key: "kernelBaseUrl" },
 ];
@@ -83,11 +114,16 @@ function emptyConfig(): Config {
 		anthropicBaseUrl: "",
 		googleApiKey: "",
 		googleBaseUrl: "",
+		tzafonApiKey: "",
+		yutoriApiKey: "",
+		yutoriBaseUrl: "",
 		kernelApiKey: "",
 		kernelBaseUrl: "",
 		openai: { default: {}, models: [] },
 		anthropic: { default: {}, models: [] },
 		gemini: { default: {}, models: [] },
+		tzafon: { default: {}, models: [] },
+		yutori: { default: {}, models: [] },
 	};
 }
 
@@ -96,7 +132,9 @@ function readModelConfig(raw: any): OpenAIModelConfig {
 	if (typeof raw?.name === "string") out.name = raw.name;
 	if (typeof raw?.reasoning_effort === "string") out.reasoningEffort = raw.reasoning_effort;
 	if (typeof raw?.tool_preamble === "boolean") out.toolPreamble = raw.tool_preamble;
-	if (typeof raw?.compact_threshold === "number") out.compactThreshold = raw.compact_threshold;
+	if (typeof raw?.compact_threshold === "number" || raw?.compact_threshold === false) {
+		out.compactThreshold = raw.compact_threshold;
+	}
 	return out;
 }
 
@@ -109,11 +147,14 @@ function readOpenAIConfig(raw: any): OpenAIConfig {
 	return out;
 }
 
-function readPlainModelConfig(raw: any): { name?: string; reasoningEffort?: string; toolPreamble?: boolean } {
-	const out: { name?: string; reasoningEffort?: string; toolPreamble?: boolean } = {};
+function readPlainModelConfig(raw: any): { name?: string; reasoningEffort?: string; toolPreamble?: boolean; compactThreshold?: number | false } {
+	const out: { name?: string; reasoningEffort?: string; toolPreamble?: boolean; compactThreshold?: number | false } = {};
 	if (typeof raw?.name === "string") out.name = raw.name;
 	if (typeof raw?.reasoning_effort === "string") out.reasoningEffort = raw.reasoning_effort;
 	if (typeof raw?.tool_preamble === "boolean") out.toolPreamble = raw.tool_preamble;
+	if (typeof raw?.compact_threshold === "number" || raw?.compact_threshold === false) {
+		out.compactThreshold = raw.compact_threshold;
+	}
 	return out;
 }
 
@@ -128,6 +169,24 @@ function readAnthropicConfig(raw: any): AnthropicConfig {
 
 function readGeminiConfig(raw: any): GeminiConfig {
 	const out: GeminiConfig = { default: {}, models: [] };
+	if (raw && typeof raw === "object") {
+		if (raw.default) out.default = readPlainModelConfig(raw.default);
+		if (Array.isArray(raw.models)) out.models = raw.models.map(readPlainModelConfig);
+	}
+	return out;
+}
+
+function readYutoriConfig(raw: any): YutoriConfig {
+	const out: YutoriConfig = { default: {}, models: [] };
+	if (raw && typeof raw === "object") {
+		if (raw.default) out.default = readPlainModelConfig(raw.default);
+		if (Array.isArray(raw.models)) out.models = raw.models.map(readPlainModelConfig);
+	}
+	return out;
+}
+
+function readTzafonConfig(raw: any): TzafonConfig {
+	const out: TzafonConfig = { default: {}, models: [] };
 	if (raw && typeof raw === "object") {
 		if (raw.default) out.default = readPlainModelConfig(raw.default);
 		if (Array.isArray(raw.models)) out.models = raw.models.map(readPlainModelConfig);
@@ -162,6 +221,18 @@ function readProfile(profile: any): { cfg: Config; explicit: Set<keyof Config> }
 		cfg.googleBaseUrl = profile.google_base_url;
 		explicit.add("googleBaseUrl");
 	}
+	if (typeof profile?.tzafon_api_key === "string") {
+		cfg.tzafonApiKey = profile.tzafon_api_key;
+		explicit.add("tzafonApiKey");
+	}
+	if (typeof profile?.yutori_api_key === "string") {
+		cfg.yutoriApiKey = profile.yutori_api_key;
+		explicit.add("yutoriApiKey");
+	}
+	if (typeof profile?.yutori_base_url === "string") {
+		cfg.yutoriBaseUrl = profile.yutori_base_url;
+		explicit.add("yutoriBaseUrl");
+	}
 	if (typeof profile?.kernel_api_key === "string") {
 		cfg.kernelApiKey = profile.kernel_api_key;
 		explicit.add("kernelApiKey");
@@ -174,6 +245,8 @@ function readProfile(profile: any): { cfg: Config; explicit: Set<keyof Config> }
 	if (profile?.anthropic) cfg.anthropic = readAnthropicConfig(profile.anthropic);
 	if (profile?.gemini) cfg.gemini = readGeminiConfig(profile.gemini);
 	if (profile?.google) cfg.gemini = readGeminiConfig(profile.google);
+	if (profile?.tzafon) cfg.tzafon = readTzafonConfig(profile.tzafon);
+	if (profile?.yutori) cfg.yutori = readYutoriConfig(profile.yutori);
 	return { cfg, explicit };
 }
 
@@ -330,13 +403,64 @@ export function resolveGeminiModelConfig(cfg: Config, model: string): GeminiMode
 	return resolved;
 }
 
-function mergePlainModelConfig<T extends { reasoningEffort?: string; toolPreamble?: boolean }>(
+export function resolveTzafonModelConfig(cfg: Config, model: string): TzafonModelConfig {
+	const trimmed = model.trim();
+	const resolved: TzafonModelConfig = { ...cfg.tzafon.default };
+	if (cfg.tzafon.models.length === 0) return resolved;
+
+	for (const entry of cfg.tzafon.models) {
+		if ((entry.name ?? "").trim() === trimmed) {
+			return mergePlainModelConfig(resolved, entry);
+		}
+	}
+
+	let longestPrefix = "";
+	let prefixCfg: TzafonModelConfig | undefined;
+	for (const entry of cfg.tzafon.models) {
+		const key = (entry.name ?? "").trim();
+		if (!key) continue;
+		if (trimmed.startsWith(key) && key.length > longestPrefix.length) {
+			longestPrefix = key;
+			prefixCfg = entry;
+		}
+	}
+	if (prefixCfg) return mergePlainModelConfig(resolved, prefixCfg);
+	return resolved;
+}
+
+export function resolveYutoriModelConfig(cfg: Config, model: string): YutoriModelConfig {
+	const trimmed = model.trim();
+	const resolved: YutoriModelConfig = { ...cfg.yutori.default };
+	if (cfg.yutori.models.length === 0) return resolved;
+
+	for (const entry of cfg.yutori.models) {
+		if ((entry.name ?? "").trim() === trimmed) {
+			return mergePlainModelConfig(resolved, entry);
+		}
+	}
+
+	let longestPrefix = "";
+	let prefixCfg: YutoriModelConfig | undefined;
+	for (const entry of cfg.yutori.models) {
+		const key = (entry.name ?? "").trim();
+		if (!key) continue;
+		if (trimmed.startsWith(key) && key.length > longestPrefix.length) {
+			longestPrefix = key;
+			prefixCfg = entry;
+		}
+	}
+	if (prefixCfg) return mergePlainModelConfig(resolved, prefixCfg);
+	return resolved;
+}
+
+function mergePlainModelConfig<T extends { reasoningEffort?: string; toolPreamble?: boolean; compactThreshold?: number | false }>(
 	base: T,
 	override: T,
 ): T {
 	const out: T = { ...base };
 	if ((override.reasoningEffort ?? "").trim().length > 0) out.reasoningEffort = override.reasoningEffort;
 	if (override.toolPreamble !== undefined) out.toolPreamble = override.toolPreamble;
+	if (override.compactThreshold !== undefined) out.compactThreshold = override.compactThreshold;
 	return out;
 }
 
@@ -402,9 +526,11 @@ export async function init(): Promise<void> {
 		const openaiKey = await prompt(rl, "OpenAI API key (leave blank to skip): ");
 		const anthropicKey = await prompt(rl, "Anthropic API key (leave blank to skip): ");
 		const googleKey = await prompt(rl, "Google API key (leave blank to skip): ");
+		const tzafonKey = await prompt(rl, "Tzafon API key (leave blank to skip): ");
+		const yutoriKey = await prompt(rl, "Yutori API key (leave blank to skip): ");
 		const kernelKey = await prompt(rl, "Kernel API key: ");
-		if (!openaiKey && !anthropicKey && !googleKey) {
-			throw new Error("at least one of OpenAI, Anthropic, or Google API key is required");
+		if (!openaiKey && !anthropicKey && !googleKey && !tzafonKey && !yutoriKey) {
+			throw new Error("at least one of OpenAI, Anthropic, Google, Tzafon, or Yutori API key is required");
 		}
 		if (!kernelKey) {
 			throw new Error("Kernel API key is required");
@@ -434,6 +560,24 @@ export async function init(): Promise<void> {
 		if (googleKey) {
 			profileBlock.google_api_key = googleKey;
 			profileBlock.gemini = {
+				default: {
+					reasoning_effort: "low",
+					tool_preamble: true,
+				},
+			};
+		}
+		if (tzafonKey) {
+			profileBlock.tzafon_api_key = tzafonKey;
+			profileBlock.tzafon = {
+				default: {
+					reasoning_effort: "low",
+					tool_preamble: true,
+				},
+			};
+		}
+		if (yutoriKey) {
+			profileBlock.yutori_api_key = yutoriKey;
+			profileBlock.yutori = {
 				default: {
 					reasoning_effort: "low",
 					tool_preamble: true,

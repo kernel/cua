@@ -38,6 +38,7 @@ export interface AnthropicComputerDetails {
 }
 
 const SETTLE_MS = 300;
+const DEFAULT_HOLD_KEY_MS = 1000;
 
 function delay(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
@@ -73,6 +74,10 @@ export async function executeAnthropicComputerAction(
 					skipScreenshot = true;
 				} else if (r.type === "url") {
 					content.push({ type: "text", text: `url: ${r.url}` });
+					skipScreenshot = true;
+				} else if (r.type === "cursor_position") {
+					content.push({ type: "text", text: `cursor_position: ${r.x},${r.y}` });
+					skipScreenshot = true;
 				}
 			}
 		}
@@ -116,37 +121,33 @@ export async function executeAnthropicComputerAction(
 type TranslateResult = ModelAction[] | "unsupported";
 
 export function translateAnthropicAction(action: string, params: Record<string, unknown>): TranslateResult {
-	switch (action) {
+	switch (normalizeAction(action)) {
 		case "screenshot":
 			return [{ type: "screenshot" }];
 
 		case "left_click": {
 			const coord = readCoord(params.coordinate);
-			if (!coord) throw new Error("left_click requires `coordinate`");
 			return modifiedClick("left", coord, params.text);
 		}
 		case "right_click": {
 			const coord = readCoord(params.coordinate);
-			if (!coord) throw new Error("right_click requires `coordinate`");
 			return modifiedClick("right", coord, params.text);
 		}
 		case "middle_click": {
 			const coord = readCoord(params.coordinate);
-			if (!coord) throw new Error("middle_click requires `coordinate`");
 			return modifiedClick("middle", coord, params.text);
 		}
 		case "double_click": {
 			const coord = readCoord(params.coordinate);
-			if (!coord) throw new Error("double_click requires `coordinate`");
-			return [{ type: "double_click", x: coord[0], y: coord[1] }];
+			return [{ type: "double_click", ...(coord ? { x: coord[0], y: coord[1] } : {}) }];
 		}
 		case "triple_click": {
 			const coord = readCoord(params.coordinate);
-			if (!coord) throw new Error("triple_click requires `coordinate`");
+			const click = coord ? { x: coord[0], y: coord[1], button: "left" } : { button: "left" };
 			return [
-				{ type: "click", x: coord[0], y: coord[1], button: "left" },
-				{ type: "click", x: coord[0], y: coord[1], button: "left" },
-				{ type: "click", x: coord[0], y: coord[1], button: "left" },
+				{ type: "click", ...click },
+				{ type: "click", ...click },
+				{ type: "click", ...click },
 			];
 		}
 
@@ -159,12 +160,13 @@ export function translateAnthropicAction(action: string, params: Record<string, 
 		case "left_click_drag": {
 			const start = readCoord(params.start_coordinate);
 			const end = readCoord(params.coordinate);
-			if (!start || !end) throw new Error("left_click_drag requires `start_coordinate` and `coordinate`");
+			if (!end) throw new Error("left_click_drag requires `coordinate`");
+			const firstPoint = start ? { x: start[0], y: start[1] } : { current: true };
 			return [
 				{
 					type: "drag",
 					path: [
-						{ x: start[0], y: start[1] },
+						firstPoint,
 						{ x: end[0], y: end[1] },
 					],
 				},
@@ -185,7 +187,6 @@ export function translateAnthropicAction(action: string, params: Record<string, 
 
 		case "scroll": {
 			const coord = readCoord(params.coordinate);
-			if (!coord) throw new Error("scroll requires `coordinate`");
 			const direction = readString(params.scroll_direction) ?? "down";
 			const amount = typeof params.scroll_amount === "number" ? params.scroll_amount : 3;
 			const magnitude = Math.max(1, Math.trunc(Math.abs(amount))) * 120;
@@ -210,10 +211,9 @@ export function translateAnthropicAction(action: string, params: Record<string, 
 			const modifiers = parseModifierList(params.text);
 			const modelAction: ModelAction = {
 				type: "scroll",
-				x: coord[0],
-				y: coord[1],
 				scroll_x: scrollX,
 				scroll_y: scrollY,
+				...(coord ? { x: coord[0], y: coord[1] } : {}),
 				...(modifiers.length > 0 ? { hold_keys: modifiers } : {}),
 			};
 			return [modelAction];
@@ -224,16 +224,40 @@ export function translateAnthropicAction(action: string, params: Record<string, 
 			return [{ type: "wait", ms: Math.max(0, Math.trunc(duration * 1000)) }];
 		}
 
-		case "hold_key":
-		case "left_mouse_down":
-		case "left_mouse_up":
+		case "hold_key": {
+			const text = readString(params.text);
+			if (!text) throw new Error("hold_key requires `text`");
+			const duration = typeof params.duration === "number" ? Math.max(0, Math.trunc(params.duration * 1000)) : DEFAULT_HOLD_KEY_MS;
+			return [{ type: "keypress", keys: parseKeyCombo(text), duration_ms: duration }];
+		}
+		case "left_mouse_down": {
+			const coord = readCoord(params.coordinate);
+			return [{ type: "mouse_down", button: "left", ...(coord ? { x: coord[0], y: coord[1] } : {}) }];
+		}
+		case "left_mouse_up": {
+			const coord = readCoord(params.coordinate);
+			return [{ type: "mouse_up", button: "left", ...(coord ? { x: coord[0], y: coord[1] } : {}) }];
+		}
 		case "zoom":
-		case "cursor_position":
 			return "unsupported";
+		case "cursor_position":
+			return [{ type: "cursor_position" }];
 
 		default:
 			throw new Error(`unknown computer action: ${action}`);
 	}
+}
+
+function normalizeAction(action: string): string {
+	const trimmed = action.trim().toLowerCase().replace(/\s+/g, "_");
+	const aliases: Record<string, string> = {
+		click: "left_click",
+		left_click: "left_click",
+		left_mouse_click: "left_click",
+		right_click: "right_click",
+		right_mouse_click: "right_click",
+	};
+	return aliases[trimmed] ?? trimmed;
 }
 
 function readCoord(value: unknown): [number, number] | null {
@@ -252,7 +276,7 @@ function readString(value: unknown): string | undefined {
 function parseKeyCombo(text: string): string[] {
 	return text
 		.split("+")
-		.map((s) => s.trim())
+		.map((s) => normalizeKey(s.trim()))
 		.filter(Boolean);
 }
 
@@ -261,21 +285,38 @@ function parseModifierList(value: unknown): string[] {
 	if (!text) return [];
 	return text
 		.split("+")
-		.map((s) => s.trim())
+		.map((s) => normalizeKey(s.trim()))
 		.filter(Boolean);
+}
+
+function normalizeKey(key: string): string {
+	const lower = key.toLowerCase();
+	const aliases: Record<string, string> = {
+		escape: "Escape",
+		esc: "Escape",
+		page_down: "PageDown",
+		pagedown: "PageDown",
+		page_up: "PageUp",
+		pageup: "PageUp",
+		super_l: "Super",
+		super: "Super",
+		cmd: "Meta",
+		command: "Meta",
+		return: "Enter",
+	};
+	return aliases[lower] ?? key;
 }
 
 function modifiedClick(
 	button: "left" | "right" | "middle",
-	coord: [number, number],
+	coord: [number, number] | null,
 	modifierText: unknown,
 ): ModelAction[] {
 	const modifiers = parseModifierList(modifierText);
 	const click: ModelAction = {
 		type: "click",
-		x: coord[0],
-		y: coord[1],
 		button,
+		...(coord ? { x: coord[0], y: coord[1] } : {}),
 		...(modifiers.length > 0 ? { hold_keys: modifiers } : {}),
 	};
 	return [click];

@@ -10,6 +10,8 @@
     { "path": "../cua-openai" },
     { "path": "../cua-anthropic" },
     { "path": "../cua-gemini" },
+    { "path": "../cua-tzafon" },
+    { "path": "../cua-yutori" },
     { "path": "../ptywright" }
   ]
 }

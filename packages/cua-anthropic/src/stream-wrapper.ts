@@ -4,7 +4,12 @@ import {
 	streamAnthropic,
 	streamSimpleAnthropic,
 } from "@mariozechner/pi-ai";
-import { anthropicComputerUseBetaForModel } from "./official.js";
+import {
+	ANTHROPIC_COMPACTION_BETA,
+	anthropicComputerUseBetaForModel,
+	anthropicSupportsCompaction,
+} from "./official.js";
+import type { AnthropicContextManagementOptions } from "./payload-hook.js";
 
 /**
  * Eagerly register the Anthropic Messages provider with `pi-ai`. pi-ai
@@ -34,14 +39,18 @@ export function registerAnthropicProvider(): void {
  * header. pi-ai's `mergeHeaders` is "later wins", so to keep both we
  * compose the combined value here and overwrite.
  */
-export function wrapAnthropicStream(base: StreamFn): StreamFn {
+export function wrapAnthropicStream(base: StreamFn, opts: AnthropicContextManagementOptions = {}): StreamFn {
 	return ((model, context, options) => {
 		if (model.api !== "anthropic-messages") {
 			return base(model, context, options);
 		}
 		const existing = options?.headers?.["anthropic-beta"];
 		const computerBeta = anthropicComputerUseBetaForModel(model.id);
-		const merged = combineBetas(existing, computerBeta, "fine-grained-tool-streaming-2025-05-14");
+		const compactionBeta =
+			opts.compactThreshold !== false && anthropicSupportsCompaction(model.id)
+				? ANTHROPIC_COMPACTION_BETA
+				: undefined;
+		const merged = combineBetas(existing, computerBeta, compactionBeta, "fine-grained-tool-streaming-2025-05-14");
 		const nextOptions = {
 			...options,
 			headers: {

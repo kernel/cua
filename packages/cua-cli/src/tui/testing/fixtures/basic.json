@@ -21,6 +21,12 @@
         { "type": "assistant_text", "text": "working...", "chunkSize": 5, "chunkMs": 10 },
         { "type": "await_abort" }
       ]
+    },
+    {
+      "match": { "equals": "please fail" },
+      "steps": [
+        { "type": "assistant_error", "message": "fixture provider failed" }
+      ]
     }
   ]
 }

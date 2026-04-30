@@ -10,6 +10,7 @@ export interface FixturePromptMatch {
 export type FixtureStep =
 	| { type: "sleep"; ms: number }
 	| { type: "assistant_text"; text: string; chunkSize?: number; chunkMs?: number }
+	| { type: "assistant_error"; message: string }
 	| { type: "tool_start"; toolName: string; args?: unknown }
 	| { type: "tool_end"; toolName: string; result?: unknown; isError?: boolean }
 	| { type: "await_abort" };
@@ -59,6 +60,7 @@ export class ScriptedDriver implements InteractiveDriver {
 		let assistantStarted = false;
 
 		const message = (): AssistantMessage => buildAssistantMessage(assistantText, startedAt);
+	const errorMessage = (text: string): AssistantMessage => buildAssistantErrorMessage(text, startedAt);
 
 		await this.emit({ type: "agent_start" });
 		try {
@@ -98,6 +100,14 @@ export class ScriptedDriver implements InteractiveDriver {
 							}
 						}
 						break;
+					}
+					case "assistant_error": {
+						assistantStarted = true;
+						const errMessage = errorMessage(step.message);
+						await this.emit({ type: "message_start", message: errMessage });
+						await this.emit({ type: "message_end", message: errMessage });
+						await this.emit({ type: "agent_end", messages: [errMessage] });
+						return;
 					}
 					case "tool_start": {
 						const toolCallId = `fixture-tool-${this.nextToolCallId++}`;
@@ -234,5 +244,13 @@ function buildAssistantMessage(text: string, timestamp: number): AssistantMessag
 		usage: ZERO_USAGE,
 		stopReason: "stop",
 		timestamp,
+	};
+}
+
+function buildAssistantErrorMessage(message: string, timestamp: number): AssistantMessage {
+	return {
+		...buildAssistantMessage("", timestamp),
+		stopReason: "error",
+		errorMessage: message,
 	};
 }

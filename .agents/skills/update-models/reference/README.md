@@ -11,6 +11,8 @@ These scripts support the `update-models` skill. Run them from the repository ro
   - `OPENAI_API_KEY`
   - `ANTHROPIC_API_KEY`
   - `GOOGLE_API_KEY` or `GEMINI_API_KEY`
+  - `TZAFON_API_KEY`
+  - `YUTORI_API_KEY`
 
 The scripts never print API keys. Smoke tests are non-destructive: they ask each model to emit a provider-native computer-use tool call, then inspect the response without executing the action.
 
@@ -26,6 +28,8 @@ Probe native action vocabularies for a specific provider/model:
 
 ```bash
 npx tsx .agents/skills/update-models/reference/native-action-probe.ts --provider openai --model gpt-5.5 --out /tmp/openai-actions.json
+npx tsx .agents/skills/update-models/reference/native-action-probe.ts --provider tzafon --model tzafon.northstar-cua-fast --out /tmp/tzafon-actions.json
+npx tsx .agents/skills/update-models/reference/native-action-probe.ts --provider yutori --model n1.5-latest --out /tmp/yutori-actions.json
 ```
 
 Clone/update official examples and extract tool-handling evidence:

@@ -13,6 +13,7 @@ import {
 } from "@mariozechner/pi-tui";
 import type { SessionManager } from "@mariozechner/pi-coding-agent";
 import type { ResourceDiagnostic } from "@mariozechner/pi-coding-agent";
+import { anthropicSupportsCompaction } from "@onkernel/cua-anthropic";
 import type { BrowserSession } from "@onkernel/cua-translator";
 import { homedir } from "node:os";
 import { relative } from "node:path";
@@ -166,6 +167,17 @@ export async function runInteractive(opts: InteractiveOptions): Promise<number> 
 
 	let assistantBuffer: AssistantBuffer | undefined;
 	let inflight = 0;
+	let lastDisplayedError: string | undefined;
+
+	const displayAgentError = (error: unknown, reason: string): void => {
+		if (typeof error !== "string" || error.trim().length === 0) return;
+		if (error === lastDisplayedError) return;
+		lastDisplayedError = error;
+		messages.addError(error);
+		status.update({ working: undefined });
+		debug?.log("agent_error", { reason, message: error });
+		requestRender("agent_error", false, { reason });
+	};
 
 	const unsubscribe = driver.subscribe((event) => {
 		if (event.type === "agent_start") {
@@ -178,6 +190,11 @@ export async function runInteractive(opts: InteractiveOptions): Promise<number> 
 		if (event.type === "agent_end") {
 			inflight -= 1;
 			if (inflight <= 0) status.update({ working: undefined });
+			const finalError = event.messages
+				.slice()
+				.reverse()
+				.find((message) => "errorMessage" in message && typeof message.errorMessage === "string");
+			displayAgentError(finalError && "errorMessage" in finalError ? finalError.errorMessage : undefined, "agent_end");
 			debug?.log("agent_end", { inflight });
 			requestRender("agent_end", false, { inflight });
 			return;
@@ -204,6 +221,10 @@ export async function runInteractive(opts: InteractiveOptions): Promise<number> 
 			}
 			assistantBuffer?.end();
 			assistantBuffer = undefined;
+			displayAgentError(
+				"errorMessage" in event.message ? event.message.errorMessage : undefined,
+				"assistant_message_end",
+			);
 			debug?.log("assistant_message_end");
 			requestRender("assistant_message_end");
 			return;
@@ -350,6 +371,8 @@ async function waitForExit(shouldExit: () => boolean, isBusy: () => boolean): Pr
 function isAutoCompactEnabled(
 	handle:
 		| {
+				provider?: unknown;
+				model?: { id?: unknown };
 				modelConfig?: unknown;
 		  }
 		| undefined,
@@ -360,6 +383,10 @@ function isAutoCompactEnabled(
 		"compactThreshold" in handle.modelConfig
 			? (handle.modelConfig as { compactThreshold?: unknown }).compactThreshold
 			: undefined;
+	if (handle?.provider === "anthropic") {
+		const modelId = typeof handle.model?.id === "string" ? handle.model.id : "";
+		return compactThreshold !== false && anthropicSupportsCompaction(modelId);
+	}
 	return typeof compactThreshold === "number" && compactThreshold > 0;
 }
 

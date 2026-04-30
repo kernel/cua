@@ -5,7 +5,7 @@ import { basename, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import process from "node:process";
 
-type Provider = "openai" | "anthropic" | "gemini";
+type Provider = "openai" | "anthropic" | "gemini" | "yutori";
 
 interface ExampleRepo {
 	provider: Provider;
@@ -51,12 +51,21 @@ const EXAMPLES: ExampleRepo[] = [
 		confidence: "provider-owned",
 		patterns: ["computer_use", "ComputerUse", "function_call", "functionCall", "FunctionResponse", "safety_decision"],
 	},
+	{
+		provider: "yutori",
+		name: "kernel-cli-yutori-template",
+		repo: "https://github.com/kernel/cli.git",
+		confidence: "kernel-template",
+		pathHint: "pkg/templates/typescript/yutori",
+		patterns: ["YUTORI_API_KEY", "tool_calls", "left_click", "goto_url", "n1-latest", "api.yutori.com"],
+	},
 ];
 
 const ACTION_REGEXES: Record<Provider, RegExp[]> = {
 	openai: [/\b(click|double_click|scroll|type|wait|keypress|drag|move|screenshot)\b/g],
 	anthropic: [/\b(screenshot|left_click|right_click|middle_click|double_click|triple_click|left_click_drag|mouse_move|key|type|scroll|hold_key|wait|left_mouse_down|left_mouse_up|cursor_position|zoom)\b/g],
 	gemini: [/\b(open_web_browser|open_web|wait_5_seconds|go_back|go_forward|search|navigate|click_at|hover_at|type_text_at|key_combination|scroll_document|scroll_at|drag_and_drop)\b/g],
+	yutori: [/\b(left_click|double_click|triple_click|right_click|scroll|type|key_press|hover|drag|wait|refresh|go_back|goto_url|mouse_move|middle_click|mouse_down|mouse_up|go_forward|hold_key|extract_elements|find|set_element_value|execute_js)\b/g],
 };
 
 function parseArgs(argv: string[]): Args {
@@ -138,7 +147,7 @@ async function auditRepo(example: ExampleRepo, cacheDir: string, args: Args): Pr
 		for (const regex of ACTION_REGEXES[example.provider] ?? []) {
 			extractAll(text, regex).forEach((v) => actionNames.add(v));
 		}
-		for (const field of ["computer_call", "actions", "action", "pending_safety_checks", "tool_use", "tool_result", "function_call", "functionCall", "FunctionResponse", "safety_decision"]) {
+		for (const field of ["computer_call", "actions", "action", "pending_safety_checks", "tool_use", "tool_result", "tool_calls", "function_call", "functionCall", "FunctionResponse", "safety_decision"]) {
 			if (text.includes(field)) responseFields.add(field);
 		}
 
