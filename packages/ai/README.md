@@ -12,13 +12,14 @@ npm install @onkernel/cua-ai
 
 ## Quick Start
 
+See [`examples/quickstart.ts`](./examples/quickstart.ts) for a runnable version
+that reads `examples/screenshot.png` and uses your `cua-cli` config credentials.
+
 ```ts
+import { readFile } from "node:fs/promises";
 import { Type, complete, getCuaModel } from "@onkernel/cua-ai";
 
-// A tiny placeholder PNG. In a real harness this comes from your browser:
-// browser screenshot, Playwright page.screenshot(), Kernel browser screenshot, etc.
-const screenshotPngBase64 =
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
+const screenshot = await readFile("examples/screenshot.png");
 
 const model = getCuaModel("openai:gpt-5.5");
 
@@ -29,7 +30,7 @@ const response = await complete(model, {
       role: "user",
       content: [
         { type: "text", text: "Click the Login button in this screenshot." },
-        { type: "image", data: screenshotPngBase64, mimeType: "image/png" },
+        { type: "image", data: screenshot.toString("base64"), mimeType: "image/png" },
       ],
       timestamp: Date.now(),
     },
