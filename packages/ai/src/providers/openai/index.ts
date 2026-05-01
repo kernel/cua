@@ -4,11 +4,15 @@ export {
 	CUA_BATCH_TOOL_NAME as OPENAI_BATCH_TOOL_NAME,
 	CUA_NAVIGATION_TOOL_DESCRIPTION as OPENAI_EXTRA_TOOL_DESCRIPTION,
 	CUA_NAVIGATION_TOOL_NAME as OPENAI_EXTRA_TOOL_NAME,
+	createComputerToolDefinitions,
+	createCuaActionSchema as createActionSchema,
+	createCuaBatchSchema as createBatchSchema,
 	CuaBatchSchema as OpenAIBatchSchema,
 	CuaNavigationSchema as OpenAIExtraSchema,
 } from "../common.js";
 export type {
 	CuaAction as OpenAIAction,
+	CreateComputerToolDefinitionsOptions,
 	CuaBatchInput as OpenAIBatchInput,
 	CuaNavigationInput as OpenAIExtraInput,
 } from "../common.js";

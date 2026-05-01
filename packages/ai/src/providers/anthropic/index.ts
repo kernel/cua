@@ -2,10 +2,14 @@ export {
 	CUA_ACTION_TYPES as ANTHROPIC_CUA_ACTION_TYPES,
 	CUA_BATCH_TOOL_DESCRIPTION as ANTHROPIC_BATCH_DESCRIPTION,
 	CUA_BATCH_TOOL_NAME as ANTHROPIC_BATCH_TOOL_NAME,
+	createComputerToolDefinitions,
+	createCuaActionSchema as createActionSchema,
+	createCuaBatchSchema as createBatchSchema,
 	CuaBatchSchema as AnthropicBatchSchema,
 } from "../common.js";
 export type {
 	CuaAction as AnthropicAction,
+	CreateComputerToolDefinitionsOptions,
 	CuaBatchInput as AnthropicBatchInput,
 } from "../common.js";
 

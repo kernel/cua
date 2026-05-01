@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseToml } from "smol-toml";
-import { Type, complete, getCuaModel, parseCuaModelRef, type CuaModelRef } from "../src/index.js";
+import { anthropic, complete, gemini, getCuaModel, openai, parseCuaModelRef, tzafon, yutori, type CuaModelRef } from "../src/index.js";
 
 type Provider = "openai" | "anthropic" | "gemini" | "tzafon" | "yutori";
 
@@ -36,7 +36,7 @@ const response = await complete(
 	{
 		systemPrompt: [
 			"You are controlling a browser from a screenshot.",
-			"Call click_mouse with the pixel coordinates of the target. Do not describe the click in prose unless you cannot identify the target.",
+			"Call the computer tool with the pixel coordinates of the target. Do not describe the click in prose unless you cannot identify the target.",
 		].join("\n"),
 		messages: [
 			{
@@ -48,20 +48,7 @@ const response = await complete(
 				timestamp: Date.now(),
 			},
 		],
-		tools: [
-			{
-				name: "click_mouse",
-				description: "Click a point on the browser viewport.",
-				parameters: Type.Object(
-					{
-						x: Type.Number({ description: "Pixel x coordinate." }),
-						y: Type.Number({ description: "Pixel y coordinate." }),
-						button: Type.Optional(Type.String({ description: "Mouse button, usually left." })),
-					},
-					{ additionalProperties: false },
-				),
-			},
-		],
+		tools: createToolDefinitions(selected.provider),
 	},
 	{
 		apiKey: selected.apiKey,
@@ -115,23 +102,38 @@ async function loadCuaCliConfig(): Promise<Record<Provider, ProviderConfig>> {
 	};
 }
 
-function selectModel(config: Record<Provider, ProviderConfig>): { ref: CuaModelRef; apiKey: string; baseUrl?: string } {
+function selectModel(config: Record<Provider, ProviderConfig>): { ref: CuaModelRef; provider: Provider; apiKey: string; baseUrl?: string } {
 	const explicit = process.env.CUA_MODEL_REF as CuaModelRef | undefined;
 	if (explicit) {
 		const { provider } = parseCuaModelRef(explicit);
 		const apiKey = config[provider].apiKey;
 		if (!apiKey) throw new Error(`No API key configured for ${provider}.`);
-		return { ref: explicit, apiKey, baseUrl: config[provider].baseUrl };
+		return { ref: explicit, provider, apiKey, baseUrl: config[provider].baseUrl };
 	}
 
 	for (const provider of providerOrder) {
 		const apiKey = config[provider].apiKey;
 		if (!apiKey) continue;
 		const model = config[provider].models?.[0] || modelDefaults[provider];
-		return { ref: `${provider}:${model}` as CuaModelRef, apiKey, baseUrl: config[provider].baseUrl };
+		return { ref: `${provider}:${model}` as CuaModelRef, provider, apiKey, baseUrl: config[provider].baseUrl };
 	}
 
 	throw new Error("No supported CUA provider API key found in CUA CLI config or environment.");
+}
+
+function createToolDefinitions(provider: Provider) {
+	switch (provider) {
+		case "openai":
+			return openai.createComputerToolDefinitions({ actions: ["click"] });
+		case "anthropic":
+			return anthropic.createComputerToolDefinitions({ actions: ["click"] });
+		case "gemini":
+			return gemini.createComputerToolDefinitions({ actions: ["click"] });
+		case "tzafon":
+			return tzafon.createComputerToolDefinitions({ actions: ["click"] });
+		case "yutori":
+			return yutori.createComputerToolDefinitions({ actions: ["click"] });
+	}
 }
 
 function withBaseUrl<T extends { baseUrl?: string }>(model: T, baseUrl: string | undefined): T {

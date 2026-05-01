@@ -1,17 +1,20 @@
 import type Kernel from "@onkernel/sdk";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
-import type { CuaProvider } from "@onkernel/cua-ai";
+import type { Tool } from "@mariozechner/pi-ai";
 import {
-	CUA_BATCH_TOOL_DESCRIPTION,
 	CUA_BATCH_TOOL_NAME,
-	CUA_NAVIGATION_TOOL_DESCRIPTION,
 	CUA_NAVIGATION_TOOL_NAME,
-	CuaBatchSchema,
-	CuaNavigationSchema,
+	anthropic,
+	gemini,
+	openai,
+	tzafon,
+	yutori,
 	type CuaBatchInput,
+	type CuaProvider,
 	type CuaNavigationInput,
 } from "@onkernel/cua-ai";
 import { InternalComputerTranslator, type KernelBrowser } from "./translator/translator.js";
+import type { ModelAction } from "./translator/types.js";
 
 export interface ComputerToolOptions {
 	browser: KernelBrowser;
@@ -46,51 +49,56 @@ export function createCuaComputerTools(args: CuaComputerToolsOptions): AgentTool
 }
 
 export function createOpenAIComputerTools(args: OpenAIComputerToolsOptions): AgentTool<any, any>[] {
-	return createGenericComputerTools(args);
+	return createGenericComputerTools(args, openai.createComputerToolDefinitions());
 }
 
 export function createAnthropicComputerTools(args: AnthropicComputerToolsOptions): AgentTool<any, any>[] {
-	return createGenericComputerTools(args);
+	return createGenericComputerTools(args, anthropic.createComputerToolDefinitions());
 }
 
 export function createGeminiComputerTools(args: GeminiComputerToolsOptions): AgentTool<any, any>[] {
-	return createGenericComputerTools(args);
+	return createGenericComputerTools(args, gemini.createComputerToolDefinitions());
 }
 
 export function createTzafonComputerTools(args: TzafonComputerToolsOptions): AgentTool<any, any>[] {
-	return createGenericComputerTools(args);
+	return createGenericComputerTools(args, tzafon.createComputerToolDefinitions());
 }
 
 export function createYutoriComputerTools(args: YutoriComputerToolsOptions): AgentTool<any, any>[] {
-	return createGenericComputerTools(args);
+	return createGenericComputerTools(args, yutori.createComputerToolDefinitions());
 }
 
-function createGenericComputerTools(args: ComputerToolOptions): AgentTool<any, any>[] {
+function createGenericComputerTools(args: ComputerToolOptions, definitions: Tool[]): AgentTool<any, any>[] {
 	const translator = new InternalComputerTranslator(args);
-	return [
-		{
-			name: CUA_BATCH_TOOL_NAME,
-			label: CUA_BATCH_TOOL_NAME,
-			description: CUA_BATCH_TOOL_DESCRIPTION,
-			parameters: CuaBatchSchema,
-			async execute(_toolCallId, params): Promise<AgentToolResult<BatchDetails>> {
-				const result = await executeBatchTool(translator, params as CuaBatchInput);
-				if (result.isError) throw Object.assign(new Error(result.details.statusText), result);
-				return { content: result.content, details: result.details };
-			},
-		},
-		{
-			name: CUA_NAVIGATION_TOOL_NAME,
-			label: CUA_NAVIGATION_TOOL_NAME,
-			description: CUA_NAVIGATION_TOOL_DESCRIPTION,
-			parameters: CuaNavigationSchema,
-			async execute(_toolCallId, params): Promise<AgentToolResult<NavigationDetails>> {
-				const result = await executeNavigationTool(translator, params as CuaNavigationInput);
-				if (result.isError) throw Object.assign(new Error(result.details.statusText), result);
-				return { content: result.content, details: result.details };
-			},
-		},
-	];
+	return definitions.map((definition) => {
+		if (definition.name === CUA_BATCH_TOOL_NAME) {
+			return {
+				name: definition.name,
+				label: definition.name,
+				description: definition.description,
+				parameters: definition.parameters,
+				async execute(_toolCallId, params): Promise<AgentToolResult<BatchDetails>> {
+					const result = await executeBatchTool(translator, params as CuaBatchInput);
+					if (result.isError) throw Object.assign(new Error(result.details.statusText), result);
+					return { content: result.content, details: result.details };
+				},
+			};
+		}
+		if (definition.name === CUA_NAVIGATION_TOOL_NAME) {
+			return {
+				name: definition.name,
+				label: definition.name,
+				description: definition.description,
+				parameters: definition.parameters,
+				async execute(_toolCallId, params): Promise<AgentToolResult<NavigationDetails>> {
+					const result = await executeNavigationTool(translator, params as CuaNavigationInput);
+					if (result.isError) throw Object.assign(new Error(result.details.statusText), result);
+					return { content: result.content, details: result.details };
+				},
+			};
+		}
+		throw new Error(`unsupported CUA computer tool definition: ${definition.name}`);
+	});
 }
 
 interface BatchDetails {
@@ -112,7 +120,7 @@ async function executeBatchTool(translator: InternalComputerTranslator, params: 
 	let statusText = "Actions executed successfully.";
 	let error: Error | undefined;
 	try {
-		const result = await translator.executeBatch(params.actions);
+		const result = await translator.executeBatch(params.actions as unknown as ModelAction[]);
 		for (const read of result.readResults) {
 			if (read.type === "url") {
 				readResults.push({ type: "url", url: read.url });

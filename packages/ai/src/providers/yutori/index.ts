@@ -2,10 +2,14 @@ export {
 	CUA_ACTION_TYPES as YUTORI_ACTION_TYPES,
 	CUA_BATCH_TOOL_DESCRIPTION as YUTORI_BATCH_DESCRIPTION,
 	CUA_BATCH_TOOL_NAME as YUTORI_BATCH_TOOL_NAME,
+	createComputerToolDefinitions,
+	createCuaActionSchema as createActionSchema,
+	createCuaBatchSchema as createBatchSchema,
 	CuaBatchSchema as YutoriBatchSchema,
 } from "../common.js";
 export type {
 	CuaAction as YutoriAction,
+	CreateComputerToolDefinitionsOptions,
 	CuaBatchInput as YutoriBatchInput,
 } from "../common.js";
 export {

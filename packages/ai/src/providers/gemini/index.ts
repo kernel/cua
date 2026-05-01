@@ -2,10 +2,14 @@ export {
 	CUA_ACTION_TYPES as GEMINI_CUA_ACTION_TYPES,
 	CUA_BATCH_TOOL_DESCRIPTION as GEMINI_BATCH_DESCRIPTION,
 	CUA_BATCH_TOOL_NAME as GEMINI_BATCH_TOOL_NAME,
+	createComputerToolDefinitions,
+	createCuaActionSchema as createActionSchema,
+	createCuaBatchSchema as createBatchSchema,
 	CuaBatchSchema as GeminiBatchSchema,
 } from "../common.js";
 export type {
 	CuaAction as GeminiAction,
+	CreateComputerToolDefinitionsOptions,
 	CuaBatchInput as GeminiBatchInput,
 } from "../common.js";
 

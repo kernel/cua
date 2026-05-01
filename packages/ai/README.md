@@ -17,7 +17,7 @@ that reads `examples/screenshot.png` and uses your `cua-cli` config credentials.
 
 ```ts
 import { readFile } from "node:fs/promises";
-import { Type, complete, getCuaModel } from "@onkernel/cua-ai";
+import { complete, getCuaModel, openai } from "@onkernel/cua-ai";
 
 const screenshot = await readFile("examples/screenshot.png");
 
@@ -35,17 +35,7 @@ const response = await complete(model, {
       timestamp: Date.now(),
     },
   ],
-  tools: [
-    {
-      name: "click_mouse",
-      description: "Click a point on the browser viewport.",
-      parameters: Type.Object({
-        x: Type.Number({ description: "Pixel x coordinate." }),
-        y: Type.Number({ description: "Pixel y coordinate." }),
-        button: Type.Optional(Type.String({ description: "Mouse button, usually left." })),
-      }),
-    },
-  ],
+  tools: openai.createComputerToolDefinitions({ actions: ["click"] }),
 });
 
 for (const block of response.content) {
@@ -101,56 +91,64 @@ Top-level exports:
 - `providerForModel(model: Model<Api>): CuaProvider`
 - `CUA_PROVIDERS: readonly CuaProvider[]`
 - `CuaBatchSchema`, `CuaActionSchema`, `CuaNavigationSchema` TypeBox schemas
-- `CUA_BATCH_TOOL_NAME`, `CUA_NAVIGATION_TOOL_NAME`
-- `CUA_BATCH_TOOL_DESCRIPTION`, `CUA_NAVIGATION_TOOL_DESCRIPTION`
+- `createCuaActionSchema(actions?)`, `createCuaBatchSchema(actions?)`
 
-The shared schemas are useful when you are building your own tools or agent
-loop on top of pi-ai:
+Provider namespaces expose `createComputerToolDefinitions({ actions? })` for
+building model-facing pi-ai `Tool[]` definitions. Omit `actions` for the
+provider's default computer tool set, or pass an action subset to narrow the
+schema for a single `complete()` call:
 
 ```ts
-import { CUA_BATCH_TOOL_DESCRIPTION, CUA_BATCH_TOOL_NAME, CuaBatchSchema } from "@onkernel/cua-ai";
+import { openai } from "@onkernel/cua-ai";
 
-const batchTool = {
-  name: CUA_BATCH_TOOL_NAME,
-  description: CUA_BATCH_TOOL_DESCRIPTION,
-  parameters: CuaBatchSchema,
-};
+const allComputerTools = openai.createComputerToolDefinitions();
+const clickOnlyTools = openai.createComputerToolDefinitions({ actions: ["click"] });
 ```
+
+Every provider namespace synthesizes a `batch_computer_actions` tool definition.
+That gives models a consistent way to plan ordered browser actions even when the
+provider's native computer-use API has a different shape. Provider namespaces
+are still used so the definitions can diverge over time where provider protocol
+differences matter.
 
 `CuaActionSchema` validates one normalized computer action. The action
 vocabulary is intentionally provider-neutral and OpenAI-shaped because it maps
 cleanly to most browser computer-use APIs:
 
 ```ts
-type CuaAction = {
-  type:
-    | "click"
-    | "double_click"
-    | "mouse_down"
-    | "mouse_up"
-    | "type"
-    | "keypress"
-    | "scroll"
-    | "move"
-    | "drag"
-    | "wait"
-    | "screenshot"
-    | "goto"
-    | "back"
-    | "forward"
-    | "url"
-    | "cursor_position";
-  x?: number;
-  y?: number;
-  text?: string;
-  url?: string;
-  keys?: string[];
+type CuaAction =
+  | CuaActionClick
+  | CuaActionDoubleClick
+  | CuaActionMouseDown
+  | CuaActionMouseUp
+  | CuaActionTypeText
+  | CuaActionKeypress
+  | CuaActionScroll
+  | CuaActionMove
+  | CuaActionDrag
+  | CuaActionWait
+  | CuaActionScreenshot
+  | CuaActionGoto
+  | CuaActionBack
+  | CuaActionForward
+  | CuaActionUrl
+  | CuaActionCursorPosition;
+```
+
+For example:
+
+```ts
+type CuaActionClick = {
+  type: "click";
+  x: number;
+  y: number;
   button?: string;
   hold_keys?: string[];
-  scroll_x?: number;
-  scroll_y?: number;
-  ms?: number;
-  path?: Array<{ x: number; y: number }>;
+};
+
+type CuaActionGoto = {
+  type: "goto";
+  url: string;
 };
 ```
 
@@ -182,12 +180,12 @@ available without exposing the full batch action surface.
 
 Provider namespaces:
 
-- `openai`: OpenAI CUA action schemas and `OPENAI_BATCH_INSTRUCTIONS`
-- `anthropic`: Anthropic prompt helpers and CUA batch schema aliases
-- `gemini`: Gemini prompt helpers and CUA batch schema aliases
-- `tzafon`: Tzafon prompt helpers and local `tzafon-responses` stream adapter
+- `openai`: `createComputerToolDefinitions`, OpenAI CUA action schemas, and `OPENAI_BATCH_INSTRUCTIONS`
+- `anthropic`: `createComputerToolDefinitions`, prompt helpers, and CUA batch schema aliases
+- `gemini`: `createComputerToolDefinitions`, prompt helpers, and CUA batch schema aliases
+- `tzafon`: `createComputerToolDefinitions`, prompt helpers, and local `tzafon-responses` stream adapter
 - `yutori`: Yutori prompt helpers, local `yutori-chat-completions` stream
-  adapter, and `yutoriBuiltinToolsOnPayload`
+  adapter, `createComputerToolDefinitions`, and `yutoriBuiltinToolsOnPayload`
 
 This package does not execute browser actions. Use `@onkernel/cua-agent` when
 you want model tool calls executed against a Kernel browser.
