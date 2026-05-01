@@ -10,7 +10,6 @@ import {
 	type CuaModelRef,
 	getCuaModel,
 	providerForModel,
-	registerCuaProviders,
 	streamSimple,
 	anthropic,
 	gemini,
@@ -32,7 +31,6 @@ export type CreateCuaAgentOptions = Omit<AgentOptions, "initialState"> & {
 };
 
 export function createCuaAgent(options: CreateCuaAgentOptions): Agent {
-	registerCuaProviders();
 	const model = typeof options.initialState.model === "string" ? getCuaModel(options.initialState.model) : options.initialState.model;
 	const provider = providerForModel(model);
 	const tools = options.initialState.tools ?? createCuaComputerTools({ provider, browser: options.browser, client: options.client });

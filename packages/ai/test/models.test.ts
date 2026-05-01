@@ -4,7 +4,6 @@ import {
 	getCuaModel,
 	listCuaModels,
 	parseCuaModelRef,
-	registerCuaProviders,
 } from "../src/index.js";
 
 describe("CUA model refs", () => {
@@ -32,8 +31,8 @@ describe("CUA model refs", () => {
 		expect(model.api).toBe("yutori-chat-completions");
 	});
 
-	it("registers providers idempotently", () => {
-		expect(() => registerCuaProviders()).not.toThrow();
-		expect(() => registerCuaProviders()).not.toThrow();
+	it("loads supported custom provider models without explicit registration", () => {
+		expect(getCuaModel("tzafon:tzafon.northstar-cua-fast").api).toBe("tzafon-responses");
+		expect(getCuaModel("yutori:n1.5-latest").api).toBe("yutori-chat-completions");
 	});
 });
