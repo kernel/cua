@@ -13,28 +13,27 @@ export interface CuaModelInfo {
 	provider: CuaProvider;
 	model: string;
 	name: string;
-	origin: "cua-override" | "pi-ai-registry";
 }
 
 export const CUA_PROVIDERS: readonly CuaProvider[] = ["openai", "anthropic", "gemini", "tzafon", "yutori"];
 
 const CUA_MODEL_OVERRIDES: Record<CuaProvider, CuaModelInfo[]> = {
 	openai: [
-		cuaModel("openai", "gpt-5.5", "GPT-5.5", "cua-override"),
-		cuaModel("openai", "gpt-5.5-2026-04-23", "GPT-5.5 (2026-04-23)", "cua-override"),
+		cuaModel("openai", "gpt-5.5", "GPT-5.5"),
+		cuaModel("openai", "gpt-5.5-2026-04-23", "GPT-5.5 (2026-04-23)"),
 	],
 	anthropic: [],
 	gemini: [
-		cuaModel("gemini", "gemini-2.5-computer-use-preview-10-2025", "Gemini 2.5 Computer Use Preview", "cua-override"),
+		cuaModel("gemini", "gemini-2.5-computer-use-preview-10-2025", "Gemini 2.5 Computer Use Preview"),
 	],
 	tzafon: [
-		cuaModel("tzafon", "tzafon.northstar-cua-fast", "Tzafon Northstar CUA Fast", "cua-override"),
+		cuaModel("tzafon", "tzafon.northstar-cua-fast", "Tzafon Northstar CUA Fast"),
 	],
 	yutori: [
-		cuaModel("yutori", "n1.5-latest", "Yutori Navigator n1.5", "cua-override"),
-		cuaModel("yutori", "n1.5-20260428", "Yutori Navigator n1.5 (2026-04-28)", "cua-override"),
-		cuaModel("yutori", "n1-latest", "Yutori Navigator n1", "cua-override"),
-		cuaModel("yutori", "n1-20260203", "Yutori Navigator n1 (2026-02-03)", "cua-override"),
+		cuaModel("yutori", "n1.5-latest", "Yutori Navigator n1.5"),
+		cuaModel("yutori", "n1.5-20260428", "Yutori Navigator n1.5 (2026-04-28)"),
+		cuaModel("yutori", "n1-latest", "Yutori Navigator n1"),
+		cuaModel("yutori", "n1-20260203", "Yutori Navigator n1 (2026-02-03)"),
 	],
 };
 
@@ -71,7 +70,6 @@ export function listCuaModels(provider?: CuaProvider): CuaModelInfo[] {
 				provider: p,
 				model: model.id,
 				name: model.name,
-				origin: "pi-ai-registry",
 			});
 		}
 	}
@@ -173,9 +171,8 @@ function cuaModel(
 	provider: CuaProvider,
 	model: string,
 	name: string,
-	origin: CuaModelInfo["origin"],
 ): CuaModelInfo {
-	return { ref: formatCuaModelRef(provider, model), provider, model, name, origin };
+	return { ref: formatCuaModelRef(provider, model), provider, model, name };
 }
 
 function compareCuaModels(a: CuaModelInfo, b: CuaModelInfo): number {

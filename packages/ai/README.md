@@ -87,7 +87,6 @@ interface CuaModelInfo {
   provider: CuaProvider;
   model: string;
   name: string;
-  origin: "cua-override" | "pi-ai-registry";
 }
 ```
 
@@ -101,9 +100,85 @@ Top-level exports:
 - `formatCuaModelRef(provider: CuaProvider, model: string): CuaModelRef`
 - `providerForModel(model: Model<Api>): CuaProvider`
 - `CUA_PROVIDERS: readonly CuaProvider[]`
-- `CuaBatchSchema`, `CuaActionSchema`, `CuaNavigationSchema`
+- `CuaBatchSchema`, `CuaActionSchema`, `CuaNavigationSchema` TypeBox schemas
 - `CUA_BATCH_TOOL_NAME`, `CUA_NAVIGATION_TOOL_NAME`
 - `CUA_BATCH_TOOL_DESCRIPTION`, `CUA_NAVIGATION_TOOL_DESCRIPTION`
+
+The shared schemas are useful when you are building your own tools or agent
+loop on top of pi-ai:
+
+```ts
+import { CUA_BATCH_TOOL_DESCRIPTION, CUA_BATCH_TOOL_NAME, CuaBatchSchema } from "@onkernel/cua-ai";
+
+const batchTool = {
+  name: CUA_BATCH_TOOL_NAME,
+  description: CUA_BATCH_TOOL_DESCRIPTION,
+  parameters: CuaBatchSchema,
+};
+```
+
+`CuaActionSchema` validates one normalized computer action. The action
+vocabulary is intentionally provider-neutral and OpenAI-shaped because it maps
+cleanly to most browser computer-use APIs:
+
+```ts
+type CuaAction = {
+  type:
+    | "click"
+    | "double_click"
+    | "mouse_down"
+    | "mouse_up"
+    | "type"
+    | "keypress"
+    | "scroll"
+    | "move"
+    | "drag"
+    | "wait"
+    | "screenshot"
+    | "goto"
+    | "back"
+    | "forward"
+    | "url"
+    | "cursor_position";
+  x?: number;
+  y?: number;
+  text?: string;
+  url?: string;
+  keys?: string[];
+  button?: string;
+  hold_keys?: string[];
+  scroll_x?: number;
+  scroll_y?: number;
+  ms?: number;
+  path?: Array<{ x: number; y: number }>;
+};
+```
+
+`CuaBatchSchema` validates the input for a batched computer tool:
+
+```ts
+type CuaBatchInput = {
+  actions: CuaAction[];
+};
+```
+
+Use it for a tool like `batch_computer_actions`, where the model can plan
+several writes and reads in one call. Read actions such as `screenshot`, `url`,
+and `cursor_position` can be interleaved with writes so your executor can return
+fresh state in the same order.
+
+`CuaNavigationSchema` validates a smaller convenience tool for high-level
+navigation:
+
+```ts
+type CuaNavigationInput = {
+  action: "goto" | "back" | "forward" | "url";
+  url?: string;
+};
+```
+
+Use it for a simple `computer_use_extra`-style tool when you want navigation
+available without exposing the full batch action surface.
 
 Provider namespaces:
 

@@ -23,6 +23,7 @@ describe("CUA model refs", () => {
 		expect(models.some((model) => model.ref === "openai:gpt-5.5")).toBe(true);
 		expect(models.every((model) => model.ref.includes(":"))).toBe(true);
 		expect(models.some((model) => "default" in model)).toBe(false);
+		expect(models.some((model) => "origin" in model)).toBe(false);
 	});
 
 	it("creates dynamic models for supported refs", () => {
