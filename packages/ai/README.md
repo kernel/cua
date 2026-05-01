@@ -13,7 +13,7 @@ npm install @onkernel/cua-ai
 ## Quick Start
 
 See [`examples/quickstart.ts`](./examples/quickstart.ts) for a runnable version
-that reads `examples/screenshot.png` and uses your `cua-cli` config credentials.
+that reads `examples/screenshot.png` and uses `OPENAI_API_KEY`.
 
 ```ts
 import { readFile } from "node:fs/promises";
