@@ -1,6 +1,8 @@
 {
   "files": [],
   "references": [
+    { "path": "./packages/ai" },
+    { "path": "./packages/agent" },
     { "path": "./packages/cua-translator" },
     { "path": "./packages/cua-openai" },
     { "path": "./packages/cua-anthropic" },

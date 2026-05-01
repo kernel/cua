@@ -5,6 +5,8 @@
   "type": "module",
   "private": true,
   "workspaces": [
+    "packages/ai",
+    "packages/agent",
     "packages/cua-translator",
     "packages/cua-openai",
     "packages/cua-anthropic",
