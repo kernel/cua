@@ -60,7 +60,7 @@ computer-use model catalog and provider/tool metadata.
 
 ```ts
 getCuaModel("openai:gpt-5.5");
-getCuaModel("anthropic:claude-sonnet-4-20250514");
+getCuaModel("anthropic:claude-opus-4-7");
 getCuaModel("gemini:gemini-2.5-computer-use-preview-10-2025");
 getCuaModel("tzafon:tzafon.northstar-cua-fast");
 getCuaModel("yutori:n1.5-latest");
@@ -110,6 +110,25 @@ That gives models a consistent way to plan ordered browser actions even when the
 provider's native computer-use API has a different shape. Provider namespaces
 are still used so the definitions can diverge over time where provider protocol
 differences matter.
+
+Provider namespaces also expose `COMPUTER_TOOL_COORDINATES`, which describes
+the coordinates the provider's computer tool calls are expected to emit:
+
+```ts
+openai.COMPUTER_TOOL_COORDINATES
+// { type: "pixel" }
+
+gemini.COMPUTER_TOOL_COORDINATES
+// { type: "normalized", range: [0, 999] }
+```
+
+Current coordinate contracts:
+
+- `openai`: pixel coordinates
+- `anthropic`: pixel coordinates
+- `gemini`: normalized coordinates in the 0-999 range ([source](https://ai.google.dev/gemini-api/docs/computer-use))
+- `yutori`: normalized coordinates in the 0-1000 range ([source](https://docs.yutori.com/reference/navigator), [SDK helper](https://github.com/yutori-ai/yutori-sdk-python/blob/main/yutori/navigator/coordinates.py))
+- `tzafon`: normalized coordinates in the 0-999 range ([source](https://docs.lightcone.ai/guides/coordinates/), [model card](https://huggingface.co/Tzafon/Northstar-CUA-Fast))
 
 `CuaActionSchema` validates one normalized computer action. The action
 vocabulary is intentionally provider-neutral and OpenAI-shaped because it maps
@@ -180,12 +199,13 @@ available without exposing the full batch action surface.
 
 Provider namespaces:
 
-- `openai`: `createComputerToolDefinitions`, OpenAI CUA action schemas, and `OPENAI_BATCH_INSTRUCTIONS`
-- `anthropic`: `createComputerToolDefinitions`, prompt helpers, and CUA batch schema aliases
-- `gemini`: `createComputerToolDefinitions`, prompt helpers, and CUA batch schema aliases
-- `tzafon`: `createComputerToolDefinitions`, prompt helpers, and local `tzafon-responses` stream adapter
+- `openai`: `createComputerToolDefinitions`, `COMPUTER_TOOL_COORDINATES`, OpenAI CUA action schemas, and `OPENAI_BATCH_INSTRUCTIONS`
+- `anthropic`: `createComputerToolDefinitions`, `COMPUTER_TOOL_COORDINATES`, prompt helpers, and CUA batch schema aliases
+- `gemini`: `createComputerToolDefinitions`, `COMPUTER_TOOL_COORDINATES`, prompt helpers, and CUA batch schema aliases
+- `tzafon`: `createComputerToolDefinitions`, `COMPUTER_TOOL_COORDINATES`, prompt helpers, and local `tzafon-responses` stream adapter
 - `yutori`: Yutori prompt helpers, local `yutori-chat-completions` stream
-  adapter, `createComputerToolDefinitions`, and `yutoriBuiltinToolsOnPayload`
+  adapter, `createComputerToolDefinitions`, `COMPUTER_TOOL_COORDINATES`, and
+  `yutoriBuiltinToolsOnPayload`
 
 This package does not execute browser actions. Use `@onkernel/cua-agent` when
 you want model tool calls executed against a Kernel browser.

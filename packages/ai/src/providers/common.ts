@@ -287,6 +287,15 @@ export interface CreateComputerToolDefinitionsOptions {
 	actions?: readonly CuaActionType[];
 }
 
+export type ComputerToolCoordinateSystem =
+	| {
+			type: "pixel";
+		}
+	| {
+			type: "normalized";
+			range: readonly [number, number];
+		};
+
 export function createComputerToolDefinitions(options: CreateComputerToolDefinitionsOptions = {}): Tool[] {
 	const actions = options.actions;
 	return [

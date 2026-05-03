@@ -1,3 +1,5 @@
+import type { ComputerToolCoordinateSystem } from "../common.js";
+
 export {
 	CUA_ACTION_TYPES as YUTORI_ACTION_TYPES,
 	CUA_BATCH_TOOL_DESCRIPTION as YUTORI_BATCH_DESCRIPTION,
@@ -18,6 +20,10 @@ export {
 	streamYutori,
 	yutoriBuiltinToolsOnPayload,
 } from "./provider.js";
+
+// Sources: https://docs.yutori.com/reference/navigator and
+// https://github.com/yutori-ai/yutori-sdk-python/blob/main/yutori/navigator/coordinates.py
+export const COMPUTER_TOOL_COORDINATES = { type: "normalized", range: [0, 1000] } as const satisfies ComputerToolCoordinateSystem;
 
 export const YUTORI_INSTRUCTIONS_RAW = `You control a Kernel cloud browser. Prefer batched computer actions for browser interaction and include screenshot or URL reads when you need updated state.`;
 

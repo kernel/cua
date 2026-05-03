@@ -1,3 +1,5 @@
+import type { ComputerToolCoordinateSystem } from "../common.js";
+
 export {
 	CUA_ACTION_TYPES as GEMINI_CUA_ACTION_TYPES,
 	CUA_BATCH_TOOL_DESCRIPTION as GEMINI_BATCH_DESCRIPTION,
@@ -12,6 +14,9 @@ export type {
 	CreateComputerToolDefinitionsOptions,
 	CuaBatchInput as GeminiBatchInput,
 } from "../common.js";
+
+// Source: https://ai.google.dev/gemini-api/docs/computer-use
+export const COMPUTER_TOOL_COORDINATES = { type: "normalized", range: [0, 999] } as const satisfies ComputerToolCoordinateSystem;
 
 export const GEMINI_INSTRUCTIONS_RAW = `You control a Kernel cloud browser through computer-use tools. Use pixel coordinates, batch predictable action sequences, and request screenshots or URL reads when state changes.`;
 

@@ -14,7 +14,7 @@ const screenshot = await readFile(screenshotPath);
 
 // Other provider examples:
 // const apiKey = process.env.ANTHROPIC_API_KEY;
-// const modelRef = "anthropic:claude-sonnet-4-20250514";
+// const modelRef = "anthropic:claude-opus-4-7";
 // const model = getCuaModel(modelRef);
 // const tools = anthropic.createComputerToolDefinitions({ actions: ["click"] });
 //

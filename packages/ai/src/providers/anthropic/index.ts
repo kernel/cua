@@ -1,3 +1,5 @@
+import type { ComputerToolCoordinateSystem } from "../common.js";
+
 export {
 	CUA_ACTION_TYPES as ANTHROPIC_CUA_ACTION_TYPES,
 	CUA_BATCH_TOOL_DESCRIPTION as ANTHROPIC_BATCH_DESCRIPTION,
@@ -12,6 +14,8 @@ export type {
 	CreateComputerToolDefinitionsOptions,
 	CuaBatchInput as AnthropicBatchInput,
 } from "../common.js";
+
+export const COMPUTER_TOOL_COORDINATES = { type: "pixel" } as const satisfies ComputerToolCoordinateSystem;
 
 export const ANTHROPIC_COMPUTER_INSTRUCTIONS = `You control a Kernel cloud browser through computer-use tools. Use batched actions for predictable browser interaction, keyboard navigation where possible, and explicit screenshot or url reads when you need to inspect state.`;
 

@@ -1,3 +1,5 @@
+import type { ComputerToolCoordinateSystem } from "../common.js";
+
 export {
 	CUA_ACTION_TYPES as OPENAI_CUA_ACTION_TYPES,
 	CUA_BATCH_TOOL_DESCRIPTION as OPENAI_BATCH_DESCRIPTION,
@@ -16,6 +18,8 @@ export type {
 	CuaBatchInput as OpenAIBatchInput,
 	CuaNavigationInput as OpenAIExtraInput,
 } from "../common.js";
+
+export const COMPUTER_TOOL_COORDINATES = { type: "pixel" } as const satisfies ComputerToolCoordinateSystem;
 
 export const OPENAI_BATCH_INSTRUCTIONS = `You have two browser tools:
 1. batch_computer_actions for click, double_click, mouse_down, mouse_up, type, keypress, scroll, move, drag, wait, goto, back, forward, url, cursor_position, and screenshot.
