@@ -245,6 +245,7 @@ const CUA_ACTION_SCHEMA_BY_TYPE = {
 
 export function createCuaActionSchema(actions: readonly CuaActionType[] = CUA_ACTION_TYPES): TSchema {
 	if (actions.length === 0) throw new Error("actions must include at least one CUA action type");
+	if (actions.length === 1) return CUA_ACTION_SCHEMA_BY_TYPE[actions[0]!];
 	return Type.Union(actions.map((action) => CUA_ACTION_SCHEMA_BY_TYPE[action]));
 }
 
