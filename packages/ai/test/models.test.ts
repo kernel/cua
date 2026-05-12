@@ -29,7 +29,7 @@ describe("CUA model refs", () => {
 		expect(models.some((model) => "origin" in model)).toBe(false);
 	});
 
-	it("creates dynamic models for supported refs", () => {
+	it("returns override models for refs missing from pi-ai", () => {
 		const model = getCuaModel("yutori:n1.5-latest");
 		expect(model.provider).toBe("yutori");
 		expect(model.api).toBe("yutori-chat-completions");
@@ -38,6 +38,13 @@ describe("CUA model refs", () => {
 	it("loads supported custom provider models without explicit registration", () => {
 		expect(getCuaModel("tzafon:tzafon.northstar-cua-fast").api).toBe("tzafon-responses");
 		expect(getCuaModel("yutori:n1.5-latest").api).toBe("yutori-chat-completions");
+	});
+
+	it("rejects supported model IDs that are not in pi-ai or overrides", () => {
+		// Matches the openai allowlist but has no pi-ai or override entry.
+		expect(() => getCuaModel("openai:gpt-5.4-fake-snapshot")).toThrow(
+			/not registered/,
+		);
 	});
 });
 

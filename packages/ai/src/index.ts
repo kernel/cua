@@ -1,6 +1,3 @@
-export type { Static, TSchema } from "typebox";
-export { Type } from "typebox";
-
 import { registerCuaProviders } from "./providers.js";
 
 export * from "@earendil-works/pi-ai";

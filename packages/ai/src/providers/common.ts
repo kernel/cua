@@ -1,5 +1,4 @@
-import { Type, type Static, type TSchema } from "typebox";
-import type { Tool } from "@earendil-works/pi-ai";
+import { Type, type Static, type TSchema, type Tool } from "@earendil-works/pi-ai";
 
 export const CUA_ACTION_TYPES = [
 	"click",
