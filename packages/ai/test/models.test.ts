@@ -1,13 +1,19 @@
 import { describe, expect, it } from "vitest";
+import { getCuaModel, listCuaModels } from "../src/index.js";
 import {
 	CUA_MODEL_ANNOTATIONS,
 	CUA_PROVIDERS,
 	findCuaAnnotation,
-	getCuaModel,
-	listCuaModels,
-} from "../src/index.js";
+	formatCuaModelRef,
+	parseCuaModelRef,
+} from "../src/models.js";
 
 describe("CUA model refs", () => {
+	it("parses and formats provider-qualified refs", () => {
+		expect(parseCuaModelRef("openai:gpt-5.5")).toEqual({ provider: "openai", model: "gpt-5.5" });
+		expect(formatCuaModelRef("yutori", "n1.5-latest")).toBe("yutori:n1.5-latest");
+	});
+
 	it("rejects unqualified and unsupported refs", () => {
 		expect(() => getCuaModel("gpt-5.5" as never)).toThrow(/provider-qualified/);
 		expect(() => getCuaModel("bogus:model" as never)).toThrow(/unsupported CUA provider/);
@@ -69,7 +75,7 @@ describe("CUA support annotations", () => {
 	});
 
 	it("matches exact-id annotations", () => {
-		expect(findCuaAnnotation("gemini", "gemini-3-flash-preview")).toBeDefined();
+		expect(findCuaAnnotation("google", "gemini-3-flash-preview")).toBeDefined();
 		expect(findCuaAnnotation("yutori", "n1.5-latest")).toBeDefined();
 		expect(findCuaAnnotation("tzafon", "tzafon.northstar-cua-fast")).toBeDefined();
 	});

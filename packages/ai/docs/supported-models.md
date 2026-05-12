@@ -32,7 +32,7 @@ Family matches (all dated snapshots accepted):
 
 Source: [Anthropic computer use docs](https://docs.anthropic.com/en/docs/build-with-claude/computer-use).
 
-## `gemini`
+## `google`
 
 API: `google-generative-ai` · coordinates: normalized 0–999
 

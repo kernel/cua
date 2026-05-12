@@ -37,7 +37,7 @@ export function createCuaComputerTools(args: CuaComputerToolsOptions): AgentTool
 			return createOpenAIComputerTools(args);
 		case "anthropic":
 			return createAnthropicComputerTools(args);
-		case "gemini":
+		case "google":
 			return createGeminiComputerTools(args);
 		case "tzafon":
 			return createTzafonComputerTools(args);

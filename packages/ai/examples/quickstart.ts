@@ -19,7 +19,7 @@ const screenshot = await readFile(screenshotPath);
 // const tools = anthropic.createComputerToolDefinitions({ actions: ["click"] });
 //
 // const apiKey = process.env.GOOGLE_API_KEY;
-// const modelRef = "gemini:gemini-2.5-computer-use-preview-10-2025";
+// const modelRef = "google:gemini-2.5-computer-use-preview-10-2025";
 // const model = getCuaModel(modelRef);
 // const tools = gemini.createComputerToolDefinitions({ actions: ["click"] });
 

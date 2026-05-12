@@ -59,35 +59,27 @@ computer-use model catalog and provider/tool metadata.
 ```ts
 getCuaModel("openai:gpt-5.5");
 getCuaModel("anthropic:claude-opus-4-7");
-getCuaModel("gemini:gemini-2.5-computer-use-preview-10-2025");
+getCuaModel("google:gemini-2.5-computer-use-preview-10-2025");
 getCuaModel("tzafon:tzafon.northstar-cua-fast");
 getCuaModel("yutori:n1.5-latest");
 ```
 
-`getCuaModel(ref)` returns a pi-ai `Model<Api>` you can pass to `complete()` or
-`stream()`. The model must be in pi-ai's registry **or** in this package's
-override list, **and** must have a matching annotation in
-`CUA_MODEL_ANNOTATIONS` certifying CUA support.
+`getCuaModel(ref)` returns a pi-ai `Model<Api>` you can pass to `complete()`
+or `stream()`.
 
 See [`docs/supported-models.md`](./docs/supported-models.md) for the current
-list of CUA-supporting models per provider, with source citations.
+list of CUA-supporting models per provider.
 
 ### CuaProvider
 
 `CuaProvider` is the string union of provider IDs this package targets:
 
 ```ts
-type CuaProvider = "openai" | "anthropic" | "gemini" | "tzafon" | "yutori";
+type CuaProvider = "openai" | "anthropic" | "google" | "tzafon" | "yutori";
 ```
 
-It is not a runtime object — it is the discriminator used in `CuaModelRef`,
-`listCuaModels(provider?)`, and `CUA_MODEL_ANNOTATIONS`. The exhaustive
-list is also exported as `CUA_PROVIDERS`.
-
-`CuaProvider` overlaps with pi-ai's `Provider` (also a string ID), with one
-rename: pi-ai calls Google's provider `"google"`, but CUA exposes it as
-`"gemini"` to match the model family. `providerForModel(model)` maps a pi-ai
-`Model<Api>` back to its `CuaProvider`.
+The IDs match pi-ai's `Model.provider` values exactly. `providerForModel(model)`
+narrows a pi-ai `Model<Api>` to a `CuaProvider`.
 
 ### Listing Models
 
@@ -103,9 +95,6 @@ interface CuaModelInfo {
 }
 ```
 
-It merges pi-ai's model registry with this package's overrides (for models
-pi-ai does not yet carry) and filters by `CUA_MODEL_ANNOTATIONS`.
-
 ### Exports
 
 Top-level exports:
@@ -113,10 +102,7 @@ Top-level exports:
 - `getCuaModel(ref: CuaModelRef): Model<Api>`
 - `listCuaModels(provider?: CuaProvider): CuaModelInfo[]`
 - `providerForModel(model: Model<Api>): CuaProvider`
-- `CUA_PROVIDERS: readonly CuaProvider[]`
-- `CUA_MODEL_ANNOTATIONS`, `findCuaAnnotation(provider, modelId)`
-- `CuaBatchSchema`, `CuaActionSchema`, `CuaNavigationSchema` TypeBox schemas
-- `createCuaActionSchema(actions?)`, `createCuaBatchSchema(actions?)`
+- `isCuaProvider(value: string): value is CuaProvider`
 
 Provider namespaces expose `createComputerToolDefinitions({ actions? })` for
 building model-facing pi-ai `Tool[]` definitions. Omit `actions` for the
@@ -155,9 +141,8 @@ Current coordinate contracts:
 - `yutori`: normalized coordinates in the 0-1000 range ([source](https://docs.yutori.com/reference/navigator), [SDK helper](https://github.com/yutori-ai/yutori-sdk-python/blob/main/yutori/navigator/coordinates.py))
 - `tzafon`: normalized coordinates in the 0-999 range ([source](https://docs.lightcone.ai/guides/coordinates/), [model card](https://huggingface.co/Tzafon/Northstar-CUA-Fast))
 
-`CuaActionSchema` validates one normalized computer action. The action
-vocabulary is intentionally provider-neutral and OpenAI-shaped because it maps
-cleanly to most browser computer-use APIs:
+The action vocabulary is intentionally provider-neutral and OpenAI-shaped
+because it maps cleanly to most browser computer-use APIs:
 
 ```ts
 type CuaAction =
@@ -196,7 +181,8 @@ type CuaActionGoto = {
 };
 ```
 
-`CuaBatchSchema` validates the input for a batched computer tool:
+The provider namespace `createComputerToolDefinitions()` emits a
+`batch_computer_actions` tool whose input is:
 
 ```ts
 type CuaBatchInput = {
@@ -204,13 +190,12 @@ type CuaBatchInput = {
 };
 ```
 
-Use it for a tool like `batch_computer_actions`, where the model can plan
-several writes and reads in one call. Read actions such as `screenshot`, `url`,
-and `cursor_position` can be interleaved with writes so your executor can return
-fresh state in the same order.
+The model can plan several writes and reads in one call. Read actions such as
+`screenshot`, `url`, and `cursor_position` can be interleaved with writes so
+your executor can return fresh state in the same order.
 
-`CuaNavigationSchema` validates a smaller convenience tool for high-level
-navigation:
+When `actions` is omitted, the OpenAI namespace also emits a `computer_use_extra`
+navigation tool whose input is:
 
 ```ts
 type CuaNavigationInput = {
@@ -218,9 +203,6 @@ type CuaNavigationInput = {
   url?: string;
 };
 ```
-
-Use it for a simple `computer_use_extra`-style tool when you want navigation
-available without exposing the full batch action surface.
 
 Provider namespaces:
 
