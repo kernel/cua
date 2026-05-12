@@ -19,6 +19,9 @@ export type {
 	CuaNavigationInput as OpenAIExtraInput,
 } from "../common.js";
 
+// Provider-native action vocabulary emitted on `computer_call.action.type`:
+//   click, double_click, drag, move, scroll, type, keypress, wait, screenshot
+// Source: https://github.com/openai/openai-cua-sample-app/blob/main/packages/runner-core/src/responses-loop.ts
 export const COMPUTER_TOOL_COORDINATES = { type: "pixel" } as const satisfies ComputerToolCoordinateSystem;
 
 export const OPENAI_BATCH_INSTRUCTIONS = `You have two browser tools:

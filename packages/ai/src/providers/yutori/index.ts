@@ -21,8 +21,21 @@ export {
 	yutoriBuiltinToolsOnPayload,
 } from "./provider.js";
 
-// Sources: https://docs.yutori.com/reference/navigator and
-// https://github.com/yutori-ai/yutori-sdk-python/blob/main/yutori/navigator/coordinates.py
+// Provider-native action vocabulary differs between Navigator versions:
+//   n1 (fixed tool set):
+//     left_click, double_click, right_click, triple_click, type, key_press,
+//     scroll, hover, drag, goto_url, go_back, refresh, wait
+//   n1.5 core (browser_tools_core-20260403):
+//     left_click, double_click, triple_click, middle_click, right_click,
+//     mouse_move (replaces hover), mouse_down, mouse_up, drag, scroll, type,
+//     key_press, hold_key, goto_url, go_back, go_forward, refresh, wait
+//   n1.5 expanded (browser_tools_expanded-20260403): core +
+//     extract_elements, find, set_element_value, execute_js
+// Sources:
+//   https://github.com/yutori-ai/yutori-sdk-python/blob/main/api.md
+//   https://github.com/yutori-ai/yutori-sdk-python/blob/main/yutori/navigator/models.py
+//   https://docs.yutori.com/reference/n1-5
+//   https://github.com/yutori-ai/yutori-sdk-python/blob/main/yutori/navigator/coordinates.py
 export const COMPUTER_TOOL_COORDINATES = { type: "normalized", range: [0, 1000] } as const satisfies ComputerToolCoordinateSystem;
 
 export const YUTORI_INSTRUCTIONS_RAW = `You control a Kernel cloud browser. Prefer batched computer actions for browser interaction and include screenshot or URL reads when you need updated state.`;
