@@ -17,6 +17,58 @@ export interface CuaModelInfo {
 
 export const CUA_PROVIDERS: readonly CuaProvider[] = ["openai", "anthropic", "gemini", "tzafon", "yutori"];
 
+// CUA support annotations.
+//
+// pi-ai's model registry is generated from models.dev (see
+// node_modules/@earendil-works/pi-ai/scripts/generate-models.ts) and lists every
+// model a provider offers. Only some of those models support computer-use, so
+// this table layers per-provider CUA-support annotations on top of the
+// registry. Each entry cites the official source documenting CUA support.
+//
+// Match kinds:
+//   - exact:  id === match.id
+//   - family: id === match.family || id.startsWith(match.family + "-")
+//
+// To verify support and add new entries, follow the `update-models` skill at
+// .agents/skills/update-models/SKILL.md.
+
+export type CuaModelMatch =
+	| { readonly kind: "exact"; readonly id: string }
+	| { readonly kind: "family"; readonly family: string };
+
+export interface CuaModelAnnotation {
+	readonly match: CuaModelMatch;
+	readonly source: string;
+}
+
+export const CUA_MODEL_ANNOTATIONS: Record<CuaProvider, readonly CuaModelAnnotation[]> = {
+	openai: [
+		{ match: { kind: "family", family: "gpt-5.4" }, source: "https://developers.openai.com/api/docs/models/gpt-5.4" },
+		{ match: { kind: "family", family: "gpt-5.5" }, source: "https://developers.openai.com/api/docs/models/gpt-5.5" },
+	],
+	anthropic: [
+		{ match: { kind: "family", family: "claude-3-7-sonnet" }, source: "https://docs.anthropic.com/en/docs/build-with-claude/computer-use" },
+		{ match: { kind: "family", family: "claude-opus-4" }, source: "https://docs.anthropic.com/en/docs/build-with-claude/computer-use" },
+		{ match: { kind: "family", family: "claude-sonnet-4" }, source: "https://docs.anthropic.com/en/docs/build-with-claude/computer-use" },
+		{ match: { kind: "family", family: "claude-haiku-4" }, source: "https://docs.anthropic.com/en/docs/build-with-claude/computer-use" },
+	],
+	gemini: [
+		{ match: { kind: "exact", id: "gemini-3-flash-preview" }, source: "https://ai.google.dev/gemini-api/docs/computer-use" },
+		{ match: { kind: "exact", id: "gemini-2.5-computer-use-preview-10-2025" }, source: "https://ai.google.dev/gemini-api/docs/computer-use" },
+	],
+	tzafon: [
+		{ match: { kind: "exact", id: "tzafon.northstar-cua-fast" }, source: "https://huggingface.co/Tzafon/Northstar-CUA-Fast" },
+	],
+	yutori: [
+		{ match: { kind: "exact", id: "n1-latest" }, source: "https://docs.yutori.com/reference/navigator" },
+		{ match: { kind: "exact", id: "n1-20260203" }, source: "https://docs.yutori.com/reference/navigator" },
+		{ match: { kind: "exact", id: "n1.5-latest" }, source: "https://docs.yutori.com/reference/navigator" },
+		{ match: { kind: "exact", id: "n1.5-20260428" }, source: "https://docs.yutori.com/reference/navigator" },
+	],
+};
+
+// Models that the pi-ai registry doesn't carry yet but that providers expose
+// today. Each override must match a CUA_MODEL_ANNOTATIONS entry above.
 const CUA_MODEL_OVERRIDES: Record<CuaProvider, CuaModelInfo[]> = {
 	openai: [
 		cuaModel("openai", "gpt-5.5", "GPT-5.5"),
@@ -123,24 +175,20 @@ function piProviderFor(provider: CuaProvider): string {
 }
 
 function supportsCuaProvider(provider: CuaProvider, modelId: string): boolean {
+	return findCuaAnnotation(provider, modelId) !== undefined;
+}
+
+export function findCuaAnnotation(provider: CuaProvider, modelId: string): CuaModelAnnotation | undefined {
 	const id = modelId.toLowerCase();
-	switch (provider) {
-		case "openai":
-			return /^gpt-5\.(4|5)(?:-|$)/.test(id);
-		case "anthropic":
-			return (
-				id.startsWith("claude-3-7-sonnet") ||
-				id.startsWith("claude-opus-4") ||
-				id.startsWith("claude-sonnet-4") ||
-				id.startsWith("claude-haiku-4")
-			);
-		case "gemini":
-			return id === "gemini-3-flash-preview" || id === "gemini-2.5-computer-use-preview-10-2025";
-		case "tzafon":
-			return id === "tzafon.northstar-cua-fast";
-		case "yutori":
-			return id === "n1-latest" || id === "n1-20260203" || id === "n1.5-latest" || id === "n1.5-20260428";
+	for (const annotation of CUA_MODEL_ANNOTATIONS[provider]) {
+		if (annotation.match.kind === "exact") {
+			if (id === annotation.match.id.toLowerCase()) return annotation;
+		} else {
+			const family = annotation.match.family.toLowerCase();
+			if (id === family || id.startsWith(`${family}-`)) return annotation;
+		}
 	}
+	return undefined;
 }
 
 function dynamicModel(provider: CuaProvider, modelId: string): Model<Api> {
