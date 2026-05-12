@@ -51,9 +51,9 @@ const cases: ProviderCase[] = [
 		supportsBatching: true,
 	},
 	{
-		provider: "gemini",
+		provider: "google",
 		envVar: "GOOGLE_API_KEY",
-		modelRef: "gemini:gemini-3-flash-preview",
+		modelRef: "google:gemini-3-flash-preview",
 		tools: () => gemini.createComputerToolDefinitions({ actions: ["click"] }),
 		multiActionTools: () => gemini.createComputerToolDefinitions({ actions: ["click", "type"] }),
 		coordinateRange: [0, 999],
