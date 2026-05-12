@@ -1,4 +1,4 @@
-import type { ComputerToolCoordinateSystem } from "../common.js";
+import type { ComputerToolCoordinateSystem } from "../common";
 
 export {
 	CUA_ACTION_TYPES as OPENAI_CUA_ACTION_TYPES,
@@ -11,13 +11,13 @@ export {
 	createCuaBatchSchema as createBatchSchema,
 	CuaBatchSchema as OpenAIBatchSchema,
 	CuaNavigationSchema as OpenAIExtraSchema,
-} from "../common.js";
+} from "../common";
 export type {
 	CuaAction as OpenAIAction,
 	CreateComputerToolDefinitionsOptions,
 	CuaBatchInput as OpenAIBatchInput,
 	CuaNavigationInput as OpenAIExtraInput,
-} from "../common.js";
+} from "../common";
 
 // Provider-native action vocabulary emitted on `computer_call.action.type`:
 //   click, double_click, drag, move, scroll, type, keypress, wait, screenshot

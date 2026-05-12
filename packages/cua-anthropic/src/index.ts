@@ -20,17 +20,17 @@ export {
 	ANTHROPIC_BATCH_TOOL_WIRE_SPEC,
 	executeAnthropicBatch,
 	expandTripleClick,
-} from "./batch.js";
+} from "./batch";
 export type {
 	AnthropicBatchToolDetails,
 	AnthropicBatchToolInput,
-} from "./batch.js";
+} from "./batch";
 export {
 	ComputerSchema,
 	executeAnthropicComputerAction,
 	translateAnthropicAction,
-} from "./computer.js";
-export type { AnthropicComputerInput, AnthropicComputerDetails } from "./computer.js";
+} from "./computer";
+export type { AnthropicComputerInput, AnthropicComputerDetails } from "./computer";
 export {
 	ANTHROPIC_COMPUTER_TOOL,
 	ANTHROPIC_COMPACTION_BETA,
@@ -40,24 +40,24 @@ export {
 	ANTHROPIC_COMPUTER_USE_BETA,
 	ANTHROPIC_OFFICIAL_ACTION_TYPES,
 	anthropicSupportsCompaction,
-} from "./official.js";
+} from "./official";
 export type {
 	AnthropicComputerToolVersion,
 	AnthropicOfficialActionType,
-} from "./official.js";
-export { ANTHROPIC_CUA_EXTRA_ACTION_TYPES } from "./cua-extras.js";
-export type { AnthropicCuaExtraActionType } from "./cua-extras.js";
-export { anthropic } from "./model.js";
+} from "./official";
+export { ANTHROPIC_CUA_EXTRA_ACTION_TYPES } from "./cua-extras";
+export type { AnthropicCuaExtraActionType } from "./cua-extras";
+export { anthropic } from "./model";
 export type {
 	AnthropicModelOptions,
 	AnthropicModelRunDetails,
-} from "./model.js";
+} from "./model";
 export {
 	compactAnthropicMessagesForRequest,
 	hasAnthropicCompactionBlock,
-} from "./context.js";
+} from "./context";
 export {
 	buildAnthropicSystemPrompt,
 	ANTHROPIC_INSTRUCTIONS_RAW,
-} from "./system-prompt.js";
-export type { AnthropicSystemPromptOptions } from "./system-prompt.js";
+} from "./system-prompt";
+export type { AnthropicSystemPromptOptions } from "./system-prompt";

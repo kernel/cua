@@ -16,8 +16,8 @@
  *    talking to the high-level translator API.
  */
 
-import { translateKeys } from "./keysym.js";
-import type { BatchAction, ModelAction } from "./types.js";
+import { translateKeys } from "./keysym";
+import type { BatchAction, ModelAction } from "./types";
 
 // ─── BatchAction-level builders ────────────────────────────────────────────
 

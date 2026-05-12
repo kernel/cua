@@ -1,4 +1,4 @@
-import type { ComputerToolCoordinateSystem } from "../common.js";
+import type { ComputerToolCoordinateSystem } from "../common";
 
 export {
 	CUA_ACTION_TYPES as TZAFON_ACTION_TYPES,
@@ -8,17 +8,17 @@ export {
 	createCuaActionSchema as createActionSchema,
 	createCuaBatchSchema as createBatchSchema,
 	CuaBatchSchema as TzafonBatchSchema,
-} from "../common.js";
+} from "../common";
 export type {
 	CuaAction as TzafonAction,
 	CreateComputerToolDefinitionsOptions,
 	CuaBatchInput as TzafonBatchInput,
-} from "../common.js";
+} from "../common";
 export {
 	TZAFON_RESPONSES_API,
 	streamSimpleTzafonResponses,
 	streamTzafonResponses,
-} from "./provider.js";
+} from "./provider";
 
 // Provider-native action vocabulary. The model card lists supported actions;
 // the Responses API loop dispatches on `action.type` and adds terminal control

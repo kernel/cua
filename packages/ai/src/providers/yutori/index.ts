@@ -1,4 +1,4 @@
-import type { ComputerToolCoordinateSystem } from "../common.js";
+import type { ComputerToolCoordinateSystem } from "../common";
 
 export {
 	CUA_ACTION_TYPES as YUTORI_ACTION_TYPES,
@@ -8,18 +8,18 @@ export {
 	createCuaActionSchema as createActionSchema,
 	createCuaBatchSchema as createBatchSchema,
 	CuaBatchSchema as YutoriBatchSchema,
-} from "../common.js";
+} from "../common";
 export type {
 	CuaAction as YutoriAction,
 	CreateComputerToolDefinitionsOptions,
 	CuaBatchInput as YutoriBatchInput,
-} from "../common.js";
+} from "../common";
 export {
 	YUTORI_CHAT_COMPLETIONS_API,
 	streamSimpleYutori,
 	streamYutori,
 	yutoriBuiltinToolsOnPayload,
-} from "./provider.js";
+} from "./provider";
 
 // Provider-native action vocabulary differs between Navigator versions:
 //   n1 (fixed tool set):

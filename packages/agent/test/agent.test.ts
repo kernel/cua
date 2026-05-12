@@ -2,7 +2,7 @@ import { Agent, type AgentTool } from "@earendil-works/pi-agent-core";
 import { describe, expect, it } from "vitest";
 import { resolveCuaRuntimeSpec } from "@onkernel/cua-ai";
 import type Kernel from "@onkernel/sdk";
-import { CuaAgent, CuaHarness, createCuaComputerTools, type KernelBrowser } from "../src/index.js";
+import { CuaAgent, CuaHarness, createCuaComputerTools, type KernelBrowser } from "../src/index";
 
 const browser = { session_id: "browser_123" } as KernelBrowser;
 const client = {} as Kernel;
@@ -86,5 +86,16 @@ describe("CuaHarness", () => {
 		expect(harness.agent).toBeInstanceOf(Agent);
 		expect(harness.agent.state.model.id).toBe("gpt-5.5");
 		expect(harness.agent.state.tools.length).toBeGreaterThan(0);
+	});
+
+	it("exposes transcript snapshots", () => {
+		const harness = new CuaHarness({
+			browser,
+			client,
+			model: "openai:gpt-5.5",
+		});
+		const transcript = harness.getTranscript();
+		expect(transcript).toEqual(harness.state.messages);
+		expect(transcript).not.toBe(harness.state.messages);
 	});
 });

@@ -1,7 +1,7 @@
 import type { ComputerTranslator, ComputerUseToolResult, ModelAction } from "@onkernel/cua-translator";
 import { type Static, Type } from "@sinclair/typebox";
-import { OPENAI_CUA_EXTRA_ACTION_TYPES } from "./cua-extras.js";
-import { OPENAI_OFFICIAL_ACTION_TYPES } from "./official.js";
+import { OPENAI_CUA_EXTRA_ACTION_TYPES } from "./cua-extras";
+import { OPENAI_OFFICIAL_ACTION_TYPES } from "./official";
 
 export const OPENAI_BATCH_TOOL_NAME = "batch_computer_actions";
 

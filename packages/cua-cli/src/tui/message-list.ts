@@ -1,5 +1,5 @@
 import { Container, Text } from "@mariozechner/pi-tui";
-import { colors } from "./themes.js";
+import { colors } from "./themes";
 
 /**
  * Append-only chat log of user prompts, assistant text, tool-call summaries,

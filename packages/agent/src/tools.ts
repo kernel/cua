@@ -9,7 +9,7 @@ import {
 	type CuaBatchInput,
 	type CuaNavigationInput,
 } from "@onkernel/cua-ai";
-import { InternalComputerTranslator, type KernelBrowser } from "./translator/translator.js";
+import { InternalComputerTranslator, type KernelBrowser } from "./translator/translator";
 
 export interface ComputerToolOptions {
 	browser: KernelBrowser;

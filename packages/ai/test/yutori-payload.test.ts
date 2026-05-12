@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { yutori } from "../src/index.js";
+import { yutori } from "../src/index";
 
 describe("yutoriBuiltinToolsOnPayload", () => {
 	it("removes yutori built-in tool definitions from payload.tools", () => {

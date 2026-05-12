@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CUA_BATCH_TOOL_NAME, CUA_NAVIGATION_TOOL_NAME, CUA_PROVIDERS, listCuaModels, resolveCuaRuntimeSpec } from "../src/index.js";
+import { CUA_BATCH_TOOL_NAME, CUA_NAVIGATION_TOOL_NAME, CUA_PROVIDERS, listCuaModels, resolveCuaRuntimeSpec } from "../src/index";
 
 describe("resolveCuaRuntimeSpec", () => {
 	it("resolves a runtime spec for every CUA provider", () => {

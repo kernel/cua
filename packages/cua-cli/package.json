@@ -13,7 +13,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -b && chmod +x dist/cli.js",
+    "build": "tsc -b && node ../../scripts/append-js-extensions.mjs dist && chmod +x dist/cli.js",
     "clean": "tsc -b --clean",
     "test": "node --test dist/tui/testing/*.test.js"
   },

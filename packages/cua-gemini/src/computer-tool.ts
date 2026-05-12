@@ -7,8 +7,8 @@ import {
 	forwardModelAction,
 } from "@onkernel/cua-translator";
 import { type Static, Type } from "@sinclair/typebox";
-import { denormalizeX, denormalizeY } from "./coords.js";
-import { DEFAULT_GEMINI_SCREEN_SIZE, GeminiAction, type GeminiScreenSize } from "./official.js";
+import { denormalizeX, denormalizeY } from "./coords";
+import { DEFAULT_GEMINI_SCREEN_SIZE, GeminiAction, type GeminiScreenSize } from "./official";
 
 /**
  * One AgentTool per predefined Gemini computer-use function.

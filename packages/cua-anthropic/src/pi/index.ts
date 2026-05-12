@@ -1,7 +1,7 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import type { ComputerTranslator } from "@onkernel/cua-translator";
-import { createAnthropicBatchTool } from "../batch-tool.js";
-import { createAnthropicComputerTool } from "../computer-tool.js";
+import { createAnthropicBatchTool } from "../batch-tool";
+import { createAnthropicComputerTool } from "../computer-tool";
 
 export interface AnthropicComputerToolsOptions {
 	/** Set false to omit the built-in `computer` tool. Defaults to true. */
@@ -24,17 +24,17 @@ export function createAnthropicComputerTools(
 	return tools;
 }
 
-export { createAnthropicComputerTool } from "../computer-tool.js";
-export type { AnthropicComputerDetails, AnthropicComputerInput } from "../computer.js";
-export { createAnthropicBatchTool } from "../batch-tool.js";
-export type { AnthropicBatchToolDetails, AnthropicBatchToolInput } from "../batch.js";
+export { createAnthropicComputerTool } from "../computer-tool";
+export type { AnthropicComputerDetails, AnthropicComputerInput } from "../computer";
+export { createAnthropicBatchTool } from "../batch-tool";
+export type { AnthropicBatchToolDetails, AnthropicBatchToolInput } from "../batch";
 export {
 	registerAnthropicProvider,
 	wrapAnthropicStream,
-} from "../stream-wrapper.js";
+} from "../stream-wrapper";
 export {
 	anthropicComputerOnPayload,
 	composeOnPayload,
 	createAnthropicContextManagementOnPayload,
-} from "../payload-hook.js";
-export type { AnthropicContextManagementOptions } from "../payload-hook.js";
+} from "../payload-hook";
+export type { AnthropicContextManagementOptions } from "../payload-hook";

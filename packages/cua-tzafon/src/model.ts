@@ -10,9 +10,9 @@ import {
 	TZAFON_FUNCTION_TOOLS,
 	type TzafonComputerToolsOptions,
 	type TzafonToolDetails,
-} from "./computer.js";
-import { TZAFON_DEFAULT_MODEL } from "./official.js";
-import { buildTzafonSystemPrompt } from "./system-prompt.js";
+} from "./computer";
+import { TZAFON_DEFAULT_MODEL } from "./official";
+import { buildTzafonSystemPrompt } from "./system-prompt";
 
 const DEFAULT_MAX_OUTPUT_TOKENS = 4096;
 const MAX_HISTORY_ITEMS = 30;

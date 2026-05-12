@@ -1,6 +1,6 @@
 import type Kernel from "@onkernel/sdk";
 import type { BrowserCreateResponse, BrowserRetrieveResponse } from "@onkernel/sdk/resources/browsers";
-import type { BatchExecutionResult, ModelAction } from "./types.js";
+import type { BatchExecutionResult, ModelAction } from "./types";
 
 export type KernelBrowser = BrowserCreateResponse | BrowserRetrieveResponse;
 

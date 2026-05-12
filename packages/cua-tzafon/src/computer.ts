@@ -4,12 +4,12 @@ import type {
 	ModelAction,
 } from "@onkernel/cua-translator";
 import { type Static, Type } from "@sinclair/typebox";
-import { denormalizeX, denormalizeY } from "./coords.js";
+import { denormalizeX, denormalizeY } from "./coords";
 import {
 	DEFAULT_TZAFON_SCREEN_SIZE,
 	TzafonAction,
 	type TzafonScreenSize,
-} from "./official.js";
+} from "./official";
 
 const SCREENSHOT_DELAY_MS = 500;
 const SCROLL_WHEEL_TICKS_PER_NOTCH = 120;

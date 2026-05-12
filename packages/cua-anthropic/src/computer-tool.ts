@@ -5,7 +5,7 @@ import {
 	ComputerSchema,
 	type AnthropicComputerDetails,
 	executeAnthropicComputerAction,
-} from "./computer.js";
+} from "./computer";
 
 /**
  * Build the `computer` AgentTool for Anthropic. The provider payload hook

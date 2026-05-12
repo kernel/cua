@@ -1,14 +1,15 @@
-import { registerCuaProviders } from "./providers.js";
+import { registerCuaProviders } from "./providers";
 
 export * from "@earendil-works/pi-ai";
 
-export * from "./models.js";
-export * from "./runtime-spec.js";
-export * from "./providers/common.js";
-export * as anthropic from "./providers/anthropic/index.js";
-export * as gemini from "./providers/gemini/index.js";
-export * as openai from "./providers/openai/index.js";
-export * as tzafon from "./providers/tzafon/index.js";
-export * as yutori from "./providers/yutori/index.js";
+export * from "./models";
+export * from "./api-keys";
+export * from "./runtime-spec";
+export * from "./providers/common";
+export * as anthropic from "./providers/anthropic/index";
+export * as gemini from "./providers/gemini/index";
+export * as openai from "./providers/openai/index";
+export * as tzafon from "./providers/tzafon/index";
+export * as yutori from "./providers/yutori/index";
 
 registerCuaProviders();

@@ -7,7 +7,7 @@ import {
 	executeOpenAIBatch,
 	OPENAI_BATCH_DESCRIPTION,
 	OPENAI_BATCH_TOOL_NAME,
-} from "./batch.js";
+} from "./batch";
 
 /**
  * Build the `batch_computer_actions` AgentTool for OpenAI computer-use models.

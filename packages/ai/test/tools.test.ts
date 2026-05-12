@@ -9,7 +9,7 @@ import {
 	openai,
 	tzafon,
 	yutori,
-} from "../src/index.js";
+} from "../src/index";
 
 const providers = { openai, anthropic, gemini, tzafon, yutori };
 

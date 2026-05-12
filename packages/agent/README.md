@@ -42,11 +42,16 @@ const harness = new CuaHarness({
   browser,
   client,
   model: "openai:gpt-5.5",
-  getApiKey: () => process.env.OPENAI_API_KEY,
 });
 
 await harness.prompt("Open example.com and tell me the current URL.");
+const transcript = harness.getTranscript();
+console.log("messages in transcript:", transcript.length);
 ```
+
+Use `CuaAgent` when you want direct pi `Agent` control. Use `CuaHarness` when you
+want the harness-style constructor plus transcript-oriented helpers like
+`getTranscript()`.
 
 ## Core Concepts
 
@@ -60,6 +65,13 @@ Both classes mirror pi constructor shapes and behavior, with minimal additions:
 - `browser` (Kernel browser response)
 - `client` (Kernel SDK client)
 - CUA model refs (`"provider:model"`) accepted where pi expects a concrete model
+
+If `getApiKey` is omitted, both classes default to CUA env var conventions:
+- OpenAI: `OPENAI_API_KEY`
+- Anthropic: `ANTHROPIC_OAUTH_TOKEN` or `ANTHROPIC_API_KEY`
+- Gemini: `GOOGLE_API_KEY` or `GEMINI_API_KEY`
+- Tzafon: `TZAFON_API_KEY`
+- Yutori: `YUTORI_API_KEY`
 
 ### Tool Defaults
 

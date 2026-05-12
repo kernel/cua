@@ -21,7 +21,7 @@ import {
 	TZAFON_FUNCTION_TOOLS,
 	type TzafonComputerToolsOptions,
 	type TzafonToolDetails,
-} from "../computer.js";
+} from "../computer";
 
 export const TZAFON_RESPONSES_API = "tzafon-responses";
 

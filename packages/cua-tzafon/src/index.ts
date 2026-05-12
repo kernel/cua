@@ -11,35 +11,35 @@ export {
 	denormalizeX,
 	denormalizeY,
 	parseTzafonCoord,
-} from "./coords.js";
+} from "./coords";
 export {
 	executeTzafonFunctionCall,
 	getTzafonDefinition,
 	splitKeyCombo,
 	TZAFON_FUNCTION_TOOLS,
-} from "./computer.js";
+} from "./computer";
 export type {
 	TzafonComputerToolsOptions,
 	TzafonToolDetails,
-} from "./computer.js";
+} from "./computer";
 export {
 	TzafonAction,
 	DEFAULT_TZAFON_SCREEN_SIZE,
 	TZAFON_ACTIONS,
 	TZAFON_COORDINATE_SCALE,
 	TZAFON_DEFAULT_MODEL,
-} from "./official.js";
+} from "./official";
 export type {
 	TzafonActionName,
 	TzafonScreenSize,
-} from "./official.js";
-export { tzafon } from "./model.js";
+} from "./official";
+export { tzafon } from "./model";
 export type {
 	TzafonModelOptions,
 	TzafonModelRunDetails,
-} from "./model.js";
+} from "./model";
 export {
 	buildTzafonSystemPrompt,
 	TZAFON_INSTRUCTIONS_RAW,
-} from "./system-prompt.js";
-export type { TzafonSystemPromptOptions } from "./system-prompt.js";
+} from "./system-prompt";
+export type { TzafonSystemPromptOptions } from "./system-prompt";

@@ -10,12 +10,13 @@ import {
 	type Api,
 	type Model,
 	type CuaModelRef,
+	getCuaEnvApiKey,
 	resolveCuaRuntimeSpec,
 	streamSimple,
 } from "@onkernel/cua-ai";
 import type Kernel from "@onkernel/sdk";
-import { createCuaComputerTools } from "./tools.js";
-import type { KernelBrowser } from "./translator/translator.js";
+import { createCuaComputerTools } from "./tools";
+import type { KernelBrowser } from "./translator/translator";
 
 type CuaAgentInitialState = Omit<NonNullable<AgentOptions["initialState"]>, "model" | "tools"> & {
 	model: CuaModelRef | Model<Api>;
@@ -45,6 +46,7 @@ export class CuaAgent extends Agent {
 
 		super({
 			...agentOptions,
+			getApiKey: agentOptions.getApiKey ?? getCuaEnvApiKey,
 			streamFn: streamFn ?? streamSimple,
 			onPayload: composeOnPayload(runtimeSpec.onPayload, onPayload),
 			initialState: {
@@ -66,6 +68,7 @@ export class CuaHarness {
 		const resolvedTools = tools ?? createCuaComputerTools({ browser, client, toolDefinitions: runtimeSpec.toolDefinitions });
 		this.agent = new Agent({
 			...agentOptions,
+			getApiKey: agentOptions.getApiKey ?? getCuaEnvApiKey,
 			streamFn: streamFn ?? streamSimple,
 			onPayload: composeOnPayload(runtimeSpec.onPayload, onPayload),
 			initialState: {
@@ -140,6 +143,10 @@ export class CuaHarness {
 
 	async waitForIdle(): Promise<void> {
 		await this.agent.waitForIdle();
+	}
+
+	getTranscript(): AgentMessage[] {
+		return [...this.agent.state.messages];
 	}
 }
 

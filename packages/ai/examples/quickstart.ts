@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { complete, getCuaModel, openai } from "../src/index.js";
+import { complete, getCuaModel, openai } from "../src/index";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const screenshotPath = join(here, "screenshot.png");

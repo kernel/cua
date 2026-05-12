@@ -2,7 +2,7 @@ import { Type, type Tool } from "@onkernel/cua-ai";
 import { CUA_PROVIDERS, listCuaModels, resolveCuaRuntimeSpec } from "@onkernel/cua-ai";
 import type Kernel from "@onkernel/sdk";
 import { describe, expect, it } from "vitest";
-import { SUPPORTED_CUA_EXECUTOR_TOOL_NAMES, createCuaComputerTools, type KernelBrowser } from "../src/index.js";
+import { SUPPORTED_CUA_EXECUTOR_TOOL_NAMES, createCuaComputerTools, type KernelBrowser } from "../src/index";
 
 const browser = { session_id: "browser_123" } as KernelBrowser;
 const client = {} as Kernel;

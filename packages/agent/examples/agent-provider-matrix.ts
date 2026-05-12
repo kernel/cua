@@ -1,13 +1,15 @@
 import Kernel from "@onkernel/sdk";
-import { CuaAgent, type CuaModelRef } from "../src/index.js";
-import { SCENARIOS } from "./shared/scenarios.js";
-import { requireEnv, resolveApiKey } from "./shared/runtime.js";
+import { requireCuaEnvApiKeyForModel, type CuaModelRef } from "../../ai/src/index";
+import { CuaAgent } from "../src/index";
+import { SCENARIOS } from "./shared/scenarios";
 
 const modelRef = (process.env.MODEL_REF as CuaModelRef | undefined) ?? "openai:gpt-5.5";
 const scenarioName = process.env.SCENARIO ?? SCENARIOS[0]!.name;
 
 async function main(): Promise<void> {
-	const kernelApiKey = requireEnv("KERNEL_API_KEY");
+	const kernelApiKey = process.env.KERNEL_API_KEY;
+	if (!kernelApiKey) throw new Error("KERNEL_API_KEY is required");
+	requireCuaEnvApiKeyForModel(modelRef);
 	const client = new Kernel({ apiKey: kernelApiKey });
 	const browser = await client.browsers.create({ stealth: true });
 	const scenario = SCENARIOS.find((entry) => entry.name === scenarioName) ?? SCENARIOS[0]!;
@@ -16,7 +18,6 @@ async function main(): Promise<void> {
 		const agent = new CuaAgent({
 			browser,
 			client,
-			getApiKey: () => resolveApiKey(modelRef),
 			initialState: { model: modelRef },
 		});
 		console.log(`model=${modelRef} scenario=${scenario.name}`);

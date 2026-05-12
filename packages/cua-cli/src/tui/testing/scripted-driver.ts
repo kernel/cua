@@ -1,6 +1,6 @@
 import type { AgentEvent } from "@mariozechner/pi-agent-core";
 import type { AssistantMessage, Usage } from "@mariozechner/pi-ai";
-import type { InteractiveDriver, InteractiveDriverListener } from "../driver.js";
+import type { InteractiveDriver, InteractiveDriverListener } from "../driver";
 
 export interface FixturePromptMatch {
 	equals?: string;

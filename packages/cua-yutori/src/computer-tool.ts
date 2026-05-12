@@ -7,7 +7,7 @@ import {
 	type YutoriComputerToolsOptions,
 	type YutoriToolDetails,
 	executeYutoriFunctionCall,
-} from "./computer.js";
+} from "./computer";
 
 export function createYutoriPerActionTools(
 	translator: ComputerTranslator,

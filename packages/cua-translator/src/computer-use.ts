@@ -1,5 +1,5 @@
-import type { BrowserSession } from "./browser-session.js";
-import { ComputerTranslator, type ComputerLogger } from "./translator.js";
+import type { BrowserSession } from "./browser-session";
+import { ComputerTranslator, type ComputerLogger } from "./translator";
 
 export interface ComputerUseTextPart {
 	type: "text";

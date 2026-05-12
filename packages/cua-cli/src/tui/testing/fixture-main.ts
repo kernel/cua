@@ -1,9 +1,9 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { BrowserSession } from "@onkernel/cua-translator";
-import type { Config } from "../../config.js";
-import { runInteractive } from "../main.js";
-import { ScriptedDriver, type ScriptedFixture } from "./scripted-driver.js";
+import type { Config } from "../../config";
+import { runInteractive } from "../main";
+import { ScriptedDriver, type ScriptedFixture } from "./scripted-driver";
 
 async function main(): Promise<void> {
 	const fixtureArg = process.argv[2];

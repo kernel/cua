@@ -3,12 +3,12 @@ import type { SessionManager } from "@mariozechner/pi-coding-agent";
 import { type BrowserSession, ComputerTranslator } from "@onkernel/cua-translator";
 import { writeFile } from "node:fs/promises";
 import { stderr, stdout } from "node:process";
-import { promptWithScreenshot } from "../agent-prompt.js";
-import { type CuaAgentHandle, createCuaAgent } from "../agent.js";
-import type { Config } from "../config.js";
-import { persistAgentEvents, seedAgentFromSession } from "../sessions.js";
-import { type ActionRequest, buildPrompt, DEFAULT_MAX_TURNS } from "./prompts.js";
-import { type ActionEventInfo, type ActionResult, exitCodeFor, formatCompact, parseResult } from "./result.js";
+import { promptWithScreenshot } from "../agent-prompt";
+import { type CuaAgentHandle, createCuaAgent } from "../agent";
+import type { Config } from "../config";
+import { persistAgentEvents, seedAgentFromSession } from "../sessions";
+import { type ActionRequest, buildPrompt, DEFAULT_MAX_TURNS } from "./prompts";
+import { type ActionEventInfo, type ActionResult, exitCodeFor, formatCompact, parseResult } from "./result";
 
 export interface RunOptions {
 	cwd: string;

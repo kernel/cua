@@ -1,4 +1,4 @@
-import type { ActionType } from "./prompts.js";
+import type { ActionType } from "./prompts";
 
 export type Status = "ok" | "not_found" | "error" | "timeout";
 

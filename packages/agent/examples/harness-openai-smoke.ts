@@ -1,12 +1,14 @@
 import Kernel from "@onkernel/sdk";
-import { CuaHarness, type CuaModelRef } from "../src/index.js";
-import { SCENARIOS } from "./shared/scenarios.js";
-import { requireEnv, resolveApiKey } from "./shared/runtime.js";
+import { requireCuaEnvApiKeyForModel, type CuaModelRef } from "../../ai/src/index";
+import { CuaHarness } from "../src/index";
+import { SCENARIOS } from "./shared/scenarios";
 
 const modelRef = (process.env.MODEL_REF as CuaModelRef | undefined) ?? "openai:gpt-5.5";
 
 async function main(): Promise<void> {
-	const kernelApiKey = requireEnv("KERNEL_API_KEY");
+	const kernelApiKey = process.env.KERNEL_API_KEY;
+	if (!kernelApiKey) throw new Error("KERNEL_API_KEY is required");
+	requireCuaEnvApiKeyForModel(modelRef);
 	const client = new Kernel({ apiKey: kernelApiKey });
 	const browser = await client.browsers.create({ stealth: true });
 
@@ -15,7 +17,6 @@ async function main(): Promise<void> {
 			browser,
 			client,
 			model: modelRef,
-			getApiKey: () => resolveApiKey(modelRef),
 		});
 
 		harness.subscribe((event) => {
@@ -29,8 +30,11 @@ async function main(): Promise<void> {
 
 		const scenario = SCENARIOS[0]!;
 		console.log(`running scenario: ${scenario.name}`);
-		const response = await harness.prompt(scenario.prompt);
-		console.log("assistant stopReason:", response.stopReason);
+		await harness.prompt(scenario.prompt);
+		const transcript = harness.getTranscript();
+		const lastAssistant = [...transcript].reverse().find((message) => message.role === "assistant");
+		console.log("transcript messages:", transcript.length);
+		console.log("assistant stopReason:", lastAssistant?.role === "assistant" ? lastAssistant.stopReason : "unknown");
 	} finally {
 		await client.browsers.deleteByID(browser.session_id);
 	}

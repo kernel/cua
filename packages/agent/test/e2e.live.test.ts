@@ -1,7 +1,7 @@
 import Kernel from "@onkernel/sdk";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { describe, expect, it } from "vitest";
-import { CuaAgent, CuaHarness } from "../src/index.js";
+import { CuaAgent, CuaHarness } from "../src/index";
 
 const LIVE = process.env.CUA_E2E_LIVE === "1";
 const KERNEL_API_KEY = process.env.KERNEL_API_KEY;

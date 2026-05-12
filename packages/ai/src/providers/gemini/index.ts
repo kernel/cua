@@ -1,4 +1,4 @@
-import type { ComputerToolCoordinateSystem } from "../common.js";
+import type { ComputerToolCoordinateSystem } from "../common";
 
 export {
 	CUA_ACTION_TYPES as GEMINI_CUA_ACTION_TYPES,
@@ -8,12 +8,12 @@ export {
 	createCuaActionSchema as createActionSchema,
 	createCuaBatchSchema as createBatchSchema,
 	CuaBatchSchema as GeminiBatchSchema,
-} from "../common.js";
+} from "../common";
 export type {
 	CuaAction as GeminiAction,
 	CreateComputerToolDefinitionsOptions,
 	CuaBatchInput as GeminiBatchInput,
-} from "../common.js";
+} from "../common";
 
 // Provider-native function names emitted on `functionCall.name` (PREDEFINED_COMPUTER_USE_FUNCTIONS):
 //   open_web_browser, click_at, hover_at, type_text_at, scroll_document,

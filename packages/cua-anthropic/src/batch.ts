@@ -1,7 +1,7 @@
 import type { ComputerTranslator, ComputerUseToolResult, ModelAction } from "@onkernel/cua-translator";
 import { type Static, Type } from "@sinclair/typebox";
-import { ANTHROPIC_CUA_EXTRA_ACTION_TYPES } from "./cua-extras.js";
-import { ANTHROPIC_OFFICIAL_ACTION_TYPES } from "./official.js";
+import { ANTHROPIC_CUA_EXTRA_ACTION_TYPES } from "./cua-extras";
+import { ANTHROPIC_OFFICIAL_ACTION_TYPES } from "./official";
 
 const COORD_PAIR = Type.Object({ x: Type.Number(), y: Type.Number() }, { additionalProperties: false });
 
