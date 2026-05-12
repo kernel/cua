@@ -67,9 +67,12 @@ export const CUA_MODEL_ANNOTATIONS: Record<CuaProvider, readonly CuaModelAnnotat
 	],
 };
 
-// Models that the pi-ai registry doesn't carry yet but that providers expose
-// today. Each override must match a CUA_MODEL_ANNOTATIONS entry above.
-const CUA_MODEL_OVERRIDES: Record<CuaProvider, CuaModelInfo[]> = {
+// Models that CUA supports which pi-ai's registry does not yet carry. Each
+// entry is a complete Model<Api> so getCuaModel() can return it directly
+// without synthesizing fields at call time. Add an entry here when a provider
+// ships a new model before pi-ai picks it up — and add a matching annotation
+// in CUA_MODEL_ANNOTATIONS above so the support filter recognizes it.
+const CUA_MODEL_OVERRIDES: Record<CuaProvider, readonly Model<Api>[]> = {
 	openai: [
 		cuaModel("openai", "gpt-5.5", "GPT-5.5"),
 		cuaModel("openai", "gpt-5.5-2026-04-23", "GPT-5.5 (2026-04-23)"),
@@ -112,7 +115,10 @@ export function listCuaModels(provider?: CuaProvider): CuaModelInfo[] {
 	const byRef = new Map<CuaModelRef, CuaModelInfo>();
 
 	for (const p of providers) {
-		for (const entry of CUA_MODEL_OVERRIDES[p]) byRef.set(entry.ref, entry);
+		for (const model of CUA_MODEL_OVERRIDES[p]) {
+			const ref = formatCuaModelRef(p, model.id);
+			byRef.set(ref, { ref, provider: p, model: model.id, name: model.name });
+		}
 		for (const model of getModels(piProviderFor(p) as never) as Model<Api>[]) {
 			if (!supportsCuaProvider(p, model.id)) continue;
 			const ref = formatCuaModelRef(p, model.id);
@@ -135,7 +141,10 @@ export function getCuaModel(ref: CuaModelRef): Model<Api> {
 		throw new Error(`unsupported CUA model "${ref}"`);
 	}
 	const fromRegistry = getModel(piProviderFor(provider) as never, modelId as never) as Model<Api> | undefined;
-	return fromRegistry ?? dynamicModel(provider, modelId);
+	if (fromRegistry) return fromRegistry;
+	const override = CUA_MODEL_OVERRIDES[provider].find((m) => m.id === modelId);
+	if (override) return override;
+	throw new Error(`CUA model "${ref}" is supported but not registered. Add it to pi-ai (models.dev) or CUA_MODEL_OVERRIDES.`);
 }
 
 export function providerForModel(model: Model<Api>): CuaProvider {
@@ -191,10 +200,10 @@ export function findCuaAnnotation(provider: CuaProvider, modelId: string): CuaMo
 	return undefined;
 }
 
-function dynamicModel(provider: CuaProvider, modelId: string): Model<Api> {
+function cuaModel(provider: CuaProvider, id: string, name: string): Model<Api> {
 	const base = {
-		id: modelId,
-		name: modelId,
+		id,
+		name,
 		provider: piProviderFor(provider),
 		reasoning: provider === "openai" || provider === "anthropic" || provider === "gemini",
 		input: ["text", "image"],
@@ -213,14 +222,6 @@ function dynamicModel(provider: CuaProvider, modelId: string): Model<Api> {
 		case "yutori":
 			return { ...base, api: "yutori-chat-completions", baseUrl: "https://api.yutori.com/v1", contextWindow: 128_000, maxTokens: 4_096 } as Model<Api>;
 	}
-}
-
-function cuaModel(
-	provider: CuaProvider,
-	model: string,
-	name: string,
-): CuaModelInfo {
-	return { ref: formatCuaModelRef(provider, model), provider, model, name };
 }
 
 function compareCuaModels(a: CuaModelInfo, b: CuaModelInfo): number {
