@@ -48,7 +48,7 @@ Start with these source-of-truth checks:
 - CLI runtime flow: `packages/cua-cli/src/agent.ts`, `cli.ts`, `config.ts`, `skills.ts`, `sessions.ts`, `named-sessions.ts`, `output/jsonl.ts`, `action/`, and `tui/`.
 - Supported models and routing: `packages/cua-cli/src/models.ts`, `cli.ts`, provider package READMEs, and the top-level `README.md`.
 - TUI test infrastructure: `packages/ptywright/package.json`, `src/index.ts`, `src/session.ts`, `src/terminal.ts`, and `README.md`.
-- External drift: provider computer-use docs, provider SDK versions, `@mariozechner/pi-*` versions, and `@onkernel/sdk` versions in package manifests.
+- External drift: provider computer-use docs, provider SDK versions, `@earendil-works/pi-*` versions, and `@onkernel/sdk` versions in package manifests.
 
 Questions `architecture.md` should answer after each update:
 

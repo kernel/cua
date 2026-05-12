@@ -24,10 +24,10 @@
     "test": "vitest --run"
   },
   "dependencies": {
-    "@mariozechner/pi-ai": "0.67.6",
-    "@sinclair/typebox": "0.34.49",
+    "@earendil-works/pi-ai": "^0.74.0",
     "@tzafon/lightcone": "^0.7.0",
-    "openai": "^6.26.0"
+    "openai": "^6.26.0",
+    "typebox": "^1.1.24"
   },
   "devDependencies": {
     "vitest": "^3.2.4"

@@ -3,7 +3,7 @@ import {
 	type Model,
 	getModel,
 	getModels,
-} from "@mariozechner/pi-ai";
+} from "@earendil-works/pi-ai";
 
 export type CuaProvider = "openai" | "anthropic" | "gemini" | "tzafon" | "yutori";
 export type CuaModelRef = `${CuaProvider}:${string}`;

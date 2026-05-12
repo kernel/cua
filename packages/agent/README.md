@@ -1,7 +1,7 @@
 # `@onkernel/cua-agent`
 
 Kernel browser computer-use tools and a small `Agent` factory built on
-[`@mariozechner/pi-agent-core`](https://github.com/badlogic/pi-mono/tree/main/packages/agent).
+[`@earendil-works/pi-agent-core`](https://github.com/earendil-works/pi/tree/main/packages/agent).
 
 The package keeps pi-agent-core's `Agent`, `AgentOptions`, `AgentTool`, event
 stream, and state model intact. Kernel only supplies the browser execution

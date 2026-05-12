@@ -31,7 +31,7 @@ someone who wants to read the code, contribute, or fork.
 ## Layers
 
 `cua` is a thin TypeScript monorepo on top of the
-[pi monorepo](https://github.com/badlogic/pi-mono):
+[pi monorepo](https://github.com/earendil-works/pi):
 
 ```text
 @onkernel/cua-cli (the binary)
@@ -44,10 +44,10 @@ Dev/test:
 └── @onkernel/ptywright           (PTY-backed TUI regression harness)
 
 External:
-├── @mariozechner/pi-agent-core   # Agent loop, tool execution, streaming, steering
-│   └── @mariozechner/pi-ai       # Provider transport (OpenAI Responses, Anthropic Messages, Google GenAI)
-├── @mariozechner/pi-coding-agent # bash / read / write / edit / grep / find / ls AgentTools + SessionManager + skills
-├── @mariozechner/pi-tui          # Terminal, Editor, Image, differential renderer
+├── @earendil-works/pi-agent-core   # Agent loop, tool execution, streaming, steering
+│   └── @earendil-works/pi-ai       # Provider transport (OpenAI Responses, Anthropic Messages, Google GenAI)
+├── @earendil-works/pi-coding-agent # bash / read / write / edit / grep / find / ls AgentTools + SessionManager + skills
+├── @earendil-works/pi-tui          # Terminal, Editor, Image, differential renderer
 ├── openai / @anthropic-ai/sdk / @google/genai  # provider SDKs for the provider-root single-invocation helpers
 └── @onkernel/sdk                 # Kernel cloud browser API
 ```

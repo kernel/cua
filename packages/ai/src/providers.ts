@@ -1,7 +1,7 @@
-import { registerApiProvider } from "@mariozechner/pi-ai";
-import { streamAnthropic, streamSimpleAnthropic } from "@mariozechner/pi-ai/anthropic";
-import { streamGoogle, streamSimpleGoogle } from "@mariozechner/pi-ai/google";
-import { streamOpenAIResponses, streamSimpleOpenAIResponses } from "@mariozechner/pi-ai/openai-responses";
+import { registerApiProvider } from "@earendil-works/pi-ai";
+import { streamAnthropic, streamSimpleAnthropic } from "@earendil-works/pi-ai/anthropic";
+import { streamGoogle, streamSimpleGoogle } from "@earendil-works/pi-ai/google";
+import { streamOpenAIResponses, streamSimpleOpenAIResponses } from "@earendil-works/pi-ai/openai-responses";
 import { streamSimpleTzafonResponses, streamTzafonResponses, TZAFON_RESPONSES_API } from "./providers/tzafon/provider.js";
 import { streamSimpleYutori, streamYutori, YUTORI_CHAT_COMPLETIONS_API } from "./providers/yutori/provider.js";
 

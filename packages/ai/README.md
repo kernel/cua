@@ -1,6 +1,6 @@
 # `@onkernel/cua-ai`
 
-Extension of [`@mariozechner/pi-ai`](https://www.npmjs.com/package/@mariozechner/pi-ai)'s
+Extension of [`@earendil-works/pi-ai`](https://www.npmjs.com/package/@earendil-works/pi-ai)'s
 unified LLM API with computer-use specific models, providers, and tool schemas
 for building CUA agents on Kernel.
 
@@ -48,7 +48,7 @@ for (const block of response.content) {
 ## Core Concepts
 
 `@onkernel/cua-ai` re-exports the core primitives of
-[`@mariozechner/pi-ai`](https://github.com/badlogic/pi-mono/tree/main/packages/ai):
+[`@earendil-works/pi-ai`](https://github.com/earendil-works/pi/tree/main/packages/ai):
 `Model`, `Context`, `Message`, `Tool`, `complete`, `stream`, `completeSimple`,
 `streamSimple`, `Type`, `Static`, `TSchema`, and the event/validation helpers
 that pi-ai exposes. Some familiarity with pi-ai is assumed; Kernel adds the

@@ -1,6 +1,6 @@
 # cua
 
-A computer-use CLI for agents (and TUI for humans) built on [pi-agent](https://github.com/badlogic/pi-mono/tree/main/packages/agent). 
+A computer-use CLI for agents (and TUI for humans) built on [pi-agent](https://github.com/earendil-works/pi/tree/main/packages/agent). 
 
 ```bash
 cua "go to news.ycombinator.com and tell me the top 3 story titles"
