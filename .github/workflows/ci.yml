@@ -20,7 +20,7 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npm run build
+      - run: npm run build --workspace @onkernel/cua-ai
       - name: Unit tests
         run: npm test --workspace @onkernel/cua-ai -- test/models.test.ts test/tools.test.ts
 
@@ -36,7 +36,7 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npm run build
+      - run: npm run build --workspace @onkernel/cua-ai
       - name: Integration tests
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
