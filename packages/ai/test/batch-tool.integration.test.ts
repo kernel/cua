@@ -47,7 +47,7 @@ const cases: ProviderCase[] = [
 	{
 		provider: "gemini",
 		envVar: "GOOGLE_API_KEY",
-		modelRef: "gemini:gemini-2.5-computer-use-preview-10-2025",
+		modelRef: "gemini:gemini-3-flash-preview",
 		tools: () => gemini.createComputerToolDefinitions({ actions: ["click"] }),
 		coordinateRange: [0, 999],
 	},

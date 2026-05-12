@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Unit tests
+        run: npm test --workspace @onkernel/cua-ai -- test/models.test.ts test/tools.test.ts
+
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Only run on the main repo (not forks) so secrets are available.
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Integration tests
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          TZAFON_API_KEY: ${{ secrets.TZAFON_API_KEY }}
+          YUTORI_API_KEY: ${{ secrets.YUTORI_API_KEY }}
+        run: npm test --workspace @onkernel/cua-ai -- test/batch-tool.integration.test.ts
