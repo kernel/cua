@@ -47,6 +47,8 @@ export const streamTzafonResponses: StreamFunction<string, TzafonResponsesOption
 			if (options?.signal?.aborted) throw new Error("Request was aborted");
 
 			stream.push({ type: "start", partial: output });
+			output.responseId = getString(response, "id") || undefined;
+			output.usage = usageFromTzafon(getValue(response, "usage"));
 			for (const item of getArray(response, "output")) {
 				const type = getString(item, "type");
 				if (type === "message") {
@@ -195,16 +197,55 @@ function extractMessageText(item: unknown): string {
 }
 
 function parseArguments(value: unknown): Record<string, unknown> {
-	if (typeof value === "string" && value.trim()) {
-		try {
-			const parsed = JSON.parse(value);
-			return parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : {};
-		} catch {
-			return {};
-		}
+	const top =
+		typeof value === "string" && value.trim()
+			? safeJsonParse(value)
+			: value && typeof value === "object"
+				? (value as Record<string, unknown>)
+				: {};
+	if (!top || typeof top !== "object") return {};
+	// Tzafon sometimes nests JSON-encoded arrays/objects inside the top-level argument object
+	// (observed: { "actions": "[{...}]" }). Unwrap one level so consumers get real values.
+	const out: Record<string, unknown> = {};
+	for (const [key, val] of Object.entries(top)) {
+		out[key] = typeof val === "string" && looksLikeJson(val) ? safeJsonParse(val) ?? val : val;
 	}
-	if (value && typeof value === "object") return value as Record<string, unknown>;
-	return {};
+	return out;
+}
+
+function safeJsonParse(value: string): Record<string, unknown> | unknown[] | null {
+	try {
+		const parsed = JSON.parse(value);
+		return parsed && typeof parsed === "object" ? parsed : null;
+	} catch {
+		return null;
+	}
+}
+
+function looksLikeJson(value: string): boolean {
+	const trimmed = value.trim();
+	return trimmed.startsWith("[") || trimmed.startsWith("{");
+}
+
+function usageFromTzafon(usage: unknown): AssistantMessage["usage"] {
+	const input = readNumber(usage, "input_tokens");
+	const output = readNumber(usage, "output_tokens");
+	const cacheRead = readNumber(getValue(usage, "input_tokens_details"), "cached_tokens");
+	const totalTokens = readNumber(usage, "total_tokens") || input + output;
+	return {
+		input,
+		output,
+		cacheRead,
+		cacheWrite: 0,
+		totalTokens,
+		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+	};
+}
+
+function readNumber(obj: unknown, key: string): number {
+	if (!obj || typeof obj !== "object") return 0;
+	const n = (obj as Record<string, unknown>)[key];
+	return typeof n === "number" && Number.isFinite(n) ? n : 0;
 }
 
 function getArray(obj: unknown, key: string): unknown[] {

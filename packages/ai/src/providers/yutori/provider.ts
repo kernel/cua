@@ -13,7 +13,7 @@ import {
 	type TextContent,
 	type ToolCall,
 } from "@earendil-works/pi-ai";
-import { CUA_ACTION_TYPES } from "../common.js";
+import { CUA_ACTION_TYPES, CUA_BATCH_TOOL_NAME, type CuaAction } from "../common.js";
 
 export const YUTORI_CHAT_COMPLETIONS_API = "yutori-chat-completions";
 
@@ -92,18 +92,44 @@ async function runYutoriStream(
 		const text = typeof message?.content === "string" ? message.content : "";
 		if (text) emitText(stream, output, text);
 
+		const wantsBatch = (context.tools ?? []).some((tool) => tool.name === CUA_BATCH_TOOL_NAME);
+		const batchActions: CuaAction[] = [];
+		let firstBatchCallId: string | undefined;
+
 		for (const call of message?.tool_calls ?? []) {
 			if (call.type !== "function") continue;
+			const args = parseArguments(call.function.arguments);
+			const canonical = wantsBatch ? toCanonicalAction(call.function.name, args) : undefined;
+			if (canonical) {
+				batchActions.push(...canonical);
+				firstBatchCallId ??= call.id;
+				continue;
+			}
 			const contentIndex = output.content.length;
 			const toolCall: ToolCall = {
 				type: "toolCall",
 				id: call.id,
 				name: call.function.name,
-				arguments: parseArguments(call.function.arguments),
+				arguments: args,
 			};
 			output.content.push(toolCall);
 			stream.push({ type: "toolcall_start", contentIndex, partial: output });
 			stream.push({ type: "toolcall_delta", contentIndex, delta: call.function.arguments ?? "", partial: output });
+			stream.push({ type: "toolcall_end", contentIndex, toolCall, partial: output });
+		}
+
+		if (batchActions.length > 0) {
+			const contentIndex = output.content.length;
+			const toolCall: ToolCall = {
+				type: "toolCall",
+				id: firstBatchCallId ?? `yutori_batch_${Date.now()}`,
+				name: CUA_BATCH_TOOL_NAME,
+				arguments: { actions: batchActions },
+			};
+			output.content.push(toolCall);
+			output.stopReason = "toolUse";
+			stream.push({ type: "toolcall_start", contentIndex, partial: output });
+			stream.push({ type: "toolcall_delta", contentIndex, delta: JSON.stringify(toolCall.arguments), partial: output });
 			stream.push({ type: "toolcall_end", contentIndex, toolCall, partial: output });
 		}
 
@@ -204,6 +230,58 @@ function toOpenAIContentPart(part: TextContent | ImageContent): Record<string, u
 function parseArguments(value: string | undefined): Record<string, unknown> {
 	if (!value?.trim()) return {};
 	return JSON.parse(value) as Record<string, unknown>;
+}
+
+const SCROLL_AMOUNT_PER_NOTCH = 120;
+
+function readPoint(value: unknown): { x: number; y: number } | undefined {
+	if (!Array.isArray(value) || value.length < 2) return undefined;
+	const x = Number(value[0]);
+	const y = Number(value[1]);
+	if (!Number.isFinite(x) || !Number.isFinite(y)) return undefined;
+	return { x, y };
+}
+
+function toCanonicalAction(name: string, args: Record<string, unknown>): CuaAction[] | undefined {
+	const coords = readPoint(args.coordinates);
+	switch (name) {
+		case "left_click":
+			return coords ? [{ type: "click", x: coords.x, y: coords.y }] : undefined;
+		case "right_click":
+			return coords ? [{ type: "click", x: coords.x, y: coords.y, button: "right" }] : undefined;
+		case "middle_click":
+			return coords ? [{ type: "click", x: coords.x, y: coords.y, button: "middle" }] : undefined;
+		case "double_click":
+			return coords ? [{ type: "double_click", x: coords.x, y: coords.y }] : undefined;
+		case "mouse_move":
+			return coords ? [{ type: "move", x: coords.x, y: coords.y }] : undefined;
+		case "key_press": {
+			const key = typeof args.key === "string" ? args.key : undefined;
+			return key ? [{ type: "keypress", keys: [key] }] : undefined;
+		}
+		case "scroll": {
+			if (!coords) return undefined;
+			const amount = typeof args.amount === "number" ? args.amount : 1;
+			const direction = typeof args.direction === "string" ? args.direction : "down";
+			const ticks = amount * SCROLL_AMOUNT_PER_NOTCH;
+			const dx = direction === "left" ? -ticks : direction === "right" ? ticks : 0;
+			const dy = direction === "up" ? -ticks : direction === "down" ? ticks : 0;
+			return [{ type: "scroll", x: coords.x, y: coords.y, scroll_x: dx, scroll_y: dy }];
+		}
+		case "drag": {
+			const start = readPoint(args.start_coordinates);
+			if (!start || !coords) return undefined;
+			return [{ type: "drag", path: [start, coords] }];
+		}
+		case "wait":
+			return [{ type: "wait" }];
+		case "go_back":
+			return [{ type: "back" }];
+		case "go_forward":
+			return [{ type: "forward" }];
+		default:
+			return undefined;
+	}
 }
 
 function usageFromYutori(usage: unknown): AssistantMessage["usage"] {
