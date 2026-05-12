@@ -102,7 +102,18 @@ Top-level exports:
 - `getCuaModel(ref: CuaModelRef): Model<Api>`
 - `listCuaModels(provider?: CuaProvider): CuaModelInfo[]`
 - `providerForModel(model: Model<Api>): CuaProvider`
-- `isCuaProvider(value: string): value is CuaProvider`
+- `resolveCuaRuntimeSpec(input: CuaModelRef | Model<Api>): CuaRuntimeSpec`
+- `CUA_PROVIDERS: readonly CuaProvider[]`
+- `CuaBatchSchema`, `CuaActionSchema`, `CuaNavigationSchema` TypeBox schemas
+- `createCuaActionSchema(actions?)`, `createCuaBatchSchema(actions?)`
+
+`resolveCuaRuntimeSpec()` centralizes provider-specific defaults for
+runtime consumers:
+
+- canonical provider id
+- canonical CUA tool definitions
+- default system prompt text
+- optional provider payload middleware (for protocol quirks)
 
 Provider namespaces expose `createComputerToolDefinitions({ actions? })` for
 building model-facing pi-ai `Tool[]` definitions. Omit `actions` for the

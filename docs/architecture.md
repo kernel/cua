@@ -5,6 +5,9 @@ someone who wants to read the code, contribute, or fork.
 
 ## Design goals and invariants
 
+- `@onkernel/cua-agent` is provider-neutral runtime glue around
+  `pi-agent-core`. It should never branch on provider identity directly.
+  Provider-specific behavior must come from `@onkernel/cua-ai`.
 - Provider packages are generic glue between a model provider and Kernel
   browsers. Their package roots expose provider-neutral helpers, tool
   specs, and execution functions that can be embedded in non-`pi` loops.
@@ -27,6 +30,25 @@ someone who wants to read the code, contribute, or fork.
 - `@onkernel/ptywright` is development/test infrastructure for terminal
   and TUI regression tests. It is part of the monorepo build graph, but
   not part of the runtime browser/model/provider path.
+
+## `cua-ai` vs `cua-agent` ownership boundary
+
+`@onkernel/cua-ai` and `@onkernel/cua-agent` intentionally split concerns:
+
+- `@onkernel/cua-ai` owns provider-specific policy:
+  - provider model refs and provider resolution
+  - provider default system prompts
+  - provider payload transforms and protocol quirks (for example, Yutori tool serialization policy)
+  - canonical CUA tool-definition exports
+- `@onkernel/cua-agent` owns browser execution orchestration:
+  - `CuaAgent` / `CuaHarness` class wiring around `pi-agent-core`
+  - executing canonical CUA tool calls against Kernel browsers
+  - typed executor coverage and translator integration
+
+In practice this means any new provider quirk should be implemented in
+`@onkernel/cua-ai` and surfaced through provider-neutral runtime specs.
+`@onkernel/cua-agent` should consume that spec without explicit
+provider-specific conditionals.
 
 ## Layers
 

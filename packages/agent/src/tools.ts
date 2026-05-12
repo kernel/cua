@@ -1,126 +1,94 @@
 import type Kernel from "@onkernel/sdk";
 import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
-import type { Tool } from "@earendil-works/pi-ai";
+import type { ImageContent, TextContent, Tool } from "@earendil-works/pi-ai";
 import {
 	CUA_BATCH_TOOL_NAME,
 	CUA_NAVIGATION_TOOL_NAME,
-	anthropic,
-	gemini,
-	openai,
-	tzafon,
-	yutori,
+	CuaBatchSchema,
+	CuaNavigationSchema,
 	type CuaBatchInput,
-	type CuaProvider,
 	type CuaNavigationInput,
 } from "@onkernel/cua-ai";
 import { InternalComputerTranslator, type KernelBrowser } from "./translator/translator.js";
-import type { ModelAction } from "./translator/types.js";
 
 export interface ComputerToolOptions {
 	browser: KernelBrowser;
-	client?: Kernel;
+	client: Kernel;
+	toolDefinitions: Tool[];
 }
 
-export interface CuaComputerToolsOptions extends ComputerToolOptions {
-	provider: CuaProvider;
-}
+export const SUPPORTED_CUA_EXECUTOR_TOOL_NAMES = [CUA_BATCH_TOOL_NAME, CUA_NAVIGATION_TOOL_NAME] as const;
+export type SupportedCuaExecutorToolName = (typeof SUPPORTED_CUA_EXECUTOR_TOOL_NAMES)[number];
 
-export interface OpenAIComputerToolsOptions extends ComputerToolOptions {}
-export interface AnthropicComputerToolsOptions extends ComputerToolOptions {}
-export interface GeminiComputerToolsOptions extends ComputerToolOptions {}
-export interface TzafonComputerToolsOptions extends ComputerToolOptions {}
-export interface YutoriComputerToolsOptions extends ComputerToolOptions {}
+type ToolContent = Array<TextContent | ImageContent>;
 
-export function createCuaComputerTools(args: CuaComputerToolsOptions): AgentTool<any, any>[] {
-	switch (args.provider) {
-		case "openai":
-			return createOpenAIComputerTools(args);
-		case "anthropic":
-			return createAnthropicComputerTools(args);
-		case "google":
-			return createGeminiComputerTools(args);
-		case "tzafon":
-			return createTzafonComputerTools(args);
-		case "yutori":
-			return createYutoriComputerTools(args);
-		default:
-			throw new Error(`unsupported CUA provider: ${String(args.provider)}`);
-	}
-}
-
-export function createOpenAIComputerTools(args: OpenAIComputerToolsOptions): AgentTool<any, any>[] {
-	return createGenericComputerTools(args, openai.createComputerToolDefinitions());
-}
-
-export function createAnthropicComputerTools(args: AnthropicComputerToolsOptions): AgentTool<any, any>[] {
-	return createGenericComputerTools(args, anthropic.createComputerToolDefinitions());
-}
-
-export function createGeminiComputerTools(args: GeminiComputerToolsOptions): AgentTool<any, any>[] {
-	return createGenericComputerTools(args, gemini.createComputerToolDefinitions());
-}
-
-export function createTzafonComputerTools(args: TzafonComputerToolsOptions): AgentTool<any, any>[] {
-	return createGenericComputerTools(args, tzafon.createComputerToolDefinitions());
-}
-
-export function createYutoriComputerTools(args: YutoriComputerToolsOptions): AgentTool<any, any>[] {
-	return createGenericComputerTools(args, yutori.createComputerToolDefinitions());
-}
-
-function createGenericComputerTools(args: ComputerToolOptions, definitions: Tool[]): AgentTool<any, any>[] {
-	const translator = new InternalComputerTranslator(args);
-	return definitions.map((definition) => {
-		if (definition.name === CUA_BATCH_TOOL_NAME) {
-			return {
-				name: definition.name,
-				label: definition.name,
-				description: definition.description,
-				parameters: definition.parameters,
-				async execute(_toolCallId, params): Promise<AgentToolResult<BatchDetails>> {
-					const result = await executeBatchTool(translator, params as CuaBatchInput);
-					if (result.isError) throw Object.assign(new Error(result.details.statusText), result);
-					return { content: result.content, details: result.details };
-				},
-			};
-		}
-		if (definition.name === CUA_NAVIGATION_TOOL_NAME) {
-			return {
-				name: definition.name,
-				label: definition.name,
-				description: definition.description,
-				parameters: definition.parameters,
-				async execute(_toolCallId, params): Promise<AgentToolResult<NavigationDetails>> {
-					const result = await executeNavigationTool(translator, params as CuaNavigationInput);
-					if (result.isError) throw Object.assign(new Error(result.details.statusText), result);
-					return { content: result.content, details: result.details };
-				},
-			};
-		}
-		throw new Error(`unsupported CUA computer tool definition: ${definition.name}`);
-	});
-}
-
-interface BatchDetails {
+export interface BatchDetails {
 	statusText: string;
 	readResults: Array<{ type: "url"; url: string } | { type: "screenshot"; bytes: number } | { type: "cursor_position"; x: number; y: number }>;
 	error?: string;
 }
 
-interface NavigationDetails {
+export interface NavigationDetails {
 	action: string;
 	statusText: string;
 	url?: string;
 	error?: string;
 }
 
-async function executeBatchTool(translator: InternalComputerTranslator, params: CuaBatchInput) {
-	const content: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }> = [];
+type BatchTool = AgentTool<typeof CuaBatchSchema, BatchDetails>;
+type NavigationTool = AgentTool<typeof CuaNavigationSchema, NavigationDetails>;
+export type CuaExecutorTool = BatchTool | NavigationTool;
+
+export function createCuaComputerTools(args: ComputerToolOptions): CuaExecutorTool[] {
+	const translator = new InternalComputerTranslator(args);
+	return args.toolDefinitions.map((definition) => createExecutorTool(definition, translator));
+}
+
+function createExecutorTool(definition: Tool, translator: InternalComputerTranslator): CuaExecutorTool {
+	if (definition.name === CUA_BATCH_TOOL_NAME) {
+		const tool: BatchTool = {
+			name: definition.name,
+			label: definition.name,
+			description: definition.description,
+			parameters: CuaBatchSchema,
+			async execute(_toolCallId: string, params: unknown): Promise<AgentToolResult<BatchDetails>> {
+				const result = await executeBatchTool(translator, asBatchInput(params));
+				if (result.isError) throw Object.assign(new Error(result.details.statusText), result);
+				return { content: result.content, details: result.details };
+			},
+		};
+		return tool;
+	}
+	if (definition.name === CUA_NAVIGATION_TOOL_NAME) {
+		const tool: NavigationTool = {
+			name: definition.name,
+			label: definition.name,
+			description: definition.description,
+			parameters: CuaNavigationSchema,
+			async execute(_toolCallId: string, params: unknown): Promise<AgentToolResult<NavigationDetails>> {
+				const result = await executeNavigationTool(translator, asNavigationInput(params));
+				if (result.isError) throw Object.assign(new Error(result.details.statusText), result);
+				return { content: result.content, details: result.details };
+			},
+		};
+		return tool;
+	}
+	throw new Error(
+		`unsupported CUA computer tool definition: ${definition.name}; supported names: ${SUPPORTED_CUA_EXECUTOR_TOOL_NAMES.join(", ")}`,
+	);
+}
+
+async function executeBatchTool(translator: InternalComputerTranslator, params: CuaBatchInput): Promise<{
+	content: ToolContent;
+	details: BatchDetails;
+	isError: boolean;
+}> {
+	const content: ToolContent = [];
 	const readResults: BatchDetails["readResults"] = [];
 	let statusText = "Actions executed successfully.";
 	let error: Error | undefined;
 	try {
-		const result = await translator.executeBatch(params.actions as unknown as ModelAction[]);
+		const result = await translator.executeBatch(params.actions as unknown as Array<Record<string, unknown>>);
 		for (const read of result.readResults) {
 			if (read.type === "url") {
 				readResults.push({ type: "url", url: read.url });
@@ -146,9 +114,13 @@ async function executeBatchTool(translator: InternalComputerTranslator, params: 
 	return { content, details: { statusText, readResults, ...(error ? { error: error.message } : {}) }, isError: Boolean(error) };
 }
 
-async function executeNavigationTool(translator: InternalComputerTranslator, params: CuaNavigationInput) {
+async function executeNavigationTool(translator: InternalComputerTranslator, params: CuaNavigationInput): Promise<{
+	content: ToolContent;
+	details: NavigationDetails;
+	isError: boolean;
+}> {
 	const action = params.action;
-	const content: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }> = [];
+	const content: ToolContent = [];
 	let statusText = "Action executed successfully.";
 	let url: string | undefined;
 	let error: Error | undefined;
@@ -168,4 +140,26 @@ async function executeNavigationTool(translator: InternalComputerTranslator, par
 	}
 	content.unshift({ type: "text", text: statusText });
 	return { content, details: { action, statusText, ...(url ? { url } : {}), ...(error ? { error: error.message } : {}) }, isError: Boolean(error) };
+}
+
+function asBatchInput(value: unknown): CuaBatchInput {
+	if (
+		value &&
+		typeof value === "object" &&
+		Array.isArray((value as { actions?: unknown }).actions)
+	) {
+		return value as CuaBatchInput;
+	}
+	throw new Error("invalid batch_computer_actions parameters");
+}
+
+function asNavigationInput(value: unknown): CuaNavigationInput {
+	if (
+		value &&
+		typeof value === "object" &&
+		typeof (value as { action?: unknown }).action === "string"
+	) {
+		return value as CuaNavigationInput;
+	}
+	throw new Error("invalid computer_use_extra parameters");
 }

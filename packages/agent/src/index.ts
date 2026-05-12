@@ -1,22 +1,14 @@
 export * from "@earendil-works/pi-agent-core";
 
 export type { KernelBrowser } from "./translator/translator.js";
+export { createCuaComputerTools } from "./tools.js";
 export type {
-	AnthropicComputerToolsOptions,
+	BatchDetails,
 	ComputerToolOptions,
-	CuaComputerToolsOptions,
-	GeminiComputerToolsOptions,
-	OpenAIComputerToolsOptions,
-	TzafonComputerToolsOptions,
-	YutoriComputerToolsOptions,
+	CuaExecutorTool,
+	NavigationDetails,
+	SupportedCuaExecutorToolName,
 } from "./tools.js";
-export {
-	createAnthropicComputerTools,
-	createCuaComputerTools,
-	createGeminiComputerTools,
-	createOpenAIComputerTools,
-	createTzafonComputerTools,
-	createYutoriComputerTools,
-} from "./tools.js";
-export { createCuaAgent } from "./agent.js";
-export type { CreateCuaAgentOptions } from "./agent.js";
+export { SUPPORTED_CUA_EXECUTOR_TOOL_NAMES } from "./tools.js";
+export { CuaAgent, CuaHarness } from "./agent.js";
+export type { CuaAgentOptions, CuaHarnessOptions } from "./agent.js";

@@ -6,12 +6,12 @@ export type KernelBrowser = BrowserCreateResponse | BrowserRetrieveResponse;
 
 export interface InternalComputerTranslatorOptions {
 	browser: KernelBrowser;
-	client?: Kernel;
+	client: Kernel;
 }
 
 export class InternalComputerTranslator {
 	private readonly sessionId: string;
-	private readonly client?: Kernel;
+	private readonly client: Kernel;
 
 	constructor(opts: InternalComputerTranslatorOptions) {
 		this.sessionId = opts.browser.session_id;
@@ -19,8 +19,7 @@ export class InternalComputerTranslator {
 	}
 
 	async screenshotRaw(): Promise<Buffer> {
-		const client = this.requireClient();
-		const response = await client.browsers.computer.captureScreenshot(this.sessionId, {});
+		const response = await this.client.browsers.computer.captureScreenshot(this.sessionId, {});
 		return Buffer.from(await response.arrayBuffer());
 	}
 
@@ -29,18 +28,18 @@ export class InternalComputerTranslator {
 			{ type: "press_key", press_key: { keys: ["Control_L", "l"] } },
 			{ type: "press_key", press_key: { keys: ["Control_L", "c"] } },
 		]);
-		const response = await this.requireClient().browsers.computer.readClipboard(this.sessionId);
+		const response = await this.client.browsers.computer.readClipboard(this.sessionId);
 		return (response.text ?? "").trim();
 	}
 
 	async currentMousePosition(): Promise<{ x: number; y: number }> {
-		const pos = await this.requireClient().browsers.computer.getMousePosition(this.sessionId);
+		const pos = await this.client.browsers.computer.getMousePosition(this.sessionId);
 		return { x: toInt(pos.x), y: toInt(pos.y) };
 	}
 
 	async executeBatch(actions: ModelAction[]): Promise<BatchExecutionResult> {
 		const result: BatchExecutionResult = { readResults: [] };
-		const pending: any[] = [];
+		const pending: KernelBatchAction[] = [];
 
 		const flush = async (): Promise<void> => {
 			if (pending.length === 0) return;
@@ -89,19 +88,18 @@ export class InternalComputerTranslator {
 		return result;
 	}
 
-	private async runKernelBatch(actions: any[]): Promise<void> {
-		await this.requireClient().browsers.computer.batch(this.sessionId, { actions });
-	}
-
-	private requireClient(): Kernel {
-		if (!this.client) {
-			throw new Error("Kernel client is required to execute computer tools for this browser");
-		}
-		return this.client;
+	private async runKernelBatch(actions: KernelBatchAction[]): Promise<void> {
+		await this.client.browsers.computer.batch(this.sessionId, { actions });
 	}
 }
 
-function toSdkAction(type: string, action: ModelAction): any {
+type KernelBatchAction =
+	Parameters<Kernel["browsers"]["computer"]["batch"]>[1]["actions"][number];
+
+type ClickMouseButton = "back" | "forward" | "left" | "right" | "middle";
+type DragMouseButton = "left" | "right" | "middle";
+
+function toSdkAction(type: string, action: ModelAction): KernelBatchAction {
 	switch (type) {
 		case "click":
 			return {
@@ -109,7 +107,7 @@ function toSdkAction(type: string, action: ModelAction): any {
 				click_mouse: {
 					x: toInt(action.x),
 					y: toInt(action.y),
-					button: stringOr(action.button, "left"),
+					button: clickMouseButtonOr(action.button, "left"),
 				},
 			};
 		case "double_click":
@@ -128,7 +126,7 @@ function toSdkAction(type: string, action: ModelAction): any {
 				click_mouse: {
 					x: toInt(action.x),
 					y: toInt(action.y),
-					button: stringOr(action.button, "left"),
+					button: clickMouseButtonOr(action.button, "left"),
 					click_type: type === "mouse_down" ? "down" : "up",
 				},
 			};
@@ -149,7 +147,7 @@ function toSdkAction(type: string, action: ModelAction): any {
 		case "move":
 			return { type: "move_mouse", move_mouse: { x: toInt(action.x), y: toInt(action.y) } };
 		case "drag":
-			return { type: "drag_mouse", drag_mouse: { path: toPath(action.path), button: stringOr(action.button, "left") } };
+			return { type: "drag_mouse", drag_mouse: { path: toPath(action.path), button: dragMouseButtonOr(action.button, "left") } };
 		case "wait":
 			return { type: "sleep", sleep: { duration_ms: typeof action.ms === "number" ? Math.trunc(action.ms) : 1000 } };
 		default:
@@ -170,15 +168,35 @@ function stringOr(value: unknown, fallback: string): string {
 	return typeof value === "string" && value.length > 0 ? value : fallback;
 }
 
+function clickMouseButtonOr(value: unknown, fallback: ClickMouseButton): ClickMouseButton {
+	const candidate = stringOr(value, fallback);
+	if (candidate === "left" || candidate === "right" || candidate === "middle" || candidate === "back" || candidate === "forward") {
+		return candidate;
+	}
+	return fallback;
+}
+
+function dragMouseButtonOr(value: unknown, fallback: DragMouseButton): DragMouseButton {
+	const candidate = stringOr(value, fallback);
+	if (candidate === "left" || candidate === "right" || candidate === "middle") {
+		return candidate;
+	}
+	return fallback;
+}
+
 function toStringArray(value: unknown): string[] {
 	return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
-function toPath(value: unknown): Array<{ x: number; y: number }> {
+function toPath(value: unknown): Array<[number, number]> {
 	if (!Array.isArray(value)) return [];
-	return value.map((point) => {
-		if (Array.isArray(point)) return { x: toInt(point[0]), y: toInt(point[1]) };
-		if (point && typeof point === "object") return { x: toInt((point as Record<string, unknown>).x), y: toInt((point as Record<string, unknown>).y) };
-		return { x: 0, y: 0 };
-	});
+	return value.map((point) => toPathPoint(point));
+}
+
+function toPathPoint(value: unknown): [number, number] {
+	if (Array.isArray(value)) return [toInt(value[0]), toInt(value[1])];
+	if (value && typeof value === "object") {
+		return [toInt((value as Record<string, unknown>).x), toInt((value as Record<string, unknown>).y)];
+	}
+	return [0, 0];
 }

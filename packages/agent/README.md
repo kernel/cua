@@ -1,11 +1,10 @@
 # `@onkernel/cua-agent`
 
-Kernel browser computer-use tools and a small `Agent` factory built on
+Kernel browser computer-use classes built on
 [`@earendil-works/pi-agent-core`](https://github.com/earendil-works/pi/tree/main/packages/agent).
 
-The package keeps pi-agent-core's `Agent`, `AgentOptions`, `AgentTool`, event
-stream, and state model intact. Kernel only supplies the browser execution
-plumbing.
+This package keeps pi-agent-core semantics intact and adds browser execution
+plumbing for canonical CUA tools.
 
 ## Installation
 
@@ -13,16 +12,16 @@ plumbing.
 npm install @onkernel/cua-agent @onkernel/cua-ai @onkernel/sdk
 ```
 
-## Quick Start
+## Quick Start (`CuaAgent`)
 
 ```ts
 import Kernel from "@onkernel/sdk";
-import { createCuaAgent } from "@onkernel/cua-agent";
+import { CuaAgent } from "@onkernel/cua-agent";
 
 const client = new Kernel({ apiKey: process.env.KERNEL_API_KEY! });
 const browser = await client.browsers.create({ stealth: true });
 
-const agent = createCuaAgent({
+const agent = new CuaAgent({
   browser,
   client,
   initialState: {
@@ -34,52 +33,59 @@ const agent = createCuaAgent({
 await agent.prompt("Open news.ycombinator.com and summarize the top story.");
 ```
 
-## Core Concepts
-
-### It Returns a pi Agent
-
-`createCuaAgent()` returns the underlying pi-agent-core `Agent` directly.
-Subscribe to events, mutate `agent.state`, call `prompt()`, `continue()`,
-`steer()`, and `followUp()` the same way you would with pi-agent-core.
-
-### Configuration Lives in `initialState`
-
-The API mirrors the pi-agent-core quick start:
+## Quick Start (`CuaHarness`)
 
 ```ts
-const agent = createCuaAgent({
+import { CuaHarness } from "@onkernel/cua-agent";
+
+const harness = new CuaHarness({
   browser,
   client,
-  initialState: {
-    model: "yutori:n1.5-latest",
-    tools: myTools,
-    systemPrompt: "Use the browser to complete the task.",
-  },
+  model: "openai:gpt-5.5",
+  getApiKey: () => process.env.OPENAI_API_KEY,
 });
+
+await harness.prompt("Open example.com and tell me the current URL.");
 ```
 
-If `initialState.tools` is omitted, Kernel installs the provider-specific CUA
-computer tools. If `initialState.tools` is provided, it is used exactly.
+## Core Concepts
+
+### Class-First API
+
+- `CuaAgent extends Agent`
+- `CuaHarness` wraps a pi `Agent` with a harness-style constructor and
+  delegated runtime methods.
+
+Both classes mirror pi constructor shapes and behavior, with minimal additions:
+- `browser` (Kernel browser response)
+- `client` (Kernel SDK client)
+- CUA model refs (`"provider:model"`) accepted where pi expects a concrete model
+
+### Tool Defaults
+
+If tools are omitted, the classes install canonical CUA computer tool executors
+using runtime specs from `@onkernel/cua-ai`. If tools are provided, they are
+used exactly.
 
 ### Tool Composition
 
-Use `createCuaComputerTools()` when you want to extend the default set:
+Use `createCuaComputerTools()` to compose your own tool list from canonical
+tool definitions:
 
 ```ts
+import { resolveCuaRuntimeSpec } from "@onkernel/cua-ai";
+import { createCuaComputerTools } from "@onkernel/cua-agent";
+
+const runtime = resolveCuaRuntimeSpec("openai:gpt-5.5");
 const tools = [
-  ...createCuaComputerTools({ provider: "openai", browser, client }),
+  ...createCuaComputerTools({
+    browser,
+    client,
+    toolDefinitions: runtime.toolDefinitions,
+  }),
   myCustomTool,
 ];
 ```
-
-There are no magic tool preset strings and no bundled coding/file tools. Compose
-those yourself with pi packages or your own tools.
-
-### Browser Plumbing
-
-Public helpers accept Kernel SDK browser responses plus a Kernel client. The
-internal translator handles screenshots, coordinate conversion, URL reads, and
-Kernel computer API calls behind the scenes.
 
 For full event semantics, steering, follow-up queues, and tool execution
 details, see the pi-agent-core README.
