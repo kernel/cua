@@ -1,6 +1,6 @@
 import type Kernel from "@onkernel/sdk";
-import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
-import type { Tool } from "@mariozechner/pi-ai";
+import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
+import type { Tool } from "@earendil-works/pi-ai";
 import {
 	CUA_BATCH_TOOL_NAME,
 	CUA_NAVIGATION_TOOL_NAME,

@@ -1,4 +1,4 @@
-export * from "@mariozechner/pi-agent-core";
+export * from "@earendil-works/pi-agent-core";
 
 export type { KernelBrowser } from "./translator/translator.js";
 export type {

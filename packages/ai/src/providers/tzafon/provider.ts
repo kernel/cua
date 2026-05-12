@@ -11,7 +11,7 @@ import {
 	type TextContent,
 	type Tool,
 	type ToolCall,
-} from "@mariozechner/pi-ai";
+} from "@earendil-works/pi-ai";
 import Lightcone from "@tzafon/lightcone";
 
 export const TZAFON_RESPONSES_API = "tzafon-responses";

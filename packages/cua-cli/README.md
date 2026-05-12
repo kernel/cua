@@ -6,8 +6,8 @@ The CLI / TUI binary for the [`cua`](../../README.md) monorepo. Wires
 [`@onkernel/cua-anthropic`](../cua-anthropic), and
 [`@onkernel/cua-gemini`](../cua-gemini), and
 [`@onkernel/cua-yutori`](../cua-yutori)
-into a [`pi-agent-core`](https://www.npmjs.com/package/@mariozechner/pi-agent-core)
-agent with a [`pi-tui`](https://www.npmjs.com/package/@mariozechner/pi-tui)
+into a [`pi-agent-core`](https://www.npmjs.com/package/@earendil-works/pi-agent-core)
+agent with a [`pi-tui`](https://www.npmjs.com/package/@earendil-works/pi-tui)
 interactive front-end.
 
 ## Install (from the monorepo)

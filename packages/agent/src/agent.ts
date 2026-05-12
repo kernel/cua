@@ -2,7 +2,7 @@ import {
 	Agent,
 	type AgentOptions,
 	type AgentTool,
-} from "@mariozechner/pi-agent-core";
+} from "@earendil-works/pi-agent-core";
 import {
 	type Api,
 	type Model,

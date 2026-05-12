@@ -89,7 +89,7 @@ before calling `executeBatch` (the translator throws
 ## Embed in your own agent loop
 
 The `ComputerTranslator` doesn't depend on
-[`pi-agent-core`](https://www.npmjs.com/package/@mariozechner/pi-agent-core)
+[`pi-agent-core`](https://www.npmjs.com/package/@earendil-works/pi-agent-core)
 or any LLM. Use it directly in any agent runtime:
 
 ```typescript

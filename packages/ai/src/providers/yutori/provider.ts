@@ -12,7 +12,7 @@ import {
 	type StreamOptions,
 	type TextContent,
 	type ToolCall,
-} from "@mariozechner/pi-ai";
+} from "@earendil-works/pi-ai";
 import { CUA_ACTION_TYPES } from "../common.js";
 
 export const YUTORI_CHAT_COMPLETIONS_API = "yutori-chat-completions";

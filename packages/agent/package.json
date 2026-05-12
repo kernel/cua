@@ -22,8 +22,8 @@
     "test": "vitest --run"
   },
   "dependencies": {
-    "@mariozechner/pi-agent-core": "0.67.6",
-    "@mariozechner/pi-ai": "0.67.6",
+    "@earendil-works/pi-agent-core": "^0.74.0",
+    "@earendil-works/pi-ai": "^0.74.0",
     "@onkernel/cua-ai": "0.1.0",
     "@onkernel/sdk": "0.49.0"
   },

@@ -1,4 +1,4 @@
-import { Agent, type AgentTool } from "@mariozechner/pi-agent-core";
+import { Agent, type AgentTool } from "@earendil-works/pi-agent-core";
 import { describe, expect, it } from "vitest";
 import { createCuaAgent, createCuaComputerTools, type KernelBrowser } from "../src/index.js";
 

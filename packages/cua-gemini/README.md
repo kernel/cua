@@ -20,7 +20,7 @@ npm install @onkernel/cua-gemini @onkernel/cua-translator @onkernel/sdk
 If you want the `pi-agent-core` bindings too:
 
 ```bash
-npm install @mariozechner/pi-agent-core @mariozechner/pi-ai
+npm install @earendil-works/pi-agent-core @earendil-works/pi-ai
 ```
 
 ## Quick start (`runComputerUse`)
@@ -43,13 +43,13 @@ console.log(result.text);
 ## Quick start (with `pi-agent-core`)
 
 ```typescript
-import { Agent } from "@mariozechner/pi-agent-core";
+import { Agent } from "@earendil-works/pi-agent-core";
 import {
   getModel,
   registerApiProvider,
   streamGoogle,
   streamSimpleGoogle,
-} from "@mariozechner/pi-ai";
+} from "@earendil-works/pi-ai";
 import {
   ComputerTranslator,
   browserSession,
