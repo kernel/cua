@@ -1,0 +1,65 @@
+# Supported CUA Models
+
+`@onkernel/cua-ai` accepts any pi-ai model whose ID is annotated as
+CUA-supporting in `CUA_MODEL_ANNOTATIONS` (see
+[`src/models.ts`](../src/models.ts)). Annotations are either a `family`
+match (root + dated snapshots) or an `exact` ID match. Each annotation
+cites the provider's CUA docs.
+
+The list below is the current snapshot. Run
+`listCuaModels(provider?)` for the live list — it merges pi-ai's registry
+with CUA-only entries that pi-ai does not ship yet.
+
+## `openai`
+
+API: `openai-responses` · coordinates: pixel
+
+Family matches (all dated snapshots accepted):
+
+- `gpt-5.4` ([docs](https://developers.openai.com/api/docs/models/gpt-5.4))
+- `gpt-5.5` ([docs](https://developers.openai.com/api/docs/models/gpt-5.5))
+
+## `anthropic`
+
+API: `anthropic-messages` · coordinates: pixel
+
+Family matches (all dated snapshots accepted):
+
+- `claude-3-7-sonnet`
+- `claude-opus-4`
+- `claude-sonnet-4`
+- `claude-haiku-4`
+
+Source: [Anthropic computer use docs](https://docs.anthropic.com/en/docs/build-with-claude/computer-use).
+
+## `gemini`
+
+API: `google-generative-ai` · coordinates: normalized 0–999
+
+Exact IDs:
+
+- `gemini-3-flash-preview`
+- `gemini-2.5-computer-use-preview-10-2025`
+
+Source: [Gemini computer use docs](https://ai.google.dev/gemini-api/docs/computer-use).
+
+## `tzafon`
+
+API: `tzafon-responses` · coordinates: normalized 0–999
+
+Exact IDs:
+
+- `tzafon.northstar-cua-fast` ([model card](https://huggingface.co/Tzafon/Northstar-CUA-Fast))
+
+## `yutori`
+
+API: `yutori-chat-completions` · coordinates: normalized 0–1000
+
+Exact IDs:
+
+- `n1-latest`
+- `n1-20260203`
+- `n1.5-latest`
+- `n1.5-20260428`
+
+Source: [Yutori Navigator reference](https://docs.yutori.com/reference/navigator).

@@ -3,21 +3,14 @@ import {
 	CUA_MODEL_ANNOTATIONS,
 	CUA_PROVIDERS,
 	findCuaAnnotation,
-	formatCuaModelRef,
 	getCuaModel,
 	listCuaModels,
-	parseCuaModelRef,
 } from "../src/index.js";
 
 describe("CUA model refs", () => {
-	it("parses and formats provider-qualified refs", () => {
-		expect(parseCuaModelRef("openai:gpt-5.5")).toEqual({ provider: "openai", model: "gpt-5.5" });
-		expect(formatCuaModelRef("yutori", "n1.5-latest")).toBe("yutori:n1.5-latest");
-	});
-
 	it("rejects unqualified and unsupported refs", () => {
-		expect(() => parseCuaModelRef("gpt-5.5")).toThrow(/provider-qualified/);
-		expect(() => parseCuaModelRef("bogus:model")).toThrow(/unsupported CUA provider/);
+		expect(() => getCuaModel("gpt-5.5" as never)).toThrow(/provider-qualified/);
+		expect(() => getCuaModel("bogus:model" as never)).toThrow(/unsupported CUA provider/);
 		expect(() => getCuaModel("openai:gpt-3.5" as never)).toThrow(/unsupported CUA model/);
 	});
 

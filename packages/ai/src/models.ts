@@ -92,7 +92,7 @@ const CUA_MODEL_OVERRIDES: Record<CuaProvider, readonly Model<Api>[]> = {
 	],
 };
 
-export function parseCuaModelRef(ref: string): { provider: CuaProvider; model: string } {
+function parseCuaModelRef(ref: string): { provider: CuaProvider; model: string } {
 	const idx = ref.indexOf(":");
 	if (idx <= 0 || idx === ref.length - 1) {
 		throw new Error(`CUA model ref must be provider-qualified as "<provider>:<model>"; got "${ref}"`);
@@ -105,8 +105,7 @@ export function parseCuaModelRef(ref: string): { provider: CuaProvider; model: s
 	return { provider, model };
 }
 
-export function formatCuaModelRef(provider: CuaProvider, model: string): CuaModelRef {
-	if (!model.trim()) throw new Error("model id is empty");
+function formatCuaModelRef(provider: CuaProvider, model: string): CuaModelRef {
 	return `${provider}:${model}` as CuaModelRef;
 }
 

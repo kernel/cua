@@ -12,9 +12,6 @@ npm install @onkernel/cua-ai
 
 ## Quick Start
 
-See [`examples/quickstart.ts`](./examples/quickstart.ts) for a runnable version
-that reads `examples/screenshot.png` and uses `OPENAI_API_KEY`.
-
 ```ts
 import { readFile } from "node:fs/promises";
 import { complete, getCuaModel, openai } from "@onkernel/cua-ai";
@@ -56,7 +53,8 @@ computer-use model catalog and provider/tool metadata.
 
 ### Model Refs
 
-`getCuaModel()` accepts only provider-qualified model refs:
+`getCuaModel()` accepts only provider-qualified model refs of the form
+`<provider>:<model-id>`:
 
 ```ts
 getCuaModel("openai:gpt-5.5");
@@ -66,10 +64,35 @@ getCuaModel("tzafon:tzafon.northstar-cua-fast");
 getCuaModel("yutori:n1.5-latest");
 ```
 
-`getCuaModel(ref)` returns a pi-ai `Model<Api>` object. You pass that model to
-pi-ai functions like `complete(model, context)` or `stream(model, context)`.
+`getCuaModel(ref)` returns a pi-ai `Model<Api>` you can pass to `complete()` or
+`stream()`. The model must be in pi-ai's registry **or** in this package's
+override list, **and** must have a matching annotation in
+`CUA_MODEL_ANNOTATIONS` certifying CUA support.
 
-`listCuaModels(provider?)` returns:
+See [`docs/supported-models.md`](./docs/supported-models.md) for the current
+list of CUA-supporting models per provider, with source citations.
+
+### CuaProvider
+
+`CuaProvider` is the string union of provider IDs this package targets:
+
+```ts
+type CuaProvider = "openai" | "anthropic" | "gemini" | "tzafon" | "yutori";
+```
+
+It is not a runtime object — it is the discriminator used in `CuaModelRef`,
+`listCuaModels(provider?)`, and `CUA_MODEL_ANNOTATIONS`. The exhaustive
+list is also exported as `CUA_PROVIDERS`.
+
+`CuaProvider` overlaps with pi-ai's `Provider` (also a string ID), with one
+rename: pi-ai calls Google's provider `"google"`, but CUA exposes it as
+`"gemini"` to match the model family. `providerForModel(model)` maps a pi-ai
+`Model<Api>` back to its `CuaProvider`.
+
+### Listing Models
+
+`listCuaModels(provider?)` returns every CUA-supporting model, optionally
+filtered to one provider:
 
 ```ts
 interface CuaModelInfo {
@@ -80,16 +103,18 @@ interface CuaModelInfo {
 }
 ```
 
+It merges pi-ai's model registry with this package's overrides (for models
+pi-ai does not yet carry) and filters by `CUA_MODEL_ANNOTATIONS`.
+
 ### Exports
 
 Top-level exports:
 
 - `getCuaModel(ref: CuaModelRef): Model<Api>`
 - `listCuaModels(provider?: CuaProvider): CuaModelInfo[]`
-- `parseCuaModelRef(ref: string): { provider: CuaProvider; model: string }`
-- `formatCuaModelRef(provider: CuaProvider, model: string): CuaModelRef`
 - `providerForModel(model: Model<Api>): CuaProvider`
 - `CUA_PROVIDERS: readonly CuaProvider[]`
+- `CUA_MODEL_ANNOTATIONS`, `findCuaAnnotation(provider, modelId)`
 - `CuaBatchSchema`, `CuaActionSchema`, `CuaNavigationSchema` TypeBox schemas
 - `createCuaActionSchema(actions?)`, `createCuaBatchSchema(actions?)`
 
