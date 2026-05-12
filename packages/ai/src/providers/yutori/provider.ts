@@ -254,8 +254,18 @@ function toCanonicalAction(name: string, args: Record<string, unknown>): CuaActi
 		case "double_click":
 			return coords ? [{ type: "double_click", x: coords.x, y: coords.y }] : undefined;
 		case "mouse_move":
+		case "hover":
 			return coords ? [{ type: "move", x: coords.x, y: coords.y }] : undefined;
-		case "key_press": {
+		case "mouse_down":
+			return coords ? [{ type: "mouse_down", x: coords.x, y: coords.y }] : undefined;
+		case "mouse_up":
+			return coords ? [{ type: "mouse_up", x: coords.x, y: coords.y }] : undefined;
+		case "type": {
+			const text = typeof args.text === "string" ? args.text : undefined;
+			return text !== undefined ? [{ type: "type", text }] : undefined;
+		}
+		case "key_press":
+		case "hold_key": {
 			const key = typeof args.key === "string" ? args.key : undefined;
 			return key ? [{ type: "keypress", keys: [key] }] : undefined;
 		}
@@ -279,6 +289,10 @@ function toCanonicalAction(name: string, args: Record<string, unknown>): CuaActi
 			return [{ type: "back" }];
 		case "go_forward":
 			return [{ type: "forward" }];
+		case "goto_url": {
+			const url = typeof args.url === "string" ? args.url : undefined;
+			return url ? [{ type: "goto", url }] : undefined;
+		}
 		default:
 			return undefined;
 	}
