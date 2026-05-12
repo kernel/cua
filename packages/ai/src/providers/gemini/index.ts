@@ -15,7 +15,13 @@ export type {
 	CuaBatchInput as GeminiBatchInput,
 } from "../common.js";
 
-// Source: https://ai.google.dev/gemini-api/docs/computer-use
+// Provider-native function names emitted on `functionCall.name` (PREDEFINED_COMPUTER_USE_FUNCTIONS):
+//   open_web_browser, click_at, hover_at, type_text_at, scroll_document,
+//   scroll_at, wait_5_seconds, go_back, go_forward, search, navigate,
+//   key_combination, drag_and_drop
+// Coordinates are normalized to 0-999 regardless of input image size.
+// Source: https://github.com/google/computer-use-preview/blob/main/agent.py
+// Docs: https://ai.google.dev/gemini-api/docs/computer-use
 export const COMPUTER_TOOL_COORDINATES = { type: "normalized", range: [0, 999] } as const satisfies ComputerToolCoordinateSystem;
 
 export const GEMINI_INSTRUCTIONS_RAW = `You control a Kernel cloud browser through computer-use tools. Use pixel coordinates, batch predictable action sequences, and request screenshots or URL reads when state changes.`;
