@@ -13,6 +13,7 @@
     "packages/cua-gemini",
     "packages/cua-tzafon",
     "packages/cua-yutori",
+    "packages/cua-ai-sdk",
     "packages/ptywright",
     "packages/cua-cli"
   ],

@@ -1,0 +1,39 @@
+{
+  "name": "@onkernel/cua-ai-sdk",
+  "version": "0.1.0",
+  "description": "Vercel AI SDK adapter for Kernel cloud browser computer use — maps provider-defined CUA tools to @onkernel/sdk browser calls",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "tsc -b --clean"
+  },
+  "dependencies": {
+    "@onkernel/cua-translator": "0.1.0",
+    "@onkernel/sdk": "0.49.0"
+  },
+  "peerDependencies": {
+    "@ai-sdk/anthropic": ">=3.0.0",
+    "ai": ">=6.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@ai-sdk/anthropic": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@ai-sdk/anthropic": "^3.0.76",
+    "ai": "^6.0.177"
+  }
+}
