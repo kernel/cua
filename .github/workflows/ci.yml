@@ -28,7 +28,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # Only run on the main repo (not forks) so secrets are available.
-    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
+    # Skip draft PRs; still run on every commit to non-draft PRs and on main pushes.
+    if: github.event_name == 'push' || (github.event.pull_request.head.repo.full_name == github.repository && !github.event.pull_request.draft)
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -45,3 +46,29 @@ jobs:
           TZAFON_API_KEY: ${{ secrets.TZAFON_API_KEY }}
           YUTORI_API_KEY: ${{ secrets.YUTORI_API_KEY }}
         run: npm test --workspace @onkernel/cua-ai -- test/batch-tool.integration.test.ts
+
+  agent-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Only run on the main repo (not forks) so secrets are available.
+    # Skip draft PRs; still run on every commit to non-draft PRs and on main pushes.
+    if: github.event_name == 'push' || (github.event.pull_request.head.repo.full_name == github.repository && !github.event.pull_request.draft)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build --workspace @onkernel/cua-ai
+      - run: npm run build --workspace @onkernel/cua-agent
+      - name: Agent live smoke tests (all providers)
+        env:
+          CUA_E2E_LIVE: "1"
+          KERNEL_API_KEY: ${{ secrets.KERNEL_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          TZAFON_API_KEY: ${{ secrets.TZAFON_API_KEY }}
+          YUTORI_API_KEY: ${{ secrets.YUTORI_API_KEY }}
+        run: npm test --workspace @onkernel/cua-agent -- test/e2e.live.test.ts

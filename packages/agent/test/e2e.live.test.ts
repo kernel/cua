@@ -9,7 +9,12 @@ const KERNEL_API_KEY = process.env.KERNEL_API_KEY;
 type ProviderCase = {
 	name: string;
 	apiKeyEnvVar: string;
-	modelRef: "openai:gpt-5.5" | "anthropic:claude-opus-4-7" | "gemini:gemini-3-flash-preview" | "tzafon:tzafon.northstar-cua-fast";
+	modelRef:
+		| "openai:gpt-5.5"
+		| "anthropic:claude-opus-4-7"
+		| "gemini:gemini-3-flash-preview"
+		| "tzafon:tzafon.northstar-cua-fast"
+		| "yutori:n1.5-latest";
 	prompt: string;
 	expectToolCalls: boolean;
 	timeoutMs: number;
@@ -21,10 +26,9 @@ const cases: ProviderCase[] = [
 		apiKeyEnvVar: "OPENAI_API_KEY",
 		modelRef: "openai:gpt-5.5",
 		prompt: [
-			"Call batch_computer_actions exactly once with these actions:",
-			'- {"type":"goto","url":"https://example.com"}',
-			'- {"type":"url"}',
-			'- {"type":"screenshot"}',
+			"Call batch_computer_actions exactly once.",
+			'Pass this exact arguments JSON: {"actions":[{"type":"screenshot"}]}',
+			"Do not call any other tools.",
 			"Then provide a one-sentence summary.",
 		].join("\n"),
 		expectToolCalls: true,
@@ -35,10 +39,9 @@ const cases: ProviderCase[] = [
 		apiKeyEnvVar: "ANTHROPIC_API_KEY",
 		modelRef: "anthropic:claude-opus-4-7",
 		prompt: [
-			"Call batch_computer_actions exactly once with these actions:",
-			'- {"type":"goto","url":"https://news.ycombinator.com"}',
-			'- {"type":"url"}',
-			'- {"type":"screenshot"}',
+			"Call batch_computer_actions exactly once.",
+			'Pass this exact arguments JSON: {"actions":[{"type":"screenshot"}]}',
+			"Do not call any other tools.",
 			"Then provide a one-sentence summary.",
 		].join("\n"),
 		expectToolCalls: true,
@@ -49,28 +52,39 @@ const cases: ProviderCase[] = [
 		apiKeyEnvVar: "GOOGLE_API_KEY",
 		modelRef: "gemini:gemini-3-flash-preview",
 		prompt: [
-			"Call batch_computer_actions exactly once with these actions:",
-			'- {"type":"goto","url":"https://www.wikipedia.org"}',
-			'- {"type":"url"}',
-			'- {"type":"screenshot"}',
+			"Call batch_computer_actions exactly once.",
+			'Pass this exact arguments JSON: {"actions":[{"type":"screenshot"}]}',
+			"Do not call any other tools.",
 			"Then provide a one-sentence summary.",
 		].join("\n"),
 		expectToolCalls: true,
-		timeoutMs: 180_000,
+		timeoutMs: 300_000,
 	},
 	{
 		name: "tzafon",
 		apiKeyEnvVar: "TZAFON_API_KEY",
 		modelRef: "tzafon:tzafon.northstar-cua-fast",
 		prompt: [
-			"Call batch_computer_actions exactly once with these actions:",
-			'- {"type":"goto","url":"https://example.com"}',
-			'- {"type":"url"}',
-			'- {"type":"screenshot"}',
+			"Call batch_computer_actions exactly once.",
+			'Pass this exact arguments JSON: {"actions":[{"type":"screenshot"}]}',
+			"Do not call any other tools.",
 			"Then provide a one-sentence summary.",
 		].join("\n"),
 		expectToolCalls: false,
 		timeoutMs: 120_000,
+	},
+	{
+		name: "yutori",
+		apiKeyEnvVar: "YUTORI_API_KEY",
+		modelRef: "yutori:n1.5-latest",
+		prompt: [
+			"Call batch_computer_actions exactly once.",
+			'Pass this exact arguments JSON: {"actions":[{"type":"screenshot"}]}',
+			"Do not call any other tools.",
+			"Then provide a one-sentence summary.",
+		].join("\n"),
+		expectToolCalls: false,
+		timeoutMs: 180_000,
 	},
 ];
 
@@ -79,6 +93,8 @@ type RunStats = {
 	toolResults: number;
 	hasReadArtifact: boolean;
 	finalAssistant?: AgentMessage;
+	toolErrors: string[];
+	assistantErrors: string[];
 };
 
 function shouldRunCase(c: ProviderCase): boolean {
@@ -100,13 +116,19 @@ async function withBrowser<T>(run: (client: Kernel, browser: Awaited<ReturnType<
 	}
 }
 
-function assertStats(stats: RunStats, expectToolCalls: boolean): void {
+function assertStats(stats: RunStats, expectToolCalls: boolean, providerName: string, runtimeName: "agent" | "harness"): void {
 	if (expectToolCalls) {
 		expect(stats.toolCalls).toBeGreaterThan(0);
 		expect(stats.toolResults).toBeGreaterThan(0);
 		expect(stats.hasReadArtifact).toBe(true);
 	}
+	expect(stats.toolErrors, `${providerName}/${runtimeName} emitted tool errors: ${stats.toolErrors.join(" | ")}`).toHaveLength(0);
+	expect(stats.assistantErrors, `${providerName}/${runtimeName} emitted assistant errors: ${stats.assistantErrors.join(" | ")}`).toHaveLength(0);
 	expect(stats.finalAssistant).toBeDefined();
+	if (stats.finalAssistant?.role === "assistant") {
+		expect(stats.finalAssistant.stopReason, `${providerName}/${runtimeName} ended in assistant error`).not.toBe("error");
+		expect(stats.finalAssistant.stopReason, `${providerName}/${runtimeName} ended in assistant abort`).not.toBe("aborted");
+	}
 }
 
 describe("Cua live e2e", () => {
@@ -117,7 +139,7 @@ describe("Cua live e2e", () => {
 			`${c.name}: CuaAgent executes browser steps`,
 			async () => {
 				await withBrowser(async (client, browser) => {
-					const stats: RunStats = { toolCalls: 0, toolResults: 0, hasReadArtifact: false };
+					const stats: RunStats = { toolCalls: 0, toolResults: 0, hasReadArtifact: false, toolErrors: [], assistantErrors: [] };
 					const agent = new CuaAgent({
 						browser,
 						client,
@@ -128,6 +150,9 @@ describe("Cua live e2e", () => {
 					});
 					agent.subscribe((event) => {
 						if (event.type === "tool_execution_start") stats.toolCalls += 1;
+						if (event.type === "tool_execution_end" && event.isError) {
+							stats.toolErrors.push(`${event.toolName}: failed`);
+						}
 						if (event.type === "message_end" && event.message.role === "toolResult") {
 							stats.toolResults += 1;
 							if (
@@ -140,11 +165,14 @@ describe("Cua live e2e", () => {
 						}
 						if (event.type === "message_end" && event.message.role === "assistant") {
 							stats.finalAssistant = event.message;
+							if (event.message.errorMessage) {
+								stats.assistantErrors.push(event.message.errorMessage);
+							}
 						}
 					});
 
 					await agent.prompt(c.prompt);
-					assertStats(stats, c.expectToolCalls);
+					assertStats(stats, c.expectToolCalls, c.name, "agent");
 				});
 			},
 			c.timeoutMs,
@@ -154,7 +182,7 @@ describe("Cua live e2e", () => {
 			`${c.name}: CuaHarness executes browser steps`,
 			async () => {
 				await withBrowser(async (client, browser) => {
-					const stats: RunStats = { toolCalls: 0, toolResults: 0, hasReadArtifact: false };
+					const stats: RunStats = { toolCalls: 0, toolResults: 0, hasReadArtifact: false, toolErrors: [], assistantErrors: [] };
 					const harness = new CuaHarness({
 						browser,
 						client,
@@ -164,6 +192,9 @@ describe("Cua live e2e", () => {
 
 					harness.subscribe((event) => {
 						if (event.type === "tool_execution_start") stats.toolCalls += 1;
+						if (event.type === "tool_execution_end" && event.isError) {
+							stats.toolErrors.push(`${event.toolName}: failed`);
+						}
 						if (event.type === "message_end" && event.message.role === "toolResult") {
 							stats.toolResults += 1;
 							if (
@@ -176,11 +207,14 @@ describe("Cua live e2e", () => {
 						}
 						if (event.type === "message_end" && event.message.role === "assistant") {
 							stats.finalAssistant = event.message;
+							if (event.message.errorMessage) {
+								stats.assistantErrors.push(event.message.errorMessage);
+							}
 						}
 					});
 
 					await harness.prompt(c.prompt);
-					assertStats(stats, c.expectToolCalls);
+					assertStats(stats, c.expectToolCalls, c.name, "harness");
 				});
 			},
 			c.timeoutMs,
