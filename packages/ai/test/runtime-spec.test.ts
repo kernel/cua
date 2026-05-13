@@ -21,7 +21,9 @@ describe("resolveCuaRuntimeSpec", () => {
 	it("only sets payload middleware for providers that need it", () => {
 		const yutoriSpec = resolveCuaRuntimeSpec("yutori:n1.5-latest");
 		const openaiSpec = resolveCuaRuntimeSpec("openai:gpt-5.5");
+		const anthropicSpec = resolveCuaRuntimeSpec("anthropic:claude-opus-4-7");
 		expect(yutoriSpec.onPayload).toBeTypeOf("function");
-		expect(openaiSpec.onPayload).toBeUndefined();
+		expect(openaiSpec.onPayload).toBeTypeOf("function");
+		expect(anthropicSpec.onPayload).toBeUndefined();
 	});
 });

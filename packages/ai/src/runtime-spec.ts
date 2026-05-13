@@ -73,6 +73,7 @@ export function resolveCuaRuntimeSpec(input: CuaRuntimeSpecInput): CuaRuntimeSpe
 				provider,
 				toolDefinitions: openai.createComputerToolDefinitions(),
 				defaultSystemPrompt: openai.OPENAI_BATCH_INSTRUCTIONS,
+				onPayload: openai.openaiResponsesStoreOnPayload,
 			};
 	}
 }
