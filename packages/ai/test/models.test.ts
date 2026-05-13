@@ -76,6 +76,7 @@ describe("CUA support annotations", () => {
 
 	it("matches exact-id annotations", () => {
 		expect(findCuaAnnotation("google", "gemini-3-flash-preview")).toBeDefined();
+		expect(findCuaAnnotation("google", "gemini-3-pro-preview")).toBeDefined();
 		expect(findCuaAnnotation("yutori", "n1.5-latest")).toBeDefined();
 		expect(findCuaAnnotation("tzafon", "tzafon.northstar-cua-fast")).toBeDefined();
 	});

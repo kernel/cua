@@ -54,6 +54,7 @@ export const CUA_MODEL_ANNOTATIONS: Record<CuaProvider, readonly CuaModelAnnotat
 	],
 	google: [
 		{ match: { kind: "exact", id: "gemini-3-flash-preview" }, source: "https://ai.google.dev/gemini-api/docs/computer-use" },
+		{ match: { kind: "exact", id: "gemini-3-pro-preview" }, source: "https://ai.google.dev/gemini-api/docs/computer-use" },
 		{ match: { kind: "exact", id: "gemini-2.5-computer-use-preview-10-2025" }, source: "https://ai.google.dev/gemini-api/docs/computer-use" },
 	],
 	tzafon: [
