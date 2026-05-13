@@ -15,7 +15,8 @@
   "scripts": {
     "build": "tsc -b && chmod +x dist/cli.js",
     "clean": "tsc -b --clean",
-    "test": "node --test dist/tui/testing/*.test.js"
+    "test": "node --test dist/tui/testing/*.test.js",
+    "test:e2e-live": "node --test dist/tui/testing/live.e2e.test.js"
   },
   "dependencies": {
     "@mariozechner/pi-coding-agent": "0.67.6",

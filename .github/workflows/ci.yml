@@ -72,3 +72,30 @@ jobs:
           TZAFON_API_KEY: ${{ secrets.TZAFON_API_KEY }}
           YUTORI_API_KEY: ${{ secrets.YUTORI_API_KEY }}
         run: npm test --workspace @onkernel/cua-agent -- test/e2e.live.test.ts
+
+  cli-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Only run on the main repo (not forks) so secrets are available.
+    # Skip draft PRs; still run on every commit to non-draft PRs and on main pushes.
+    if: github.event_name == 'push' || (github.event.pull_request.head.repo.full_name == github.repository && !github.event.pull_request.draft)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Install Zig 0.15.2
+        run: |
+          mkdir -p .dev/tools
+          curl -fsSL https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz -o /tmp/zig-x86_64-linux-0.15.2.tar.xz
+          tar -xf /tmp/zig-x86_64-linux-0.15.2.tar.xz -C .dev/tools
+      - run: npm run build:native --workspace @onkernel/ptywright
+      - run: npm run build --workspace @onkernel/cua-cli
+      - name: CUA CLI live TUI smoke test
+        env:
+          CUA_CLI_E2E_LIVE: "1"
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          KERNEL_API_KEY: ${{ secrets.KERNEL_API_KEY }}
+        run: npm run test:e2e-live --workspace @onkernel/cua-cli
