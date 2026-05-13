@@ -1,5 +1,5 @@
 import Kernel from "@onkernel/sdk";
-import { requireCuaEnvApiKeyForModel, type CuaModelRef } from "../../ai/src/index";
+import { requireCuaEnvApiKeyForModel, type CuaModelRef } from "@onkernel/cua-ai";
 import { CuaHarness } from "../src/index";
 import { SCENARIOS } from "./shared/scenarios";
 

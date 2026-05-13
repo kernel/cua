@@ -8,6 +8,7 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "source": "./src/index.ts",
       "import": "./dist/index.js"
     }
   },
@@ -20,8 +21,8 @@
   "scripts": {
     "build": "tsc -b && node ../../scripts/append-js-extensions.mjs dist",
     "clean": "tsc -b --clean",
-    "example:agent": "npm run build --workspace @onkernel/cua-ai && npm run build --workspace @onkernel/cua-agent && tsx examples/agent-openai-smoke.ts",
-    "example:harness": "npm run build --workspace @onkernel/cua-ai && npm run build --workspace @onkernel/cua-agent && tsx examples/harness-openai-smoke.ts",
+    "example:agent": "NODE_OPTIONS=--conditions=source tsx examples/agent-openai-smoke.ts",
+    "example:harness": "NODE_OPTIONS=--conditions=source tsx examples/harness-openai-smoke.ts",
     "test": "vitest --run"
   },
   "dependencies": {
