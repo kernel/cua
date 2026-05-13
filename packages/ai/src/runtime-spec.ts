@@ -67,7 +67,6 @@ export function resolveCuaRuntimeSpec(input: CuaRuntimeSpecInput): CuaRuntimeSpe
 				onPayload: yutori.yutoriBuiltinToolsOnPayload,
 			};
 		case "openai":
-		default:
 			return {
 				model,
 				provider,
@@ -76,4 +75,7 @@ export function resolveCuaRuntimeSpec(input: CuaRuntimeSpecInput): CuaRuntimeSpe
 				onPayload: openai.openaiResponsesStoreOnPayload,
 			};
 	}
+
+	const exhaustiveProvider: never = provider;
+	throw new Error(`Unsupported CUA provider: ${exhaustiveProvider}`);
 }
