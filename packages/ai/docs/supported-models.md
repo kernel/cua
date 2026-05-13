@@ -39,6 +39,7 @@ API: `google-generative-ai` · coordinates: normalized 0–999
 Exact IDs:
 
 - `gemini-3-flash-preview`
+- `gemini-3-pro-preview`
 - `gemini-2.5-computer-use-preview-10-2025`
 
 Source: [Gemini computer use docs](https://ai.google.dev/gemini-api/docs/computer-use).
