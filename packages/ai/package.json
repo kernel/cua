@@ -2,9 +2,19 @@
   "name": "@onkernel/cua-ai",
   "version": "0.1.0",
   "description": "Kernel-curated computer-use model access built on pi-ai",
+  "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kernel/cua.git",
+    "directory": "packages/ai"
+  },
+  "bugs": {
+    "url": "https://github.com/kernel/cua/issues"
+  },
+  "homepage": "https://github.com/kernel/cua/tree/main/packages/ai#readme",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -18,6 +28,9 @@
     "README.md",
     "CHANGELOG.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -b",
     "clean": "tsc -b --clean",
