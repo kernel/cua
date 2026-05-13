@@ -263,7 +263,7 @@ export class CuaAgentHarness<
 	TPromptTemplate extends PromptTemplate = PromptTemplate,
 > extends AgentHarness<TSkill, TPromptTemplate, AgentTool> {
 	private readonly runtime: CuaRuntimeController;
-	private readonly requestedActiveToolNames?: string[];
+	private requestedActiveToolNames?: string[];
 
 	constructor(options: CuaAgentHarnessOptions<TSkill, TPromptTemplate>) {
 		const {
@@ -317,6 +317,11 @@ export class CuaAgentHarness<
 			await super.setTools(tools, this.requestedActiveToolNames ?? tools.map((tool) => tool.name));
 		}
 		await super.setModel(this.runtime.model);
+	}
+
+	override async setActiveTools(toolNames: string[]): Promise<void> {
+		await super.setActiveTools(toolNames);
+		this.requestedActiveToolNames = [...toolNames];
 	}
 }
 

@@ -217,4 +217,18 @@ describe("CuaAgentHarness", () => {
 		expect(harness.agent.state.model.id).toBe(runtime.model.id);
 		expect(harness.agent.state.tools).toHaveLength(runtime.toolDefinitions.length);
 	});
+
+	it("preserves active tool selection when setModel refreshes tools", async () => {
+		const harness = new CuaAgentHarness({
+			...(await createHarnessServices()),
+			browser,
+			client,
+			model: "openai:gpt-5.5",
+		});
+
+		await harness.setActiveTools([]);
+		await harness.setModel("google:gemini-3-pro-preview");
+
+		expect(harness.agent.state.tools).toEqual([]);
+	});
 });
