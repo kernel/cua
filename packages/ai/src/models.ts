@@ -5,7 +5,7 @@ import {
 	getModels,
 } from "@earendil-works/pi-ai";
 
-export type CuaProvider = "openai" | "anthropic" | "gemini" | "tzafon" | "yutori";
+export type CuaProvider = "openai" | "anthropic" | "google" | "tzafon" | "yutori";
 export type CuaModelRef = `${CuaProvider}:${string}`;
 
 export interface CuaModelInfo {
@@ -15,7 +15,7 @@ export interface CuaModelInfo {
 	name: string;
 }
 
-export const CUA_PROVIDERS: readonly CuaProvider[] = ["openai", "anthropic", "gemini", "tzafon", "yutori"];
+export const CUA_PROVIDERS: readonly CuaProvider[] = ["openai", "anthropic", "google", "tzafon", "yutori"];
 
 // CUA support annotations.
 //
@@ -52,7 +52,7 @@ export const CUA_MODEL_ANNOTATIONS: Record<CuaProvider, readonly CuaModelAnnotat
 		{ match: { kind: "family", family: "claude-sonnet-4" }, source: "https://docs.anthropic.com/en/docs/build-with-claude/computer-use" },
 		{ match: { kind: "family", family: "claude-haiku-4" }, source: "https://docs.anthropic.com/en/docs/build-with-claude/computer-use" },
 	],
-	gemini: [
+	google: [
 		{ match: { kind: "exact", id: "gemini-3-flash-preview" }, source: "https://ai.google.dev/gemini-api/docs/computer-use" },
 		{ match: { kind: "exact", id: "gemini-2.5-computer-use-preview-10-2025" }, source: "https://ai.google.dev/gemini-api/docs/computer-use" },
 	],
@@ -78,8 +78,8 @@ const CUA_MODEL_OVERRIDES: Record<CuaProvider, readonly Model<Api>[]> = {
 		cuaModel("openai", "gpt-5.5-2026-04-23", "GPT-5.5 (2026-04-23)"),
 	],
 	anthropic: [],
-	gemini: [
-		cuaModel("gemini", "gemini-2.5-computer-use-preview-10-2025", "Gemini 2.5 Computer Use Preview"),
+	google: [
+		cuaModel("google", "gemini-2.5-computer-use-preview-10-2025", "Gemini 2.5 Computer Use Preview"),
 	],
 	tzafon: [
 		cuaModel("tzafon", "tzafon.northstar-cua-fast", "Tzafon Northstar CUA Fast"),
@@ -106,7 +106,6 @@ export function parseCuaModelRef(ref: string): { provider: CuaProvider; model: s
 }
 
 export function formatCuaModelRef(provider: CuaProvider, model: string): CuaModelRef {
-	if (!model.trim()) throw new Error("model id is empty");
 	return `${provider}:${model}` as CuaModelRef;
 }
 
@@ -119,7 +118,7 @@ export function listCuaModels(provider?: CuaProvider): CuaModelInfo[] {
 			const ref = formatCuaModelRef(p, model.id);
 			byRef.set(ref, { ref, provider: p, model: model.id, name: model.name });
 		}
-		for (const model of getModels(piProviderFor(p) as never) as Model<Api>[]) {
+		for (const model of getModels(p as never) as Model<Api>[]) {
 			if (!supportsCuaProvider(p, model.id)) continue;
 			const ref = formatCuaModelRef(p, model.id);
 			if (byRef.has(ref)) continue;
@@ -140,7 +139,7 @@ export function getCuaModel(ref: CuaModelRef): Model<Api> {
 	if (!supportsCuaProvider(provider, modelId)) {
 		throw new Error(`unsupported CUA model "${ref}"`);
 	}
-	const fromRegistry = getModel(piProviderFor(provider) as never, modelId as never) as Model<Api> | undefined;
+	const fromRegistry = getModel(provider as never, modelId as never) as Model<Api> | undefined;
 	if (fromRegistry) return fromRegistry;
 	const override = CUA_MODEL_OVERRIDES[provider].find((m) => m.id === modelId);
 	if (override) return override;
@@ -148,39 +147,14 @@ export function getCuaModel(ref: CuaModelRef): Model<Api> {
 }
 
 export function providerForModel(model: Model<Api>): CuaProvider {
-	switch (model.provider) {
-		case "openai":
-			return "openai";
-		case "anthropic":
-			return "anthropic";
-		case "google":
-			return "gemini";
-		case "tzafon":
-			return "tzafon";
-		case "yutori":
-			return "yutori";
-		default:
-			throw new Error(`unsupported CUA model provider "${model.provider}"`);
+	if (!isCuaProvider(model.provider)) {
+		throw new Error(`unsupported CUA model provider "${model.provider}"`);
 	}
+	return model.provider;
 }
 
 export function isCuaProvider(value: string): value is CuaProvider {
 	return (CUA_PROVIDERS as readonly string[]).includes(value);
-}
-
-function piProviderFor(provider: CuaProvider): string {
-	switch (provider) {
-		case "openai":
-			return "openai";
-		case "anthropic":
-			return "anthropic";
-		case "gemini":
-			return "google";
-		case "tzafon":
-			return "tzafon";
-		case "yutori":
-			return "yutori";
-	}
 }
 
 function supportsCuaProvider(provider: CuaProvider, modelId: string): boolean {
@@ -204,8 +178,8 @@ function cuaModel(provider: CuaProvider, id: string, name: string): Model<Api> {
 	const base = {
 		id,
 		name,
-		provider: piProviderFor(provider),
-		reasoning: provider === "openai" || provider === "anthropic" || provider === "gemini",
+		provider,
+		reasoning: provider === "openai" || provider === "anthropic" || provider === "google",
 		input: ["text", "image"],
 		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 	} satisfies Partial<Model<Api>>;
@@ -215,7 +189,7 @@ function cuaModel(provider: CuaProvider, id: string, name: string): Model<Api> {
 			return { ...base, api: "openai-responses", baseUrl: "https://api.openai.com/v1", contextWindow: 400_000, maxTokens: 32_768 } as Model<Api>;
 		case "anthropic":
 			return { ...base, api: "anthropic-messages", baseUrl: "https://api.anthropic.com", contextWindow: 200_000, maxTokens: 64_000 } as Model<Api>;
-		case "gemini":
+		case "google":
 			return { ...base, api: "google-generative-ai", baseUrl: "https://generativelanguage.googleapis.com/v1beta", contextWindow: 1_048_576, maxTokens: 65_536 } as Model<Api>;
 		case "tzafon":
 			return { ...base, api: "tzafon-responses", baseUrl: "https://api.lightcone.ai", contextWindow: 128_000, maxTokens: 4_096 } as Model<Api>;

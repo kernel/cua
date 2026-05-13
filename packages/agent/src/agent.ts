@@ -54,7 +54,7 @@ function defaultSystemPrompt(provider: ReturnType<typeof providerForModel>): str
 	switch (provider) {
 		case "anthropic":
 			return anthropic.buildAnthropicSystemPrompt();
-		case "gemini":
+		case "google":
 			return gemini.buildGeminiSystemPrompt();
 		case "tzafon":
 			return tzafon.buildTzafonSystemPrompt();
