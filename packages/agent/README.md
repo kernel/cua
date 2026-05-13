@@ -49,8 +49,13 @@ const transcript = harness.getTranscript();
 console.log("messages in transcript:", transcript.length);
 ```
 
-Use `CuaAgent` when you want direct pi `Agent` control. Use `CuaHarness` when you
-want the harness-style constructor plus transcript-oriented helpers like
+Use `CuaAgent` when you want direct pi `Agent` control: raw transcript state,
+lifecycle events, custom streaming, and explicit prompt/continue/queue control.
+Reach for the harness shape when you want an app layer around the loop:
+session/transcript helpers, resource and prompt entry points, provider/auth
+hooks, active tool selection, compaction/tree workflows, and higher-level queue
+events. `CuaHarness` is the thin CUA version of that shape today: it installs
+CUA defaults, delegates runtime methods to the wrapped `Agent`, and adds
 `getTranscript()`.
 
 ## Core Concepts
