@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
 import { existsSync, mkdirSync } from "node:fs";
-import { resolve } from "node:path";
+import { delimiter, dirname, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { ensureGhosttySource } from "./ensure-ghostty.mjs";
 
@@ -12,7 +12,8 @@ const requiredVersion = config.upstream.zigVersion;
 const ghosttyRoot = await ensureGhosttySource();
 
 const zig = resolveZigBinary();
-const version = run([zig, "version"]).trim();
+const runEnv = withZigPath(zig);
+const version = run([zig, "version"], { env: runEnv }).trim();
 if (version !== requiredVersion) {
 	throw new Error(
 		`Ghostty requires Zig ${requiredVersion}, but ${zig} reported ${version}. ` +
@@ -33,6 +34,7 @@ run([
 	config.zigGlobalCacheDir,
 ], {
 	cwd: ghosttyRoot,
+	env: runEnv,
 });
 
 function resolveZigBinary() {
@@ -43,6 +45,19 @@ function resolveZigBinary() {
 		return localZig;
 	}
 	return "zig";
+}
+
+function withZigPath(zigBinary) {
+	const zigDir = dirname(zigBinary);
+	const currentPath = process.env.PATH ?? "";
+	const pathEntries = currentPath.split(delimiter).filter((entry) => entry.length > 0);
+	if (!pathEntries.includes(zigDir)) {
+		pathEntries.unshift(zigDir);
+	}
+	return {
+		...process.env,
+		PATH: pathEntries.join(delimiter),
+	};
 }
 
 function run(command, options = {}) {
