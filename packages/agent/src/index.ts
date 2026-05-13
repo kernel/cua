@@ -1,4 +1,4 @@
-export * from "@earendil-works/pi-agent-core";
+export * from "./vendor/pi-agent-core/index";
 
 export type { KernelBrowser } from "./translator/translator";
 export { createCuaComputerTools } from "./tools";
@@ -10,5 +10,5 @@ export type {
 	SupportedCuaExecutorToolName,
 } from "./tools";
 export { SUPPORTED_CUA_EXECUTOR_TOOL_NAMES } from "./tools";
-export { CuaAgent, CuaHarness } from "./agent";
-export type { CuaAgentOptions, CuaHarnessOptions } from "./agent";
+export { CuaAgent, CuaAgentHarness } from "./agent";
+export type { CuaAgentHarnessOptions, CuaAgentOptions, CuaAgentState } from "./agent";

@@ -1,6 +1,6 @@
 import Kernel from "@onkernel/sdk";
 import { requireCuaEnvApiKeyForModel, type CuaModelRef } from "@onkernel/cua-ai";
-import { CuaHarness } from "../src/index";
+import { CuaAgentHarness, InMemorySessionRepo, NodeExecutionEnv } from "../src/index";
 import { SCENARIOS } from "./shared/scenarios";
 
 const modelRef = (process.env.MODEL_REF as CuaModelRef | undefined) ?? "openai:gpt-5.5";
@@ -15,14 +15,30 @@ async function main(): Promise<void> {
 	const scenario = SCENARIOS.find((entry) => entry.name === scenarioName) ?? SCENARIOS[0]!;
 
 	try {
-		const harness = new CuaHarness({
+		const sessionRepo = new InMemorySessionRepo();
+		const session = await sessionRepo.create({ id: `harness-provider-matrix-${scenario.name}` });
+		const harness = new CuaAgentHarness({
 			browser,
 			client,
+			env: new NodeExecutionEnv({ cwd: process.cwd() }),
 			model: modelRef,
+			session,
 		});
 		console.log(`model=${modelRef} scenario=${scenario.name}`);
-		await harness.prompt(scenario.prompt);
-		console.log("transcript messages:", harness.getTranscript().length);
+		const response = await harness.prompt(scenario.prompt);
+		const branch = await session.getBranch();
+		const lastAssistant = [...branch]
+			.reverse()
+			.flatMap((entry) =>
+				entry.type === "message" && entry.message.role === "assistant" ? [entry.message] : [],
+			)[0];
+		const assistant = lastAssistant ?? response;
+		const assistantText = assistant.content
+			.flatMap((block) => (block.type === "text" ? [block.text] : []))
+			.join("")
+			.trim();
+		console.log("assistant stopReason:", assistant.stopReason);
+		console.log("assistant text:", assistantText || "(no text)");
 	} finally {
 		await client.browsers.deleteByID(browser.session_id);
 	}

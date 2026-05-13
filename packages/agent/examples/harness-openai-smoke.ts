@@ -1,6 +1,6 @@
 import Kernel from "@onkernel/sdk";
 import { requireCuaEnvApiKeyForModel, type CuaModelRef } from "@onkernel/cua-ai";
-import { CuaHarness } from "../src/index";
+import { CuaAgentHarness, InMemorySessionRepo, NodeExecutionEnv } from "../src/index";
 import { SCENARIOS } from "./shared/scenarios";
 
 const modelRef = (process.env.MODEL_REF as CuaModelRef | undefined) ?? "openai:gpt-5.5";
@@ -13,10 +13,14 @@ async function main(): Promise<void> {
 	const browser = await client.browsers.create({ stealth: true });
 
 	try {
-		const harness = new CuaHarness({
+		const sessionRepo = new InMemorySessionRepo();
+		const session = await sessionRepo.create({ id: "harness-openai-smoke" });
+		const harness = new CuaAgentHarness({
 			browser,
 			client,
+			env: new NodeExecutionEnv({ cwd: process.cwd() }),
 			model: modelRef,
+			session,
 		});
 
 		harness.subscribe((event) => {
@@ -30,11 +34,20 @@ async function main(): Promise<void> {
 
 		const scenario = SCENARIOS[0]!;
 		console.log(`running scenario: ${scenario.name}`);
-		await harness.prompt(scenario.prompt);
-		const transcript = harness.getTranscript();
-		const lastAssistant = [...transcript].reverse().find((message) => message.role === "assistant");
-		console.log("transcript messages:", transcript.length);
-		console.log("assistant stopReason:", lastAssistant?.role === "assistant" ? lastAssistant.stopReason : "unknown");
+		const response = await harness.prompt(scenario.prompt);
+		const branch = await session.getBranch();
+		const lastAssistant = [...branch]
+			.reverse()
+			.flatMap((entry) =>
+				entry.type === "message" && entry.message.role === "assistant" ? [entry.message] : [],
+			)[0];
+		const assistant = lastAssistant ?? response;
+		const assistantText = assistant.content
+			.flatMap((block) => (block.type === "text" ? [block.text] : []))
+			.join("")
+			.trim();
+		console.log("assistant stopReason:", assistant.stopReason);
+		console.log("assistant text:", assistantText || "(no text)");
 	} finally {
 		await client.browsers.deleteByID(browser.session_id);
 	}
