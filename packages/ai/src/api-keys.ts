@@ -8,16 +8,18 @@ import { parseCuaModelRef, providerForModel, type CuaModelRef, type CuaProvider 
  * when streaming. These helpers let callers share one readable convention for
  * explicit `getApiKey` wiring (especially useful for `google` vs `gemini`).
  */
-const CUA_PROVIDER_API_KEY_ENV_VARS: Record<CuaProvider | "google", readonly string[]> = {
+const CUA_PROVIDER_API_KEY_ENV_VARS: Record<CuaProvider, readonly string[]> = {
 	openai: ["OPENAI_API_KEY"],
 	anthropic: ["ANTHROPIC_OAUTH_TOKEN", "ANTHROPIC_API_KEY"],
-	gemini: ["GOOGLE_API_KEY", "GEMINI_API_KEY"],
 	google: ["GOOGLE_API_KEY", "GEMINI_API_KEY"],
 	tzafon: ["TZAFON_API_KEY"],
 	yutori: ["YUTORI_API_KEY"],
 };
 
 export function cuaApiKeyEnvVarsForProvider(provider: string): readonly string[] {
+	if (provider === "gemini") {
+		return CUA_PROVIDER_API_KEY_ENV_VARS.google;
+	}
 	return CUA_PROVIDER_API_KEY_ENV_VARS[provider as keyof typeof CUA_PROVIDER_API_KEY_ENV_VARS] ?? [];
 }
 

@@ -20,7 +20,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -b && node ../../scripts/append-js-extensions.mjs dist",
+    "build": "tsc -b",
     "clean": "tsc -b --clean"
   },
   "dependencies": {

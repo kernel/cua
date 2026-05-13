@@ -44,7 +44,7 @@ export function resolveCuaRuntimeSpec(input: CuaRuntimeSpecInput): CuaRuntimeSpe
 				toolDefinitions: anthropic.createComputerToolDefinitions(),
 				defaultSystemPrompt: anthropic.buildAnthropicSystemPrompt(),
 			};
-		case "gemini":
+		case "google":
 			return {
 				model,
 				provider,

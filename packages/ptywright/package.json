@@ -14,7 +14,7 @@
     "native/build/Release"
   ],
   "scripts": {
-    "build": "tsc -b && node ../../scripts/append-js-extensions.mjs dist && npm run build:native",
+    "build": "tsc -b && npm run build:native",
     "build:native": "node ./scripts/build-ghostty.mjs && node-gyp rebuild --directory native",
     "clean": "tsc -b --clean",
     "clean:native": "node-gyp clean --directory native",

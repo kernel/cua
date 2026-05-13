@@ -17,7 +17,7 @@
     "packages/cua-cli"
   ],
   "scripts": {
-    "build": "tsc -b && node ./scripts/append-js-extensions.mjs && npm run build:native --workspace @onkernel/ptywright --if-present",
+    "build": "tsc -b && npm run build:native --workspace @onkernel/ptywright --if-present",
     "build:cli": "npm run build --workspace @onkernel/cua-cli",
     "dev": "tsc -b --watch",
     "typecheck": "tsc -b",

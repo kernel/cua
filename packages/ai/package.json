@@ -19,7 +19,7 @@
     "CHANGELOG.md"
   ],
   "scripts": {
-    "build": "tsc -b && node ../../scripts/append-js-extensions.mjs dist",
+    "build": "tsc -b",
     "clean": "tsc -b --clean",
     "example:quickstart": "tsx examples/quickstart.ts",
     "test": "vitest --run"

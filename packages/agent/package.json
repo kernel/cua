@@ -19,7 +19,7 @@
     "CHANGELOG.md"
   ],
   "scripts": {
-    "build": "tsc -b && node ../../scripts/append-js-extensions.mjs dist",
+    "build": "tsc -b",
     "clean": "tsc -b --clean",
     "example:agent": "NODE_OPTIONS=--conditions=source tsx examples/agent-openai-smoke.ts",
     "example:harness": "NODE_OPTIONS=--conditions=source tsx examples/harness-openai-smoke.ts",

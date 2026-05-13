@@ -12,7 +12,7 @@ type ProviderCase = {
 	modelRef:
 		| "openai:gpt-5.5"
 		| "anthropic:claude-opus-4-7"
-		| "gemini:gemini-3-flash-preview"
+		| "google:gemini-3-flash-preview"
 		| "tzafon:tzafon.northstar-cua-fast"
 		| "yutori:n1.5-latest";
 	prompt: string;
@@ -50,7 +50,7 @@ const cases: ProviderCase[] = [
 	{
 		name: "gemini",
 		apiKeyEnvVar: "GOOGLE_API_KEY",
-		modelRef: "gemini:gemini-3-flash-preview",
+		modelRef: "google:gemini-3-flash-preview",
 		prompt: [
 			"Call batch_computer_actions exactly once.",
 			'Pass this exact arguments JSON: {"actions":[{"type":"screenshot"}]}',
