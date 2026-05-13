@@ -236,6 +236,11 @@ describe("Cua live e2e", () => {
 							return apiKey ? { apiKey } : undefined;
 						},
 					});
+					if (c.name === "yutori") {
+						// Yutori can occasionally keep requesting additional tool rounds.
+						// Terminate after the first completed batch to keep CI deterministic.
+						harness.on("tool_result", () => ({ terminate: true }));
+					}
 
 					harness.subscribe((event) => {
 						recordRunEvent(stats, event);

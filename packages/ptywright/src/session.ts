@@ -1,8 +1,8 @@
 import { EventEmitter } from "node:events";
 import { mkdir, writeFile } from "node:fs/promises";
 import { spawn, type IPty } from "node-pty";
-import { KeyEnter, type Key } from "./keys";
-import { createTerminal, type SnapshotOptions, type TerminalSnapshot, type TerminalSurface } from "./terminal";
+import { KeyEnter, type Key } from "./keys.js";
+import { createTerminal, type SnapshotOptions, type TerminalSnapshot, type TerminalSurface } from "./terminal.js";
 
 const DEFAULT_COLS = 120;
 const DEFAULT_ROWS = 40;
