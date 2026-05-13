@@ -2,18 +2,18 @@
 import { browserSession, type BrowserSession } from "@onkernel/cua-translator";
 import { stderr, stdout } from "node:process";
 import { parseArgs } from "node:util";
-import { type ActionRequest, type ActionType } from "./action/prompts.js";
-import { emitCompact, runAction, type RunActionResult } from "./action/runner.js";
-import { createCuaAgent } from "./agent.js";
-import { promptWithScreenshot } from "./agent-prompt.js";
-import * as configMod from "./config.js";
+import { type ActionRequest, type ActionType } from "./action/prompts";
+import { emitCompact, runAction, type RunActionResult } from "./action/runner";
+import { createCuaAgent } from "./agent";
+import { promptWithScreenshot } from "./agent-prompt";
+import * as configMod from "./config";
 import {
 	DEFAULT_MODEL_ID,
 	SUPPORTED_PROVIDERS,
 	type ProviderId,
 	listSupportedModels,
 	resolveProvider,
-} from "./models.js";
+} from "./models";
 import {
 	attachNamedSession,
 	formatRelativeAge,
@@ -24,8 +24,8 @@ import {
 	startNamedSession,
 	stopNamedSession,
 	validateSlug,
-} from "./named-sessions.js";
-import { attachJsonlSink } from "./output/jsonl.js";
+} from "./named-sessions";
+import { attachJsonlSink } from "./output/jsonl";
 import {
 	appendBrowserMetadata,
 	findLatestSession,
@@ -35,9 +35,9 @@ import {
 	resolveSessionPath,
 	seedAgentFromSession,
 	type SessionInfo,
-} from "./sessions.js";
-import { discoverCuaSkills, discoverStartupResources, expandSkillInvocation } from "./skills.js";
-import { runInteractive } from "./tui/main.js";
+} from "./sessions";
+import { discoverCuaSkills, discoverStartupResources, expandSkillInvocation } from "./skills";
+import { runInteractive } from "./tui/main";
 
 const HELP = `cua — Kernel-cloud-browser computer-use agent
 

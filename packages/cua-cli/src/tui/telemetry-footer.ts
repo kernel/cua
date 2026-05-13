@@ -1,5 +1,5 @@
 import { type Component, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
-import { colors } from "./themes.js";
+import { colors } from "./themes";
 
 export interface TelemetryFooterState {
 	provider?: string;

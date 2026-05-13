@@ -1,6 +1,6 @@
 import type { Agent, AgentEvent } from "@mariozechner/pi-agent-core";
-import type { CuaAgentHandle } from "../agent.js";
-import { promptWithScreenshot } from "../agent-prompt.js";
+import type { CuaAgentHandle } from "../agent";
+import { promptWithScreenshot } from "../agent-prompt";
 
 export type InteractiveDriverListener = (event: AgentEvent) => void | Promise<void>;
 

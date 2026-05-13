@@ -8,14 +8,14 @@ import {
 	executeGeminiBatch,
 	GEMINI_BATCH_FUNCTION_DECLARATION,
 	GEMINI_BATCH_TOOL_NAME,
-} from "./batch.js";
+} from "./batch";
 import {
 	type GeminiComputerToolsOptions,
 	type GeminiToolDetails,
 	executeGeminiFunctionCall,
 	GEMINI_FUNCTION_DECLARATIONS,
-} from "./computer.js";
-import { buildGeminiSystemPrompt } from "./system-prompt.js";
+} from "./computer";
+import { buildGeminiSystemPrompt } from "./system-prompt";
 
 export interface GeminiModelOptions extends GeminiComputerToolsOptions {
 	apiKey?: string;

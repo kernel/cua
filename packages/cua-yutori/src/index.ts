@@ -11,26 +11,26 @@ export {
 	executeYutoriFunctionCall,
 	YUTORI_DEFINITIONS,
 	YUTORI_FUNCTION_DECLARATIONS,
-} from "./computer.js";
+} from "./computer";
 export type {
 	YutoriComputerToolsOptions,
 	YutoriToolDetails,
-} from "./computer.js";
+} from "./computer";
 export {
 	DEFAULT_YUTORI_SCREEN_SIZE,
 	YUTORI_ACTION_TYPES,
 	YUTORI_COORDINATE_SCALE,
 	YUTORI_MODEL_IDS,
 	YutoriAction,
-} from "./official.js";
+} from "./official";
 export type {
 	YutoriActionType,
 	YutoriModelId,
 	YutoriScreenSize,
 	YutoriScrollDirection,
-} from "./official.js";
-export { denormalizeX, denormalizeY } from "./coords.js";
-export { yutori } from "./model.js";
-export type { YutoriModelOptions, YutoriModelRunDetails } from "./model.js";
-export { buildYutoriSystemPrompt } from "./system-prompt.js";
-export type { YutoriSystemPromptOptions } from "./system-prompt.js";
+} from "./official";
+export { denormalizeX, denormalizeY } from "./coords";
+export { yutori } from "./model";
+export type { YutoriModelOptions, YutoriModelRunDetails } from "./model";
+export { buildYutoriSystemPrompt } from "./system-prompt";
+export type { YutoriSystemPromptOptions } from "./system-prompt";

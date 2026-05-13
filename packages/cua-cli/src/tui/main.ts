@@ -18,23 +18,23 @@ import type { BrowserSession } from "@onkernel/cua-translator";
 import { homedir } from "node:os";
 import { relative } from "node:path";
 import { stderr } from "node:process";
-import { createCuaAgent } from "../agent.js";
-import type { Config } from "../config.js";
-import { DEFAULT_MODEL_ID, resolveProvider } from "../models.js";
+import { createCuaAgent } from "../agent";
+import type { Config } from "../config";
+import { DEFAULT_MODEL_ID, resolveProvider } from "../models";
 import {
 	appendBrowserMetadata,
 	persistAgentEvents,
 	seedAgentFromSession,
-} from "../sessions.js";
-import { expandSkillInvocation, type Skill, type StartupResources } from "../skills.js";
-import { openTuiDebugLog } from "./debug-log.js";
-import { applyAndSummarizeImageProtocol } from "./diagnostics.js";
-import { LiveInteractiveDriver, type InteractiveDriver } from "./driver.js";
-import { type AssistantBuffer, MessageList } from "./message-list.js";
-import { ScreenshotWidget } from "./screenshot-widget.js";
-import { StatusLine } from "./status-line.js";
-import { TelemetryFooter } from "./telemetry-footer.js";
-import { colors, editorTheme } from "./themes.js";
+} from "../sessions";
+import { expandSkillInvocation, type Skill, type StartupResources } from "../skills";
+import { openTuiDebugLog } from "./debug-log";
+import { applyAndSummarizeImageProtocol } from "./diagnostics";
+import { LiveInteractiveDriver, type InteractiveDriver } from "./driver";
+import { type AssistantBuffer, MessageList } from "./message-list";
+import { ScreenshotWidget } from "./screenshot-widget";
+import { StatusLine } from "./status-line";
+import { TelemetryFooter } from "./telemetry-footer";
+import { colors, editorTheme } from "./themes";
 
 export interface InteractiveOptions {
 	cwd: string;

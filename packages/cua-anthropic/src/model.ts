@@ -5,11 +5,11 @@ import type {
 	ComputerUseToolResult,
 } from "@onkernel/cua-translator";
 import { Anthropic } from "@anthropic-ai/sdk";
-import { ANTHROPIC_BATCH_TOOL_WIRE_SPEC, executeAnthropicBatch } from "./batch.js";
+import { ANTHROPIC_BATCH_TOOL_WIRE_SPEC, executeAnthropicBatch } from "./batch";
 import {
 	type AnthropicComputerInput,
 	executeAnthropicComputerAction,
-} from "./computer.js";
+} from "./computer";
 import {
 	anthropicComputerToolForModel,
 	anthropicComputerUseBetaForModel,
@@ -17,9 +17,9 @@ import {
 	ANTHROPIC_COMPACTION_EDIT_TYPE,
 	ANTHROPIC_COMPACTION_MIN_TRIGGER_TOKENS,
 	anthropicSupportsCompaction,
-} from "./official.js";
-import { compactAnthropicMessagesForRequest } from "./context.js";
-import { buildAnthropicSystemPrompt } from "./system-prompt.js";
+} from "./official";
+import { compactAnthropicMessagesForRequest } from "./context";
+import { buildAnthropicSystemPrompt } from "./system-prompt";
 
 export interface AnthropicModelOptions {
 	apiKey?: string;

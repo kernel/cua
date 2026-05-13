@@ -2,6 +2,6 @@
 
 ## 0.1.0
 
-- Initial `@onkernel/cua-agent` package.
-- Added `createCuaAgent()` returning a pi-agent-core `Agent`.
-- Added Kernel browser computer `AgentTool` constructors with internal translator plumbing.
+- Class-first CUA runtime: `CuaAgent` and `CuaHarness` on top of pi-agent-core.
+- Provider-neutral browser tool executors for canonical CUA tool names, backed by Kernel browser actions.
+- Includes examples plus unit and live e2e coverage for common provider/model combinations.

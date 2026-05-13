@@ -1,11 +1,11 @@
 import type { Api, Model } from "@mariozechner/pi-ai";
-import { compactAnthropicMessagesForRequest } from "./context.js";
-import { anthropicComputerToolForModel } from "./official.js";
+import { compactAnthropicMessagesForRequest } from "./context";
+import { anthropicComputerToolForModel } from "./official";
 import {
 	ANTHROPIC_COMPACTION_EDIT_TYPE,
 	ANTHROPIC_COMPACTION_MIN_TRIGGER_TOKENS,
 	anthropicSupportsCompaction,
-} from "./official.js";
+} from "./official";
 
 /**
  * onPayload hook for Anthropic Messages requests.

@@ -1,4 +1,4 @@
-import { GEMINI_COORDINATE_SCALE, type GeminiScreenSize } from "./official.js";
+import { GEMINI_COORDINATE_SCALE, type GeminiScreenSize } from "./official";
 
 /** Convert Gemini's 0–1000 normalized X to pixels for the given screen. */
 export function denormalizeX(x: number, screen: GeminiScreenSize): number {

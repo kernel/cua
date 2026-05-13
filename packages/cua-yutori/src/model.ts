@@ -4,7 +4,7 @@ import type {
 } from "@onkernel/cua-translator";
 import OpenAI from "openai";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
-import { executeYutoriFunctionCall, type YutoriComputerToolsOptions } from "./computer.js";
+import { executeYutoriFunctionCall, type YutoriComputerToolsOptions } from "./computer";
 
 export interface YutoriModelOptions extends YutoriComputerToolsOptions {
 	apiKey?: string;

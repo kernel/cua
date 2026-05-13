@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createTerminal } from "../terminal.js";
+import { createTerminal } from "../terminal";
 
 test("terminal snapshots formatted visible text", () => {
 	const terminal = createTerminal({ cols: 40, rows: 6 });

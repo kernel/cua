@@ -2,7 +2,7 @@ import {
 	DEFAULT_TZAFON_SCREEN_SIZE,
 	TZAFON_COORDINATE_SCALE,
 	type TzafonScreenSize,
-} from "./official.js";
+} from "./official";
 
 export function parseTzafonCoord(value: unknown): number {
 	if (value == null) return 0;

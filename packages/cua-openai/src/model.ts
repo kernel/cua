@@ -17,9 +17,9 @@ import type {
 	ResponseOutputMessage,
 	Tool,
 } from "openai/resources/responses/responses";
-import { type BatchToolDetails, type BatchToolInput, executeOpenAIBatch, OPENAI_BATCH_TOOL } from "./batch.js";
-import { type ExtraToolDetails, type ExtraToolInput, executeOpenAIExtraAction, OPENAI_EXTRA_TOOL } from "./extra.js";
-import { OPENAI_BATCH_INSTRUCTIONS, OPENAI_NATIVE_COMPUTER_INSTRUCTIONS } from "./system-prompt.js";
+import { type BatchToolDetails, type BatchToolInput, executeOpenAIBatch, OPENAI_BATCH_TOOL } from "./batch";
+import { type ExtraToolDetails, type ExtraToolInput, executeOpenAIExtraAction, OPENAI_EXTRA_TOOL } from "./extra";
+import { OPENAI_BATCH_INSTRUCTIONS, OPENAI_NATIVE_COMPUTER_INSTRUCTIONS } from "./system-prompt";
 
 const OPENAI_COMPUTER_TOOL = { type: "computer" } as const;
 const POST_ACTION_SETTLE_MS = 300;

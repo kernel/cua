@@ -17,39 +17,39 @@ export {
 	OPENAI_BATCH_DESCRIPTION,
 	OPENAI_BATCH_TOOL,
 	OPENAI_BATCH_TOOL_NAME,
-} from "./batch.js";
-export type { BatchToolDetails, BatchToolInput } from "./batch.js";
+} from "./batch";
+export type { BatchToolDetails, BatchToolInput } from "./batch";
 export {
 	executeOpenAIExtraAction,
 	ExtraSchema,
 	OPENAI_EXTRA_TOOL,
 	OPENAI_EXTRA_TOOL_DESCRIPTION,
 	OPENAI_EXTRA_TOOL_NAME,
-} from "./extra.js";
-export type { ExtraToolDetails, ExtraToolInput } from "./extra.js";
+} from "./extra";
+export type { ExtraToolDetails, ExtraToolInput } from "./extra";
 export {
 	OPENAI_OFFICIAL_ACTION_TYPES,
 	OpenAIOfficialActionSchema,
 	OpenAIPointSchema,
-} from "./official.js";
-export type { OpenAIOfficialAction, OpenAIOfficialActionType, OpenAIPoint } from "./official.js";
+} from "./official";
+export type { OpenAIOfficialAction, OpenAIOfficialActionType, OpenAIPoint } from "./official";
 export {
 	OPENAI_CUA_EXTRA_ACTION_TYPES,
 	OpenAICuaExtraActionSchema,
-} from "./cua-extras.js";
-export type { OpenAICuaExtraAction, OpenAICuaExtraActionType } from "./cua-extras.js";
+} from "./cua-extras";
+export type { OpenAICuaExtraAction, OpenAICuaExtraActionType } from "./cua-extras";
 export {
 	executeOpenAIToolCall,
 	openai,
 	openaiTools,
-} from "./model.js";
+} from "./model";
 export type {
 	OpenAIModelOptions,
 	OpenAIModelRunDetails,
 	OpenAIToolCallResultDetails,
 	OpenAIToolSpec,
-} from "./model.js";
+} from "./model";
 export {
 	OPENAI_BATCH_INSTRUCTIONS,
 	OPENAI_NATIVE_COMPUTER_INSTRUCTIONS,
-} from "./system-prompt.js";
+} from "./system-prompt";

@@ -1,4 +1,4 @@
-import type { ComputerToolCoordinateSystem } from "../common.js";
+import type { ComputerToolCoordinateSystem } from "../common";
 
 export {
 	CUA_ACTION_TYPES as OPENAI_CUA_ACTION_TYPES,
@@ -11,13 +11,13 @@ export {
 	createCuaBatchSchema as createBatchSchema,
 	CuaBatchSchema as OpenAIBatchSchema,
 	CuaNavigationSchema as OpenAIExtraSchema,
-} from "../common.js";
+} from "../common";
 export type {
 	CuaAction as OpenAIAction,
 	CreateComputerToolDefinitionsOptions,
 	CuaBatchInput as OpenAIBatchInput,
 	CuaNavigationInput as OpenAIExtraInput,
-} from "../common.js";
+} from "../common";
 
 // Provider-native action vocabulary emitted on `computer_call.action.type`:
 //   click, double_click, drag, move, scroll, type, keypress, wait, screenshot
@@ -29,3 +29,13 @@ export const OPENAI_BATCH_INSTRUCTIONS = `You have two browser tools:
 2. computer_use_extra for a single high-level goto, back, forward, or url action.
 
 Prefer batch_computer_actions for predictable multi-step browser interaction. Include explicit url(), cursor_position(), or screenshot() read steps when you need intermediate state.`;
+
+export function openaiResponsesStoreOnPayload(payload: unknown): unknown | undefined {
+	if (!payload || typeof payload !== "object") return undefined;
+	const current = payload as Record<string, unknown>;
+	if (current.store === true) return undefined;
+	return {
+		...current,
+		store: true,
+	};
+}

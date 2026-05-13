@@ -8,12 +8,12 @@ import {
 	forwardModelAction,
 } from "@onkernel/cua-translator";
 import { type TObject, Type } from "@sinclair/typebox";
-import { denormalizeX, denormalizeY } from "./coords.js";
+import { denormalizeX, denormalizeY } from "./coords";
 import {
 	DEFAULT_GEMINI_SCREEN_SIZE,
 	GeminiAction,
 	type GeminiScreenSize,
-} from "./official.js";
+} from "./official";
 
 const SCREENSHOT_DELAY_MS = 500;
 const PX_PER_NOTCH = 60;

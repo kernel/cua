@@ -13,7 +13,7 @@ import {
 	type TextContent,
 	type ToolCall,
 } from "@earendil-works/pi-ai";
-import { CUA_ACTION_TYPES, CUA_BATCH_TOOL_NAME, type CuaAction } from "../common.js";
+import { CUA_ACTION_TYPES, CUA_BATCH_TOOL_NAME, type CuaAction } from "../common";
 
 export const YUTORI_CHAT_COMPLETIONS_API = "yutori-chat-completions";
 

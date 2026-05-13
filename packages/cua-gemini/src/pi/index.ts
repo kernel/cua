@@ -1,10 +1,10 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import type { ComputerTranslator } from "@onkernel/cua-translator";
-import { createGeminiBatchTool } from "../batch-tool.js";
+import { createGeminiBatchTool } from "../batch-tool";
 import {
 	createGeminiPerActionTools,
 	type GeminiComputerToolsOptions as PerActionOptions,
-} from "../computer-tool.js";
+} from "../computer-tool";
 
 export interface GeminiComputerToolsOptions extends PerActionOptions {
 	includeBatch?: boolean;
@@ -24,7 +24,7 @@ export function createGeminiComputerTools(
 	return tools;
 }
 
-export { createGeminiPerActionTools } from "../computer-tool.js";
-export type { GeminiToolDetails } from "../computer-tool.js";
-export { createGeminiBatchTool } from "../batch-tool.js";
-export type { GeminiBatchToolInput, GeminiBatchToolDetails } from "../batch.js";
+export { createGeminiPerActionTools } from "../computer-tool";
+export type { GeminiToolDetails } from "../computer-tool";
+export { createGeminiBatchTool } from "../batch-tool";
+export type { GeminiBatchToolInput, GeminiBatchToolDetails } from "../batch";

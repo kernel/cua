@@ -1,4 +1,4 @@
-import { loadNativeBinding, type NativeSnapshot, type NativeTerminalHandle } from "./native-loader.js";
+import { loadNativeBinding, type NativeSnapshot, type NativeTerminalHandle } from "./native-loader";
 
 export interface CreateTerminalOptions {
 	cols: number;

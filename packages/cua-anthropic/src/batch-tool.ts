@@ -7,7 +7,7 @@ import {
 	executeAnthropicBatch,
 	ANTHROPIC_BATCH_DESCRIPTION,
 	ANTHROPIC_BATCH_TOOL_NAME,
-} from "./batch.js";
+} from "./batch";
 
 /**
  * Anthropic-flavored `batch_computer_actions` tool.

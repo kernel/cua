@@ -1,13 +1,17 @@
 import { Agent, type AgentTool } from "@earendil-works/pi-agent-core";
 import { describe, expect, it } from "vitest";
-import { createCuaAgent, createCuaComputerTools, type KernelBrowser } from "../src/index.js";
+import { resolveCuaRuntimeSpec } from "@onkernel/cua-ai";
+import type Kernel from "@onkernel/sdk";
+import { CuaAgent, CuaHarness, createCuaComputerTools, type KernelBrowser } from "../src/index";
 
 const browser = { session_id: "browser_123" } as KernelBrowser;
+const client = {} as Kernel;
 
-describe("createCuaAgent", () => {
-	it("returns a pi-agent-core Agent and resolves model refs in initialState", () => {
-		const agent = createCuaAgent({
+describe("CuaAgent", () => {
+	it("extends pi Agent and resolves model refs in initialState", () => {
+		const agent = new CuaAgent({
 			browser,
+			client,
 			initialState: {
 				model: "openai:gpt-5.5",
 			},
@@ -19,7 +23,7 @@ describe("createCuaAgent", () => {
 	});
 
 	it("uses provided tools exactly", () => {
-		const tool: AgentTool<any, any> = {
+		const tool: AgentTool = {
 			name: "custom",
 			label: "custom",
 			description: "custom tool",
@@ -29,8 +33,9 @@ describe("createCuaAgent", () => {
 			},
 		};
 
-		const agent = createCuaAgent({
+		const agent = new CuaAgent({
 			browser,
+			client,
 			initialState: {
 				model: "yutori:n1.5-latest",
 				tools: [tool],
@@ -41,8 +46,9 @@ describe("createCuaAgent", () => {
 	});
 
 	it("lets users explicitly compose default tools", () => {
+		const runtime = resolveCuaRuntimeSpec("openai:gpt-5.5");
 		const tools = [
-			...createCuaComputerTools({ provider: "openai", browser }),
+			...createCuaComputerTools({ browser, client, toolDefinitions: runtime.toolDefinitions }),
 			{
 				name: "custom",
 				label: "custom",
@@ -54,8 +60,9 @@ describe("createCuaAgent", () => {
 			} satisfies AgentTool<any, any>,
 		];
 
-		const agent = createCuaAgent({
+		const agent = new CuaAgent({
 			browser,
+			client,
 			initialState: {
 				model: "openai:gpt-5.5",
 				tools,
@@ -65,5 +72,30 @@ describe("createCuaAgent", () => {
 
 		expect(agent.state.tools).toHaveLength(3);
 		expect(agent.state.systemPrompt).toBe("Use the browser carefully.");
+	});
+});
+
+describe("CuaHarness", () => {
+	it("wraps a pi Agent and resolves model refs", () => {
+		const harness = new CuaHarness({
+			browser,
+			client,
+			model: "openai:gpt-5.5",
+			getApiKey: () => "test-key",
+		});
+		expect(harness.agent).toBeInstanceOf(Agent);
+		expect(harness.agent.state.model.id).toBe("gpt-5.5");
+		expect(harness.agent.state.tools.length).toBeGreaterThan(0);
+	});
+
+	it("exposes transcript snapshots", () => {
+		const harness = new CuaHarness({
+			browser,
+			client,
+			model: "openai:gpt-5.5",
+		});
+		const transcript = harness.getTranscript();
+		expect(transcript).toEqual(harness.state.messages);
+		expect(transcript).not.toBe(harness.state.messages);
 	});
 });

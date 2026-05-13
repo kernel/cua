@@ -7,7 +7,7 @@ import {
 	type ExtraToolDetails,
 	OPENAI_EXTRA_TOOL_DESCRIPTION,
 	OPENAI_EXTRA_TOOL_NAME,
-} from "./extra.js";
+} from "./extra";
 
 /**
  * Build the `computer_use_extra` AgentTool. High-level browser navigation

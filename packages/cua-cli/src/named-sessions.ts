@@ -2,7 +2,7 @@ import { browserSession, type BrowserSession } from "@onkernel/cua-translator";
 import { mkdir, readdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { Config } from "./config.js";
+import type { Config } from "./config";
 
 /**
  * Named sessions: durable, slug-keyed pointers to a Kernel cloud browser

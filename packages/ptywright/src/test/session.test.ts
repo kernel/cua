@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { KeyCtrlD, spawnSession } from "../index.js";
+import { KeyCtrlD, spawnSession } from "../index";
 
 test("session captures transcript and visible screen", async (t) => {
 	const session = spawnSession({

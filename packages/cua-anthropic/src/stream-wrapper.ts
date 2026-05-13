@@ -8,8 +8,8 @@ import {
 	ANTHROPIC_COMPACTION_BETA,
 	anthropicComputerUseBetaForModel,
 	anthropicSupportsCompaction,
-} from "./official.js";
-import type { AnthropicContextManagementOptions } from "./payload-hook.js";
+} from "./official";
+import type { AnthropicContextManagementOptions } from "./payload-hook";
 
 /**
  * Eagerly register the Anthropic Messages provider with `pi-ai`. pi-ai

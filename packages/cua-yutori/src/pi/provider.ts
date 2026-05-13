@@ -14,7 +14,7 @@ import {
 	createAssistantMessageEventStream,
 	registerApiProvider,
 } from "@mariozechner/pi-ai";
-import { YUTORI_ACTION_TYPES } from "../official.js";
+import { YUTORI_ACTION_TYPES } from "../official";
 
 export const YUTORI_CHAT_COMPLETIONS_API = "yutori-chat-completions";
 

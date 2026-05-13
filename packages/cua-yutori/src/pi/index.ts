@@ -1,15 +1,15 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import type { ComputerTranslator } from "@onkernel/cua-translator";
-import { createYutoriPerActionTools } from "../computer-tool.js";
-import type { YutoriComputerToolsOptions } from "../computer.js";
-import { YUTORI_ACTION_TYPES } from "../official.js";
+import { createYutoriPerActionTools } from "../computer-tool";
+import type { YutoriComputerToolsOptions } from "../computer";
+import { YUTORI_ACTION_TYPES } from "../official";
 export {
 	YUTORI_CHAT_COMPLETIONS_API,
 	registerYutoriProvider,
 	streamSimpleYutori,
 	streamYutori,
-} from "./provider.js";
-export type { YutoriOptions } from "./provider.js";
+} from "./provider";
+export type { YutoriOptions } from "./provider";
 
 const YUTORI_BUILTIN_TOOL_NAMES = new Set<string>(YUTORI_ACTION_TYPES);
 
@@ -47,5 +47,5 @@ function readToolName(tool: unknown): string | undefined {
 	return undefined;
 }
 
-export { createYutoriPerActionTools } from "../computer-tool.js";
-export type { YutoriToolDetails, YutoriComputerToolsOptions } from "../computer.js";
+export { createYutoriPerActionTools } from "../computer-tool";
+export type { YutoriToolDetails, YutoriComputerToolsOptions } from "../computer";

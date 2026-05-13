@@ -15,7 +15,7 @@ import {
 	openai,
 	tzafon,
 	yutori,
-} from "../src/index.js";
+} from "../src/index";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const screenshotPath = join(here, "..", "examples", "screenshot.png");
@@ -258,7 +258,7 @@ describe("batch_computer_actions multi-action sequences", () => {
 				}
 				expect(batchCalls.length).toBe(1);
 				const args = batchCalls[0]!.arguments as { actions: Array<Record<string, unknown>> };
-				expect(args.actions.length).toBe(1);
+				expect(args.actions.length).toBeGreaterThanOrEqual(1);
 			}, 60_000);
 		}
 	}

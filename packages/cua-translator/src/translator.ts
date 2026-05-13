@@ -4,9 +4,9 @@ import {
 	currentUrlCopyActions,
 	forwardBatchActions,
 	gotoBatchActions,
-} from "./cua-extras.js";
-import { splitKeypress, translateKeys } from "./keysym.js";
-import { modelScrollDeltaToWheelTicks } from "./scroll.js";
+} from "./cua-extras";
+import { splitKeypress, translateKeys } from "./keysym";
+import { modelScrollDeltaToWheelTicks } from "./scroll";
 import {
 	type ActionValidationScope,
 	ActionValidationError,
@@ -14,7 +14,7 @@ import {
 	type BatchAction,
 	type BatchExecutionResult,
 	type ModelAction,
-} from "./types.js";
+} from "./types";
 
 // ─── Numeric helpers ───────────────────────────────────────────────────────
 
@@ -208,7 +208,7 @@ export function translateToBatchAction(actionType: string, action: ModelAction, 
 
 // ─── SDK conversion ────────────────────────────────────────────────────────
 
-type SdkBatchAction = import("@onkernel/sdk/resources/browsers/computer.js").ComputerBatchParams.Action;
+type SdkBatchAction = import("@onkernel/sdk/resources/browsers/computer").ComputerBatchParams.Action;
 
 export function toSdkAction(action: BatchAction): SdkBatchAction {
 	switch (action.type) {

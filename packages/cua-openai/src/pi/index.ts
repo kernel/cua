@@ -1,7 +1,7 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import type { ComputerTranslator } from "@onkernel/cua-translator";
-import { createBatchTool } from "../batch-tool.js";
-import { createExtraTool } from "../extra-tool.js";
+import { createBatchTool } from "../batch-tool";
+import { createExtraTool } from "../extra-tool";
 
 export interface OpenAIComputerToolsOptions {
 	/** Set false to omit `batch_computer_actions`. Defaults to true. */
@@ -24,7 +24,7 @@ export function createOpenAIComputerTools(
 	return tools;
 }
 
-export { createBatchTool } from "../batch-tool.js";
-export type { BatchToolDetails, BatchToolInput } from "../batch.js";
-export { createExtraTool } from "../extra-tool.js";
-export type { ExtraToolDetails, ExtraToolInput } from "../extra.js";
+export { createBatchTool } from "../batch-tool";
+export type { BatchToolDetails, BatchToolInput } from "../batch";
+export { createExtraTool } from "../extra-tool";
+export type { ExtraToolDetails, ExtraToolInput } from "../extra";

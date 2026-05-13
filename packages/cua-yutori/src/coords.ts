@@ -1,4 +1,4 @@
-import { YUTORI_COORDINATE_SCALE, type YutoriScreenSize } from "./official.js";
+import { YUTORI_COORDINATE_SCALE, type YutoriScreenSize } from "./official";
 
 export function denormalizeX(x: number, screen: YutoriScreenSize): number {
 	return Math.round((x / YUTORI_COORDINATE_SCALE) * screen.width);

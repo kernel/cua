@@ -6,7 +6,7 @@ import {
 	findCuaAnnotation,
 	formatCuaModelRef,
 	parseCuaModelRef,
-} from "../src/models.js";
+} from "../src/index";
 
 describe("CUA model refs", () => {
 	it("parses and formats provider-qualified refs", () => {

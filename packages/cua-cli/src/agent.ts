@@ -77,13 +77,13 @@ import {
 	resolveOpenAIModelConfig,
 	resolveTzafonModelConfig,
 	resolveYutoriModelConfig,
-} from "./config.js";
+} from "./config";
 import {
 	DEFAULT_MODEL_ID,
 	type ProviderId,
 	loadModel as loadSupportedModel,
-} from "./models.js";
-import { appendSkillsToSystemPrompt, type Skill } from "./skills.js";
+} from "./models";
+import { appendSkillsToSystemPrompt, type Skill } from "./skills";
 
 let providersRegistered = false;
 

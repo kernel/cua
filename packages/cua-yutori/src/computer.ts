@@ -5,13 +5,13 @@ import {
 	backModelAction,
 } from "@onkernel/cua-translator";
 import { type TObject, Type } from "@sinclair/typebox";
-import { denormalizeX, denormalizeY } from "./coords.js";
+import { denormalizeX, denormalizeY } from "./coords";
 import {
 	DEFAULT_YUTORI_SCREEN_SIZE,
 	YutoriAction,
 	type YutoriScreenSize,
 	type YutoriScrollDirection,
-} from "./official.js";
+} from "./official";
 
 const SCREENSHOT_DELAY_MS = 300;
 const WAIT_MS = 2000;

@@ -18,34 +18,34 @@ export {
 	GEMINI_BATCH_DESCRIPTION,
 	GEMINI_BATCH_FUNCTION_DECLARATION,
 	GEMINI_BATCH_TOOL_NAME,
-} from "./batch.js";
-export type { GeminiBatchToolInput, GeminiBatchToolDetails } from "./batch.js";
+} from "./batch";
+export type { GeminiBatchToolInput, GeminiBatchToolDetails } from "./batch";
 export {
 	executeGeminiFunctionCall,
 	GEMINI_FUNCTION_DECLARATIONS,
-} from "./computer.js";
-export type { GeminiComputerToolsOptions, GeminiToolDetails } from "./computer.js";
+} from "./computer";
+export type { GeminiComputerToolsOptions, GeminiToolDetails } from "./computer";
 export {
 	GeminiAction,
 	PREDEFINED_COMPUTER_USE_FUNCTIONS,
 	DEFAULT_GEMINI_SCREEN_SIZE,
 	GEMINI_COORDINATE_SCALE,
-} from "./official.js";
+} from "./official";
 export type {
 	GeminiFunctionArgs,
 	GeminiScreenSize,
 	ScrollDirection,
-} from "./official.js";
-export { gemini } from "./model.js";
+} from "./official";
+export { gemini } from "./model";
 export type {
 	GeminiModelOptions,
 	GeminiModelRunDetails,
-} from "./model.js";
-export { denormalizeX, denormalizeY } from "./coords.js";
-export { GEMINI_CUA_EXTRA_ACTION_TYPES } from "./cua-extras.js";
-export type { GeminiCuaExtraActionType } from "./cua-extras.js";
+} from "./model";
+export { denormalizeX, denormalizeY } from "./coords";
+export { GEMINI_CUA_EXTRA_ACTION_TYPES } from "./cua-extras";
+export type { GeminiCuaExtraActionType } from "./cua-extras";
 export {
 	buildGeminiSystemPrompt,
 	GEMINI_INSTRUCTIONS_RAW,
-} from "./system-prompt.js";
-export type { GeminiSystemPromptOptions } from "./system-prompt.js";
+} from "./system-prompt";
+export type { GeminiSystemPromptOptions } from "./system-prompt";

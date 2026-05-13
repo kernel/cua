@@ -1,24 +1,28 @@
 {
   "name": "@onkernel/cua-agent",
   "version": "0.1.0",
-  "description": "Kernel browser computer-use AgentTools and agent factory built on pi-agent-core",
+  "description": "Kernel browser computer-use Agent and AgentHarness classes built on pi-agent-core",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "source": "./src/index.ts",
       "import": "./dist/index.js"
     }
   },
   "files": [
     "dist",
+    "examples",
     "README.md",
     "CHANGELOG.md"
   ],
   "scripts": {
     "build": "tsc -b",
     "clean": "tsc -b --clean",
+    "example:agent": "NODE_OPTIONS=--conditions=source tsx examples/agent-openai-smoke.ts",
+    "example:harness": "NODE_OPTIONS=--conditions=source tsx examples/harness-openai-smoke.ts",
     "test": "vitest --run"
   },
   "dependencies": {

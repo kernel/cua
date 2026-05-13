@@ -8,7 +8,7 @@ import {
 	type ImageDimensions,
 	type ImageTheme,
 } from "@mariozechner/pi-tui";
-import { imageTheme } from "./themes.js";
+import { imageTheme } from "./themes";
 
 const MAX_WIDTH_CELLS = 60;
 

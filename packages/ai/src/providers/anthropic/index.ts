@@ -1,4 +1,4 @@
-import type { ComputerToolCoordinateSystem } from "../common.js";
+import type { ComputerToolCoordinateSystem } from "../common";
 
 export {
 	CUA_ACTION_TYPES as ANTHROPIC_CUA_ACTION_TYPES,
@@ -8,12 +8,12 @@ export {
 	createCuaActionSchema as createActionSchema,
 	createCuaBatchSchema as createBatchSchema,
 	CuaBatchSchema as AnthropicBatchSchema,
-} from "../common.js";
+} from "../common";
 export type {
 	CuaAction as AnthropicAction,
 	CreateComputerToolDefinitionsOptions,
 	CuaBatchInput as AnthropicBatchInput,
-} from "../common.js";
+} from "../common";
 
 // Provider-native action vocabulary emitted on `tool_use.input.action`. Latest
 // tool version is `computer_20251124`, which extends earlier dated versions:
