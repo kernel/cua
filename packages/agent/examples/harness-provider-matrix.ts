@@ -1,6 +1,7 @@
 import Kernel from "@onkernel/sdk";
 import { requireCuaEnvApiKeyForModel, type CuaModelRef } from "@onkernel/cua-ai";
 import { CuaAgentHarness, InMemorySessionRepo, NodeExecutionEnv } from "../src/index";
+import { logAgentEvent, logAssistant } from "./shared/logging";
 import { SCENARIOS } from "./shared/scenarios";
 
 const modelRef = (process.env.MODEL_REF as CuaModelRef | undefined) ?? "openai:gpt-5.5";
@@ -24,6 +25,7 @@ async function main(): Promise<void> {
 			model: modelRef,
 			session,
 		});
+		harness.subscribe(logAgentEvent);
 		console.log(`model=${modelRef} scenario=${scenario.name}`);
 		const response = await harness.prompt(scenario.prompt);
 		const branch = await session.getBranch();
@@ -32,13 +34,7 @@ async function main(): Promise<void> {
 			.flatMap((entry) =>
 				entry.type === "message" && entry.message.role === "assistant" ? [entry.message] : [],
 			)[0];
-		const assistant = lastAssistant ?? response;
-		const assistantText = assistant.content
-			.flatMap((block) => (block.type === "text" ? [block.text] : []))
-			.join("")
-			.trim();
-		console.log("assistant stopReason:", assistant.stopReason);
-		console.log("assistant text:", assistantText || "(no text)");
+		logAssistant(lastAssistant ?? response);
 	} finally {
 		await client.browsers.deleteByID(browser.session_id);
 	}

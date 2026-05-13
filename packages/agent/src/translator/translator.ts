@@ -25,8 +25,8 @@ export class InternalComputerTranslator {
 
 	async currentUrl(): Promise<string> {
 		await this.runKernelBatch([
-			{ type: "press_key", press_key: { keys: ["Control_L", "l"] } },
-			{ type: "press_key", press_key: { keys: ["Control_L", "c"] } },
+			keypress(["Control", "l"]),
+			keypress(["Control", "c"]),
 		]);
 		const response = await this.client.browsers.computer.readClipboard(this.sessionId);
 		return (response.text ?? "").trim();
@@ -67,18 +67,18 @@ export class InternalComputerTranslator {
 			}
 			if (type === "goto") {
 				pending.push(
-					{ type: "press_key", press_key: { keys: ["Control_L", "l"] } },
+					keypress(["Control", "l"]),
 					{ type: "type_text", type_text: { text: stringOr(action.url, "") } },
-					{ type: "press_key", press_key: { keys: ["Enter"] } },
+					keypress(["Enter"]),
 				);
 				continue;
 			}
 			if (type === "back") {
-				pending.push({ type: "press_key", press_key: { keys: ["Alt_L", "Left"] } });
+				pending.push(keypress(["Alt", "Left"]));
 				continue;
 			}
 			if (type === "forward") {
-				pending.push({ type: "press_key", press_key: { keys: ["Alt_L", "Right"] } });
+				pending.push(keypress(["Alt", "Right"]));
 				continue;
 			}
 			pending.push(toSdkAction(type, action));
@@ -133,7 +133,7 @@ function toSdkAction(type: string, action: ModelAction): KernelBatchAction {
 		case "type":
 			return { type: "type_text", type_text: { text: typeof action.text === "string" ? action.text : "" } };
 		case "keypress":
-			return { type: "press_key", press_key: { keys: toStringArray(action.keys) } };
+			return keypress(toStringArray(action.keys));
 		case "scroll":
 			return {
 				type: "scroll",
@@ -186,6 +186,67 @@ function dragMouseButtonOr(value: unknown, fallback: DragMouseButton): DragMouse
 
 function toStringArray(value: unknown): string[] {
 	return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function keypress(keys: string[]): KernelBatchAction {
+	const translated = translateKeys(keys);
+	const pressedKeys = translated.filter((key) => !isModifierKey(key));
+	const holdKeys = pressedKeys.length > 0 ? translated.filter(isModifierKey) : translated.slice(0, -1);
+	return {
+		type: "press_key",
+		press_key: {
+			keys: pressedKeys.length > 0 ? pressedKeys : translated.slice(-1),
+			...(holdKeys.length > 0 ? { hold_keys: holdKeys } : {}),
+		},
+	};
+}
+
+const KEY_ALIASES: Record<string, string> = {
+	ctrl: "Control_L",
+	control: "Control_L",
+	control_l: "Control_L",
+	controlleft: "Control_L",
+	alt: "Alt_L",
+	alt_l: "Alt_L",
+	altleft: "Alt_L",
+	shift: "Shift_L",
+	shift_l: "Shift_L",
+	shiftleft: "Shift_L",
+	meta: "Super_L",
+	super: "Super_L",
+	cmd: "Super_L",
+	command: "Super_L",
+	enter: "Return",
+	return: "Return",
+	escape: "Escape",
+	esc: "Escape",
+	backspace: "BackSpace",
+	delete: "Delete",
+	tab: "Tab",
+	space: "space",
+	left: "Left",
+	right: "Right",
+	up: "Up",
+	down: "Down",
+};
+
+function translateKeys(keys: string[]): string[] {
+	return keys.flatMap((key) =>
+		key
+			.split("+")
+			.map((part) => part.trim())
+			.filter(Boolean)
+			.map((part) => {
+				const alias = KEY_ALIASES[part.replace(/[-\s]/g, "_").toLowerCase()];
+				if (alias) return alias;
+				if (part.length === 1 && part >= "A" && part <= "Z") return part.toLowerCase();
+				return part;
+			}),
+	);
+}
+
+function isModifierKey(key: string): boolean {
+	return key === "Control_L" || key === "Alt_L" || key === "Shift_L" || key === "Super_L";
 }
 
 function toPath(value: unknown): Array<[number, number]> {

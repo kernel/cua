@@ -1,6 +1,7 @@
 import Kernel from "@onkernel/sdk";
 import { requireCuaEnvApiKeyForModel, type CuaModelRef } from "@onkernel/cua-ai";
 import { CuaAgent } from "../src/index";
+import { logAgentEvent, logAssistant } from "./shared/logging";
 import { SCENARIOS } from "./shared/scenarios";
 
 const modelRef = (process.env.MODEL_REF as CuaModelRef | undefined) ?? "openai:gpt-5.5";
@@ -20,8 +21,11 @@ async function main(): Promise<void> {
 			client,
 			initialState: { model: modelRef },
 		});
+		agent.subscribe(logAgentEvent);
 		console.log(`model=${modelRef} scenario=${scenario.name}`);
 		await agent.prompt(scenario.prompt);
+		const assistant = [...agent.state.messages].reverse().find((message) => message.role === "assistant");
+		logAssistant(assistant?.role === "assistant" ? assistant : undefined);
 	} finally {
 		await client.browsers.deleteByID(browser.session_id);
 	}
