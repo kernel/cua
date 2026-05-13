@@ -1,4 +1,4 @@
-import type { Agent, AgentEvent } from "@mariozechner/pi-agent-core";
+import type { Agent, AgentEvent } from "@onkernel/cua-agent";
 import type { CuaAgentHandle } from "../agent";
 import { promptWithScreenshot } from "../agent-prompt";
 

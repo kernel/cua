@@ -1,4 +1,4 @@
-import type { Agent, AgentEvent } from "@mariozechner/pi-agent-core";
+import type { Agent, AgentEvent } from "@onkernel/cua-agent";
 import type { BrowserSession } from "@onkernel/cua-translator";
 
 export interface JsonlSinkOptions {

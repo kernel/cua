@@ -1,23 +1,14 @@
+import type { Api, CuaModelRef, Model } from "@onkernel/cua-ai";
+import { resolveCuaRuntimeSpec } from "@onkernel/cua-ai";
 import {
 	Agent,
+	CuaAgentHarness,
 	type AgentEvent,
 	type AgentMessage,
 	type AgentTool,
-	type StreamFn,
 	type ThinkingLevel,
-} from "@mariozechner/pi-agent-core";
-import {
-	type Api,
-	type Model,
-	registerApiProvider,
-	streamOpenAICompletions,
-	streamGoogle,
-	streamOpenAIResponses,
-	streamSimpleOpenAICompletions,
-	streamSimple,
-	streamSimpleGoogle,
-	streamSimpleOpenAIResponses,
-} from "@mariozechner/pi-ai";
+	InMemorySessionRepo,
+} from "@onkernel/cua-agent";
 import {
 	createBashTool,
 	createEditTool,
@@ -27,44 +18,9 @@ import {
 	createReadTool,
 	createWriteTool,
 } from "@mariozechner/pi-coding-agent";
-import {
-	buildAnthropicSystemPrompt,
-} from "@onkernel/cua-anthropic";
-import {
-	anthropicComputerOnPayload,
-	composeOnPayload,
-	createAnthropicContextManagementOnPayload,
-	createAnthropicComputerTools,
-	registerAnthropicProvider,
-	wrapAnthropicStream,
-} from "@onkernel/cua-anthropic/pi";
-import {
-	buildGeminiSystemPrompt,
-} from "@onkernel/cua-gemini";
-import { createGeminiComputerTools } from "@onkernel/cua-gemini/pi";
-import {
-	OPENAI_BATCH_INSTRUCTIONS,
-} from "@onkernel/cua-openai";
-import { createOpenAIComputerTools } from "@onkernel/cua-openai/pi";
-import {
-	type BrowserSession,
-	ComputerTranslator,
-} from "@onkernel/cua-translator";
-import {
-	buildTzafonSystemPrompt,
-} from "@onkernel/cua-tzafon";
-import {
-	createTzafonComputerTools,
-	registerTzafonProvider,
-} from "@onkernel/cua-tzafon/pi";
-import {
-	buildYutoriSystemPrompt,
-} from "@onkernel/cua-yutori";
-import {
-	createYutoriComputerTools,
-	registerYutoriProvider,
-	yutoriBuiltinToolsOnPayload,
-} from "@onkernel/cua-yutori/pi";
+import { createCuaComputerTools, NodeExecutionEnv } from "@onkernel/cua-agent";
+import type { BrowserSession } from "@onkernel/cua-translator";
+import { ComputerTranslator } from "@onkernel/cua-translator";
 import {
 	type AnthropicModelConfig,
 	type Config,
@@ -84,35 +40,10 @@ import {
 	loadModel as loadSupportedModel,
 } from "./models";
 import { appendSkillsToSystemPrompt, type Skill } from "./skills";
+import type { CuaSessionState } from "./sessions";
 
-let providersRegistered = false;
-
-/**
- * Eagerly register the providers we use. pi-ai's lazy dynamic-import
- * registration breaks under bundlers, so we wire them up at module load.
- */
-export function registerProviders(): void {
-	if (providersRegistered) return;
-	registerApiProvider({
-		api: "openai-responses",
-		stream: streamOpenAIResponses,
-		streamSimple: streamSimpleOpenAIResponses,
-	});
-	registerApiProvider({
-		api: "openai-completions",
-		stream: streamOpenAICompletions,
-		streamSimple: streamSimpleOpenAICompletions,
-	});
-	registerAnthropicProvider();
-	registerApiProvider({
-		api: "google-generative-ai",
-		stream: streamGoogle,
-		streamSimple: streamSimpleGoogle,
-	});
-	registerYutoriProvider();
-	registerTzafonProvider();
-	providersRegistered = true;
-}
+const TOOL_INSTRUCTIONS = `Use bash for shell work. Use read, write, edit, grep, find, and ls for workspace files.`;
+const TOOL_PREAMBLE_LINE = `Before every tool call, first output a single short sentence describing what you are about to do.`;
 
 function mapReasoningEffort(effort: string | undefined): ThinkingLevel {
 	const v = (effort ?? "low").trim().toLowerCase();
@@ -139,14 +70,15 @@ export interface CuaAgentOptions {
 	cwd: string;
 	browser: BrowserSession;
 	config: Config;
+	session?: CuaSessionState;
 	modelId?: string; // default DEFAULT_MODEL_ID
 	additionalSystemPrompt?: string;
 	skills?: Skill[];
-	sessionId?: string;
 	skipCodingTools?: boolean;
 }
 
 export interface CuaAgentHandle {
+	harness: CuaAgentHarness;
 	agent: Agent;
 	translator: ComputerTranslator;
 	model: Model<Api>;
@@ -157,16 +89,13 @@ export interface CuaAgentHandle {
 }
 
 /**
- * Build a fully wired pi-agent-core Agent for cua: provider registered,
+ * Build a fully wired CUA AgentHarness for cua-cli:
  * tools loaded, system prompt set, reasoning effort + auto-compaction
  * applied via the model config.
  */
-export function createCuaAgent(opts: CuaAgentOptions): CuaAgentHandle {
-	registerProviders();
-
+export async function createCuaAgent(opts: CuaAgentOptions): Promise<CuaAgentHandle> {
 	const modelId = opts.modelId ?? DEFAULT_MODEL_ID;
 	const { provider, model: loadedModel } = loadSupportedModel(modelId);
-
 	const modelConfig = resolveModelConfigForProvider(provider, opts.config, modelId);
 	const model = applyProviderBaseUrl(provider, loadedModel, opts.config);
 	const thinkingLevel = mapReasoningEffort(modelConfig.reasoningEffort);
@@ -178,51 +107,49 @@ export function createCuaAgent(opts: CuaAgentOptions): CuaAgentHandle {
 		sessionId: opts.browser.sessionId,
 	});
 
+	const runtimeInput = toRuntimeInput(provider, model.id);
+	const runtimeSpec = resolveCuaRuntimeSpec(runtimeInput);
+	const kernelBrowser = toKernelBrowser(opts.browser);
 	const tools = buildAgentTools({
 		cwd: opts.cwd,
-		translator,
-		provider,
+		browser: kernelBrowser,
+		client: opts.browser.client,
+		toolDefinitions: runtimeSpec.toolDefinitions,
 		skipCodingTools: opts.skipCodingTools,
 	});
 
-	const baseSystemPrompt = buildSystemPromptForProvider(provider, {
+	const baseSystemPrompt = buildSystemPrompt(runtimeSpec.defaultSystemPrompt, {
 		toolPreamble,
 		additionalSystemPrompt: opts.additionalSystemPrompt,
 	});
 	const systemPrompt = appendSkillsToSystemPrompt(baseSystemPrompt, opts.skills ?? []);
+	const sessionState = opts.session ?? (await createEphemeralSessionState(opts.cwd));
 
-	const onPayload = composeOnPayload(
-		// OpenAI auto-compaction (no-op for Anthropic/Gemini per the model.api guard).
-		typeof compactThreshold === "number" && compactThreshold > 0
-			? (payload, m) =>
-					m.api === "openai-responses" ? injectContextManagement(payload, compactThreshold) : undefined
-			: undefined,
-		provider === "anthropic"
-			? createAnthropicContextManagementOnPayload({
-					compactThreshold: (modelConfig as AnthropicModelConfig).compactThreshold,
-				})
-			: undefined,
-		// Anthropic computer-tool spec injection.
-		anthropicComputerOnPayload,
-		provider === "yutori" ? yutoriBuiltinToolsOnPayload : undefined,
-	);
-
-	const agent = new Agent({
-		initialState: {
-			systemPrompt,
-			model,
-			tools,
-			thinkingLevel,
+	const harness = new CuaAgentHarness({
+		browser: kernelBrowser,
+		client: opts.browser.client,
+		env: sessionState.env,
+		session: sessionState.session,
+		model,
+		tools,
+		thinkingLevel,
+		systemPrompt,
+		getApiKeyAndHeaders: async (requestModel) => {
+			const apiKey = resolveApiKey(providerIdForModelProvider(requestModel.provider), opts.config);
+			return apiKey ? { apiKey } : undefined;
 		},
-		sessionId: opts.sessionId,
-		getApiKey: () => resolveApiKey(provider, opts.config),
-		streamFn: wrapAnthropicStream(streamSimple as unknown as StreamFn, {
-			compactThreshold: provider === "anthropic" ? (modelConfig as AnthropicModelConfig).compactThreshold : undefined,
-		}),
-		onPayload,
+		onPayload:
+			typeof compactThreshold === "number" && compactThreshold > 0
+				? async (payload, runtimeModel) =>
+						runtimeModel.api === "openai-responses"
+							? injectContextManagement(payload, compactThreshold)
+							: undefined
+				: undefined,
 	});
+	const agent = harness.agent;
 
 	return {
+		harness,
 		agent,
 		translator,
 		model,
@@ -235,91 +162,48 @@ export function createCuaAgent(opts: CuaAgentOptions): CuaAgentHandle {
 	};
 }
 
-// ─── Tool factory ─────────────────────────────────────────────────────────
-
 interface ToolFactoryOptions {
 	cwd: string;
-	translator: ComputerTranslator;
-	provider: ProviderId;
+	browser: Parameters<typeof createCuaComputerTools>[0]["browser"];
+	client: Parameters<typeof createCuaComputerTools>[0]["client"];
+	toolDefinitions: ReturnType<typeof resolveCuaRuntimeSpec>["toolDefinitions"];
 	skipCodingTools?: boolean;
 }
 
-function buildAgentTools(opts: ToolFactoryOptions): AgentTool<any, any>[] {
-	const tools: AgentTool<any, any>[] = [];
-
-	switch (opts.provider) {
-		case "anthropic":
-			tools.push(...createAnthropicComputerTools(opts.translator));
-			break;
-		case "gemini":
-			tools.push(...createGeminiComputerTools(opts.translator));
-			break;
-		case "tzafon":
-			tools.push(...createTzafonComputerTools(opts.translator));
-			break;
-		case "yutori":
-			tools.push(...createYutoriComputerTools(opts.translator));
-			break;
-		case "openai":
-		default:
-			tools.push(...createOpenAIComputerTools(opts.translator));
-			break;
-	}
+function buildAgentTools(opts: ToolFactoryOptions): AgentTool[] {
+	const tools: AgentTool[] = createCuaComputerTools({
+		browser: opts.browser,
+		client: opts.client,
+		toolDefinitions: opts.toolDefinitions,
+	});
 
 	if (!opts.skipCodingTools) {
 		tools.push(
-			createBashTool(opts.cwd),
-			createReadTool(opts.cwd),
-			createEditTool(opts.cwd),
-			createWriteTool(opts.cwd),
-			createGrepTool(opts.cwd),
-			createFindTool(opts.cwd),
-			createLsTool(opts.cwd),
+			createBashTool(opts.cwd) as AgentTool,
+			createReadTool(opts.cwd) as AgentTool,
+			createEditTool(opts.cwd) as AgentTool,
+			createWriteTool(opts.cwd) as AgentTool,
+			createGrepTool(opts.cwd) as AgentTool,
+			createFindTool(opts.cwd) as AgentTool,
+			createLsTool(opts.cwd) as AgentTool,
 		);
 	}
 
 	return tools;
 }
 
-// ─── System prompt selection ─────────────────────────────────────────────
-
-const TOOL_INSTRUCTIONS = `Use bash for shell work. Use read, write, edit, grep, find, and ls for workspace files.`;
-const TOOL_PREAMBLE_LINE = `Before every tool call, first output a single short sentence describing what you are about to do.`;
-
 interface SystemPromptOptions {
 	toolPreamble?: boolean;
 	additionalSystemPrompt?: string;
 }
 
-function buildSystemPromptForProvider(provider: ProviderId, opts: SystemPromptOptions): string {
-	let preamble: string;
-	switch (provider) {
-		case "anthropic":
-			preamble = buildAnthropicSystemPrompt();
-			break;
-		case "gemini":
-			preamble = buildGeminiSystemPrompt();
-			break;
-		case "tzafon":
-			preamble = buildTzafonSystemPrompt();
-			break;
-		case "yutori":
-			preamble = buildYutoriSystemPrompt({ toolPreamble: false });
-			break;
-		case "openai":
-		default:
-			preamble = OPENAI_BATCH_INSTRUCTIONS;
-			break;
-	}
-
-	const sections: string[] = [preamble, TOOL_INSTRUCTIONS];
+function buildSystemPrompt(defaultSystemPrompt: string, opts: SystemPromptOptions): string {
+	const sections: string[] = [defaultSystemPrompt, TOOL_INSTRUCTIONS];
 	if (opts.toolPreamble !== false) sections.push(TOOL_PREAMBLE_LINE);
 	const extra = (opts.additionalSystemPrompt ?? "").trim();
 	if (extra) sections.push(extra);
 	return sections.join("\n\n");
 }
-
-// ─── Per-provider config resolution + API key routing ────────────────────
 
 function resolveModelConfigForProvider(
 	provider: ProviderId,
@@ -361,6 +245,37 @@ function applyProviderBaseUrl(provider: ProviderId, model: Model<Api>, cfg: Conf
 		return { ...model, baseUrl: cfg.yutoriBaseUrl };
 	}
 	return model;
+}
+
+function providerIdForModelProvider(provider: string): ProviderId {
+	if (provider === "google") return "gemini";
+	if (provider === "openai" || provider === "anthropic" || provider === "tzafon" || provider === "yutori") {
+		return provider;
+	}
+	return "openai";
+}
+
+function toRuntimeInput(provider: ProviderId, modelId: string): CuaModelRef {
+	const runtimeProvider = provider === "gemini" ? "google" : provider;
+	return `${runtimeProvider}:${modelId}` as CuaModelRef;
+}
+
+async function createEphemeralSessionState(cwd: string): Promise<CuaSessionState> {
+	const repo = new InMemorySessionRepo();
+	return {
+		env: new NodeExecutionEnv({ cwd }),
+		session: await repo.create(),
+		resumed: false,
+		priorMessageCount: 0,
+		getSessionFile: () => undefined,
+	};
+}
+
+function toKernelBrowser(browser: BrowserSession): Parameters<typeof createCuaComputerTools>[0]["browser"] {
+	return {
+		session_id: browser.sessionId,
+		browser_live_view_url: browser.liveUrl ?? null,
+	} as Parameters<typeof createCuaComputerTools>[0]["browser"];
 }
 
 /**

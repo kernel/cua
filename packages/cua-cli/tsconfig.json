@@ -6,12 +6,9 @@
   },
   "include": ["src/**/*"],
   "references": [
+    { "path": "../ai" },
+    { "path": "../agent" },
     { "path": "../cua-translator" },
-    { "path": "../cua-openai" },
-    { "path": "../cua-anthropic" },
-    { "path": "../cua-gemini" },
-    { "path": "../cua-tzafon" },
-    { "path": "../cua-yutori" },
     { "path": "../ptywright" }
   ]
 }

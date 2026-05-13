@@ -18,16 +18,11 @@
     "test": "node --test dist/tui/testing/*.test.js"
   },
   "dependencies": {
-    "@mariozechner/pi-agent-core": "0.67.6",
-    "@mariozechner/pi-ai": "0.67.6",
     "@mariozechner/pi-coding-agent": "0.67.6",
     "@mariozechner/pi-tui": "0.67.6",
-    "@onkernel/cua-anthropic": "0.1.0",
-    "@onkernel/cua-gemini": "0.1.0",
-    "@onkernel/cua-openai": "0.1.0",
+    "@onkernel/cua-agent": "0.2.0",
+    "@onkernel/cua-ai": "0.1.0",
     "@onkernel/cua-translator": "0.1.0",
-    "@onkernel/cua-tzafon": "0.1.0",
-    "@onkernel/cua-yutori": "0.1.0",
     "@onkernel/sdk": "0.49.0",
     "smol-toml": "1.5.1"
   },

@@ -31,9 +31,7 @@ import {
 	findLatestSession,
 	listSessions,
 	openSession,
-	persistAgentEvents,
 	resolveSessionPath,
-	seedAgentFromSession,
 	type SessionInfo,
 } from "./sessions";
 import { discoverCuaSkills, discoverStartupResources, expandSkillInvocation } from "./skills";
@@ -212,7 +210,7 @@ function parseCliArgs(argv: string[]): CliFlags {
 /**
  * Load the cua config and verify the keys we need for the requested
  * provider. The provider comes from the supported model table, matching
- * what {@link createCuaAgent} will use at run time.
+ * what the CUA runtime will use at run time.
  */
 async function loadConfigOrFail(flags: CliFlags): Promise<configMod.Config> {
 	const cfg = await configMod.load(flags.configProfile);
@@ -612,7 +610,7 @@ async function runPrint(prompt: string, flags: CliFlags): Promise<number> {
 	const provision = await provisionBrowser(cfg, flags);
 	const browser = provision.browser;
 	const sessionPolicy = await resolveSessionFlags(flags, cwd, provision.named);
-	const sm = openSession({
+	const sm = await openSession({
 		cwd,
 		sessionDir: flags.sessionDir,
 		sessionPath: sessionPolicy.sessionPath,
@@ -621,24 +619,22 @@ async function runPrint(prompt: string, flags: CliFlags): Promise<number> {
 	const { skills } = discoverCuaSkills({ cwd, extraPaths: flags.skillPaths, disabled: flags.noSkills });
 	const { expanded, skill: invokedSkill } = expandSkillInvocation(prompt, skills);
 	if (invokedSkill && flags.verbose) stderr.write(`[cua] expanded /skill:${invokedSkill.name}\n`);
-	const handle = createCuaAgent({
+	const handle = await createCuaAgent({
 		cwd,
 		browser,
 		config: cfg,
+		session: sm,
 		modelId: flags.model,
-		sessionId: browser.sessionId,
 		skills,
 	});
-	if (sessionPolicy.resumed) seedAgentFromSession(handle.agent, sm);
-	appendBrowserMetadata(sm, browser);
-	const unsubscribePersist = persistAgentEvents(handle.agent, sm);
+	await appendBrowserMetadata(sm, browser);
 	const transcriptPath = sm.getSessionFile();
 	if (provision.named && transcriptPath) {
 		await recordTranscriptPath(provision.named.name, transcriptPath);
 	}
 	if (flags.verbose) {
 		if (transcriptPath) stderr.write(`[cua] session=${transcriptPath}\n`);
-		if (sessionPolicy.resumed) stderr.write("[cua] resumed prior session into fresh browser\n");
+		if (sm.resumed) stderr.write("[cua] resumed prior session into fresh browser\n");
 	}
 
 	const jsonlMode = (flags.output ?? "text").toLowerCase() === "jsonl";
@@ -673,7 +669,7 @@ async function runPrint(prompt: string, flags: CliFlags): Promise<number> {
 			agent: handle.agent,
 			translator: handle.translator,
 			prompt: expanded,
-			options: { skipInitialScreenshot: sessionPolicy.resumed },
+			options: { skipInitialScreenshot: sm.resumed },
 		});
 		const agentError = (handle.agent.state as { errorMessage?: string }).errorMessage;
 		if (agentError) {
@@ -697,7 +693,6 @@ async function runPrint(prompt: string, flags: CliFlags): Promise<number> {
 	} finally {
 		unsubscribe();
 		unsubscribeJsonl?.();
-		unsubscribePersist();
 		try {
 			await handle.dispose();
 		} catch (err) {
@@ -724,17 +719,17 @@ async function runActionSub(action: ActionType, rest: string[], flags: CliFlags)
 
 	// For named sessions the transcript should persist across action calls so
 	// external analysis can correlate them. For one-shot subcommand calls
-	// without a named session we skip the SessionManager entirely.
-	let sm: ReturnType<typeof openSession> | undefined;
+	// without a named session we use an ephemeral in-memory harness session.
+	let sm: Awaited<ReturnType<typeof openSession>> | undefined;
 	if (provision.named) {
 		const sessionPolicy = await resolveSessionFlags(flags, cwd, provision.named);
-		sm = openSession({
+		sm = await openSession({
 			cwd,
 			sessionDir: flags.sessionDir,
 			sessionPath: sessionPolicy.sessionPath,
 			ephemeral: sessionPolicy.ephemeral,
 		});
-		appendBrowserMetadata(sm, browser);
+		await appendBrowserMetadata(sm, browser);
 		const transcriptPath = sm.getSessionFile();
 		if (transcriptPath) await recordTranscriptPath(provision.named.name, transcriptPath);
 		if (flags.verbose && transcriptPath) stderr.write(`[cua] session=${transcriptPath}\n`);
@@ -750,7 +745,7 @@ async function runActionSub(action: ActionType, rest: string[], flags: CliFlags)
 				config: cfg,
 				modelId: flags.model,
 				verbose: flags.verbose,
-				sessionManager: sm,
+				sessionState: sm,
 			},
 			screenshotOut,
 		);
@@ -864,7 +859,7 @@ async function runInteractiveCli(initialPrompt: string, flags: CliFlags): Promis
 	const provision = await provisionBrowser(cfg, flags);
 	const browser = provision.browser;
 	const sessionPolicy = await resolveSessionFlags(flags, cwd, provision.named);
-	const sm = openSession({
+	const sm = await openSession({
 		cwd,
 		sessionDir: flags.sessionDir,
 		sessionPath: sessionPolicy.sessionPath,
@@ -888,8 +883,8 @@ async function runInteractiveCli(initialPrompt: string, flags: CliFlags): Promis
 		verbose: flags.verbose,
 		debugTui: flags.debugTui,
 		imageProtocol: flags.imageProtocol,
-		sessionManager: sm,
-		resumed: sessionPolicy.resumed,
+		sessionState: sm,
+		resumed: sm.resumed,
 		skills: startupResources.skills,
 		startupResources,
 	});

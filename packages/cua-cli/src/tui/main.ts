@@ -11,9 +11,7 @@ import {
 	TUI,
 	TUI_KEYBINDINGS,
 } from "@mariozechner/pi-tui";
-import type { SessionManager } from "@mariozechner/pi-coding-agent";
 import type { ResourceDiagnostic } from "@mariozechner/pi-coding-agent";
-import { anthropicSupportsCompaction } from "@onkernel/cua-anthropic";
 import type { BrowserSession } from "@onkernel/cua-translator";
 import { homedir } from "node:os";
 import { relative } from "node:path";
@@ -21,11 +19,7 @@ import { stderr } from "node:process";
 import { createCuaAgent } from "../agent";
 import type { Config } from "../config";
 import { DEFAULT_MODEL_ID, resolveProvider } from "../models";
-import {
-	appendBrowserMetadata,
-	persistAgentEvents,
-	seedAgentFromSession,
-} from "../sessions";
+import { appendBrowserMetadata, type CuaSessionState } from "../sessions";
 import { expandSkillInvocation, type Skill, type StartupResources } from "../skills";
 import { openTuiDebugLog } from "./debug-log";
 import { applyAndSummarizeImageProtocol } from "./diagnostics";
@@ -45,8 +39,8 @@ export interface InteractiveOptions {
 	verbose?: boolean;
 	/** Image protocol override: kitty | iterm2 | none | auto (default: auto). */
 	imageProtocol?: string;
-	/** Optional session manager for transcript persistence. */
-	sessionManager?: SessionManager;
+	/** Optional harness-native session state for transcript persistence. */
+	sessionState?: CuaSessionState;
 	/** True when seeding the agent from a previously persisted session. */
 	resumed?: boolean;
 	/** Skills available for /skill:name expansion and system-prompt injection. */
@@ -95,12 +89,12 @@ export async function runInteractive(opts: InteractiveOptions): Promise<number> 
 	void _keybindings;
 	const liveHandle = opts.driver
 		? undefined
-		: createCuaAgent({
+		: await createCuaAgent({
 				cwd: opts.cwd,
 				browser: opts.browser,
 				config: opts.config,
+				session: opts.sessionState,
 				modelId: opts.modelId,
-				sessionId: opts.browser.sessionId,
 				skills: opts.skills,
 			});
 	const editor = new Editor(tui, editorTheme);
@@ -153,15 +147,14 @@ export async function runInteractive(opts: InteractiveOptions): Promise<number> 
 	};
 
 	let unsubscribePersist = () => {};
-	const sm = opts.sessionManager;
-	if (liveHandle && sm && opts.resumed) seedAgentFromSession(liveHandle.agent, sm);
-	if (liveHandle && sm) appendBrowserMetadata(sm, opts.browser);
+	const sm = opts.sessionState;
+	if (liveHandle && sm) await appendBrowserMetadata(sm, opts.browser);
 	if (liveHandle && sm && opts.resumed) {
 		messages.addNotice(
-			`resumed from ${sm.getSessionFile() ?? "memory"} · ${liveHandle.agent.state.messages.length} prior messages · fresh browser`,
+			`resumed from ${sm.getSessionFile() ?? "memory"} · ${sm.priorMessageCount} prior messages · fresh browser`,
 		);
 	}
-	unsubscribePersist = liveHandle && sm ? persistAgentEvents(liveHandle.agent, sm) : () => {};
+	unsubscribePersist = () => {};
 	let driver: InteractiveDriver =
 		opts.driver ?? new LiveInteractiveDriver(liveHandle!, { skipInitialScreenshot: opts.resumed === true });
 
@@ -384,8 +377,7 @@ function isAutoCompactEnabled(
 			? (handle.modelConfig as { compactThreshold?: unknown }).compactThreshold
 			: undefined;
 	if (handle?.provider === "anthropic") {
-		const modelId = typeof handle.model?.id === "string" ? handle.model.id : "";
-		return compactThreshold !== false && anthropicSupportsCompaction(modelId);
+		return compactThreshold !== false;
 	}
 	return typeof compactThreshold === "number" && compactThreshold > 0;
 }

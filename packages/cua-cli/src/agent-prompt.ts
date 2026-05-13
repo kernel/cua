@@ -1,4 +1,4 @@
-import type { Agent, AgentMessage } from "@mariozechner/pi-agent-core";
+import type { Agent, AgentMessage } from "@onkernel/cua-agent";
 import type { ImageContent, TextContent } from "@mariozechner/pi-ai";
 import type { ComputerTranslator } from "@onkernel/cua-translator";
 

@@ -1,9 +1,4 @@
-import {
-	type Api,
-	type Model,
-	getModel,
-	getModels,
-} from "@mariozechner/pi-ai";
+import { type Api, type CuaModelRef, getCuaModel, listCuaModels, type Model } from "@onkernel/cua-ai";
 
 export type ProviderId = "openai" | "anthropic" | "gemini" | "tzafon" | "yutori";
 export const SUPPORTED_PROVIDERS: ProviderId[] = ["openai", "anthropic", "gemini", "tzafon", "yutori"];
@@ -13,7 +8,7 @@ export interface SupportedModel {
 	provider: ProviderId;
 	model: string;
 	name: string;
-	origin: "cua-override" | "pi-ai-registry";
+	origin: "cua-override" | "cua-ai-registry";
 	default?: boolean;
 }
 
@@ -46,16 +41,17 @@ export function listSupportedModels(provider?: ProviderId): SupportedModel[] {
 			byKey.set(modelKey(entry.provider, entry.model), entry);
 		}
 
-		for (const model of getModels(piProviderFor(p) as never) as Model<Api>[]) {
-			if (!supportsCuaProvider(p, model.id)) continue;
-			const key = modelKey(p, model.id);
+		for (const model of listCuaModels(toCuaProvider(p))) {
+			const normalizedProvider = fromCuaProvider(model.provider);
+			if (normalizedProvider !== p) continue;
+			const key = modelKey(normalizedProvider, model.model);
 			if (byKey.has(key)) continue;
 			byKey.set(key, {
-				provider: p,
-				model: model.id,
+				provider: normalizedProvider,
+				model: model.model,
 				name: model.name,
-				origin: "pi-ai-registry",
-				default: model.id === DEFAULT_MODEL_ID,
+				origin: "cua-ai-registry",
+				default: model.model === DEFAULT_MODEL_ID,
 			});
 		}
 	}
@@ -73,17 +69,11 @@ export function resolveProvider(modelId: string): ProviderId {
 
 export function loadModel(modelId: string): { provider: ProviderId; model: Model<Api> } {
 	const provider = resolveProvider(modelId);
-	const piProvider = piProviderFor(provider);
-	const fromRegistry = getModel(piProvider as never, modelId as never) as Model<Api> | undefined;
-	if (fromRegistry) return { provider, model: fromRegistry };
-
-	// Provider model lists can expose working model IDs before pi-ai's generated
-	// registry catches up. Use conservative metadata so the request can still
-	// reach the provider; cost telemetry stays zero until the registry updates.
-	return { provider, model: dynamicModel(provider, modelId) };
+	const modelRef = `${toCuaProvider(provider)}:${modelId}` as CuaModelRef;
+	return { provider, model: getCuaModel(modelRef) };
 }
 
-export function piProviderFor(provider: ProviderId): string {
+export function toCuaProvider(provider: ProviderId): "openai" | "anthropic" | "google" | "tzafon" | "yutori" {
 	switch (provider) {
 		case "openai":
 			return "openai";
@@ -98,106 +88,18 @@ export function piProviderFor(provider: ProviderId): string {
 	}
 }
 
-function supportsCuaProvider(provider: ProviderId, modelId: string): boolean {
-	const id = modelId.toLowerCase();
+function fromCuaProvider(provider: string): ProviderId {
 	switch (provider) {
+		case "google":
+			return "gemini";
 		case "openai":
-			return /^gpt-5\.(4|5)(?:-|$)/.test(id);
 		case "anthropic":
-			return (
-				id.startsWith("claude-3-7-sonnet") ||
-				id.startsWith("claude-opus-4") ||
-				id.startsWith("claude-sonnet-4") ||
-				id.startsWith("claude-haiku-4")
-			);
-		case "gemini":
-			return id === "gemini-3-flash-preview" || id === "gemini-2.5-computer-use-preview-10-2025";
 		case "tzafon":
-			return id === "tzafon.northstar-cua-fast";
 		case "yutori":
-			return id === "n1-latest" || id === "n1-20260203" || id === "n1.5-latest" || id === "n1.5-20260428";
-	}
-}
-
-function dynamicModel(provider: ProviderId, modelId: string): Model<Api> {
-	const piProvider = piProviderFor(provider);
-	switch (provider) {
-		case "anthropic":
-			return {
-				id: modelId,
-				name: modelId,
-				api: "anthropic-messages",
-				provider: piProvider,
-				baseUrl: "https://api.anthropic.com",
-				reasoning: true,
-				input: ["text", "image"],
-				cost: zeroCost(),
-				contextWindow: 200_000,
-				maxTokens: 64_000,
-			};
-		case "gemini":
-			return {
-				id: modelId,
-				name: modelId,
-				api: "google-generative-ai",
-				provider: piProvider,
-				baseUrl: "https://generativelanguage.googleapis.com/v1beta",
-				reasoning: true,
-				input: ["text", "image"],
-				cost: zeroCost(),
-				contextWindow: 1_048_576,
-				maxTokens: 65_536,
-			};
-		case "tzafon":
-			return {
-				id: modelId,
-				name: modelId,
-				api: "tzafon-responses",
-				provider: piProvider,
-				baseUrl: "https://api.lightcone.ai",
-				reasoning: false,
-				input: ["text", "image"],
-				cost: zeroCost(),
-				contextWindow: 128_000,
-				maxTokens: 4_096,
-			};
-		case "yutori":
-			return {
-				id: modelId,
-				name: modelId,
-				api: "yutori-chat-completions",
-				provider: piProvider,
-				baseUrl: "https://api.yutori.com/v1",
-				reasoning: false,
-				input: ["text", "image"],
-				cost: zeroCost(),
-				contextWindow: 128_000,
-				maxTokens: 4_096,
-			};
-		case "openai":
+			return provider;
 		default:
-			return {
-				id: modelId,
-				name: modelId,
-				api: "openai-responses",
-				provider: piProvider,
-				baseUrl: "https://api.openai.com/v1",
-				reasoning: true,
-				input: ["text", "image"],
-				cost: zeroCost(),
-				contextWindow: 400_000,
-				maxTokens: 32_768,
-			};
+			throw new Error(`unsupported CUA provider "${provider}"`);
 	}
-}
-
-function zeroCost(): Model<Api>["cost"] {
-	return {
-		input: 0,
-		output: 0,
-		cacheRead: 0,
-		cacheWrite: 0,
-	};
 }
 
 function modelKey(provider: ProviderId, model: string): string {

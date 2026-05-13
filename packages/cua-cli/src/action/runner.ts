@@ -1,12 +1,11 @@
-import type { Agent, AgentEvent } from "@mariozechner/pi-agent-core";
-import type { SessionManager } from "@mariozechner/pi-coding-agent";
+import type { Agent, AgentEvent } from "@onkernel/cua-agent";
 import { type BrowserSession, ComputerTranslator } from "@onkernel/cua-translator";
 import { writeFile } from "node:fs/promises";
 import { stderr, stdout } from "node:process";
 import { promptWithScreenshot } from "../agent-prompt";
 import { type CuaAgentHandle, createCuaAgent } from "../agent";
 import type { Config } from "../config";
-import { persistAgentEvents, seedAgentFromSession } from "../sessions";
+import type { CuaSessionState } from "../sessions";
 import { type ActionRequest, buildPrompt, DEFAULT_MAX_TURNS } from "./prompts";
 import { type ActionEventInfo, type ActionResult, exitCodeFor, formatCompact, parseResult } from "./result";
 
@@ -18,11 +17,10 @@ export interface RunOptions {
 	verbose?: boolean;
 	maxTurns?: number;
 	/**
-	 * Optional SessionManager. When supplied, prior turns are seeded into
-	 * the agent transcript and new messages are persisted as they emit.
-	 * Used when chaining action subcommands via `-s <name>`.
+	 * Optional harness-native session state, used when chaining action
+	 * subcommands via `-s <name>`.
 	 */
-	sessionManager?: SessionManager;
+	sessionState?: CuaSessionState;
 }
 
 export interface ScreenshotOutput {
@@ -54,22 +52,16 @@ export async function runAction(
 	}
 
 	const prompt = buildPrompt(req);
-	const handle = createCuaAgent({
+	const handle = await createCuaAgent({
 		cwd: opts.cwd,
 		browser: opts.browser,
 		config: opts.config,
+		session: opts.sessionState,
 		modelId: opts.modelId,
-		sessionId: opts.browser.sessionId,
 	});
 
-	let unsubscribePersist: (() => void) | undefined;
-	let resumed = false;
-	if (opts.sessionManager) {
-		seedAgentFromSession(handle.agent, opts.sessionManager);
-		unsubscribePersist = persistAgentEvents(handle.agent, opts.sessionManager);
-		resumed = handle.agent.state.messages.some((m) => m.role === "user" || m.role === "assistant");
-	}
-	const initialMessageCount = handle.agent.state.messages.length;
+	const resumed = opts.sessionState?.resumed === true;
+	const initialMessageCount = opts.sessionState?.priorMessageCount ?? handle.agent.state.messages.length;
 
 	const events: ActionEventInfo[] = [];
 	const maxTurns = req.maxTurns ?? opts.maxTurns ?? DEFAULT_MAX_TURNS;
@@ -104,7 +96,6 @@ export async function runAction(
 		runError = err instanceof Error ? err : new Error(String(err));
 	} finally {
 		unsubscribe();
-		unsubscribePersist?.();
 	}
 
 	const elapsed = Date.now() - startedAt;
@@ -173,7 +164,7 @@ function extractLatestToolError(messages: readonly unknown[]): string | undefine
 }
 
 function collectEvent(
-	event: { type: "tool_execution_start"; toolName: string; args: any },
+	event: { type: "tool_execution_start"; toolName: string; args: unknown },
 	events: ActionEventInfo[],
 ): void {
 	switch (event.toolName) {
