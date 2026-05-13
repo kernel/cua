@@ -4,12 +4,12 @@ import { fileURLToPath } from "node:url";
 import { KeyCtrlC, KeyEnter, spawnSession } from "@onkernel/ptywright";
 
 function spawnFixture() {
-	const fixtureMain = fileURLToPath(new URL("./fixture-main.js", import.meta.url));
+	const fixtureMain = fileURLToPath(new URL("../../../src/tui/testing/fixture-main.ts", import.meta.url));
 	const fixtureJson = fileURLToPath(new URL("../../../src/tui/testing/fixtures/basic.json", import.meta.url));
 	const cwd = fileURLToPath(new URL("../../../", import.meta.url));
 	return spawnSession({
 		command: process.execPath,
-		args: [fixtureMain, fixtureJson],
+		args: ["--conditions=source", "--import", "tsx", fixtureMain, fixtureJson],
 		cwd,
 		cols: 160,
 		rows: 40,
