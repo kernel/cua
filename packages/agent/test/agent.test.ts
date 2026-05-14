@@ -231,4 +231,20 @@ describe("CuaAgentHarness", () => {
 
 		expect(harness.agent.state.tools).toEqual([]);
 	});
+
+	it("keeps runtime spec unchanged if setModel fails validation", async () => {
+		const runtime = resolveCuaRuntimeSpec("openai:gpt-5.5");
+		const harness = new CuaAgentHarness({
+			...(await createHarnessServices()),
+			browser,
+			client,
+			model: "openai:gpt-5.5",
+		});
+
+		(harness as unknown as { requestedActiveToolNames?: string[] }).requestedActiveToolNames = ["missing-tool"];
+
+		await expect(harness.setModel("google:gemini-3-pro-preview")).rejects.toThrow("Unknown tool(s): missing-tool");
+		expect(harness.agent.state.model.id).toBe(runtime.model.id);
+		expect((harness as unknown as { runtime: { model: { id: string } } }).runtime.model.id).toBe(runtime.model.id);
+	});
 });

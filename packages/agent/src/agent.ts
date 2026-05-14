@@ -129,19 +129,30 @@ class CuaRuntimeController {
 		this.runtimeSpec = resolveCuaRuntimeSpec(model);
 	}
 
-	tools(): AgentTool[] {
+	private buildTools(runtimeSpec: CuaRuntimeSpec): AgentTool[] {
 		return (
 			this.options.tools ??
 			createCuaComputerTools({
 				browser: this.options.browser,
 				client: this.options.client,
-				toolDefinitions: this.runtimeSpec.toolDefinitions,
+				toolDefinitions: runtimeSpec.toolDefinitions,
 			})
 		);
 	}
 
+	tools(): AgentTool[] {
+		return this.buildTools(this.runtimeSpec);
+	}
+
+	toolsFor(runtimeSpec: CuaRuntimeSpec): AgentTool[] {
+		return this.buildTools(runtimeSpec);
+	}
+
 	onPayloadFor(model: CuaRuntimeInput): SimpleStreamOptions["onPayload"] {
-		const runtimeSpec = resolveCuaRuntimeSpec(model);
+		const runtimeSpec =
+			typeof model === "string" || !isSameModel(model, this.runtimeSpec.model)
+				? resolveCuaRuntimeSpec(model)
+				: this.runtimeSpec;
 		return composeOnPayload(runtimeSpec.onPayload, this.options.onPayload);
 	}
 }
@@ -311,12 +322,19 @@ export class CuaAgentHarness<
 	 * concrete model selected by `@onkernel/cua-ai`.
 	 */
 	override async setModel(model: CuaRuntimeInput): Promise<void> {
-		this.runtime.setModel(model);
+		const runtimeSpec = resolveCuaRuntimeSpec(model);
 		if (this.runtime.ownsTools) {
-			const tools = this.runtime.tools();
-			await super.setTools(tools, this.requestedActiveToolNames ?? tools.map((tool) => tool.name));
+			const tools = this.runtime.toolsFor(runtimeSpec);
+			const activeToolNames = this.requestedActiveToolNames ?? tools.map((tool) => tool.name);
+			const toolNameSet = new Set(tools.map((tool) => tool.name));
+			const missingToolNames = activeToolNames.filter((toolName) => !toolNameSet.has(toolName));
+			if (missingToolNames.length > 0) {
+				throw new Error(`Unknown tool(s): ${missingToolNames.join(", ")}`);
+			}
+			await super.setTools(tools, activeToolNames);
 		}
-		await super.setModel(this.runtime.model);
+		await super.setModel(runtimeSpec.model);
+		this.runtime.setModel(runtimeSpec.model);
 	}
 
 	override async setActiveTools(toolNames: string[]): Promise<void> {
@@ -332,4 +350,8 @@ function composeOnPayload(first: AgentOptions["onPayload"], second: AgentOptions
 		const afterFirst = await first(payload, modelRef);
 		return second(afterFirst ?? payload, modelRef);
 	};
+}
+
+function isSameModel(left: Model<Api>, right: Model<Api>): boolean {
+	return left.api === right.api && left.provider === right.provider && left.id === right.id;
 }
