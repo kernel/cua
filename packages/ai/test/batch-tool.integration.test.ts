@@ -73,18 +73,6 @@ const cases: ProviderCase[] = [
 		supportsBatching: false,
 		requireToolCalls: false,
 	},
-	{
-		provider: "yutori",
-		envVar: "YUTORI_API_KEY",
-		modelRef: "yutori:n1.5-latest",
-		tools: () => yutori.createComputerToolDefinitions({ actions: ["click"] }),
-		multiActionTools: () => yutori.createComputerToolDefinitions({ actions: ["click", "type"] }),
-		coordinateRange: [0, 1000],
-		// Yutori's server-side model always emits one native tool call per response,
-		// so the translated batch always contains exactly one action.
-		supportsBatching: false,
-		requireToolCalls: true,
-	},
 ];
 
 async function buildContext(tools: ProviderCase["tools"]): Promise<Context> {
@@ -130,6 +118,23 @@ async function buildMultiActionContext(tools: ProviderCase["multiActionTools"]):
 			},
 		],
 		tools: tools(),
+	};
+}
+
+async function buildYutoriContext(): Promise<Context> {
+	const screenshot = await readFile(screenshotPath);
+	return {
+		messages: [
+			{
+				role: "user",
+				content: [
+					{ type: "text", text: "Click the sign in / up link in this Kernel homepage screenshot." },
+					{ type: "image", data: screenshot.toString("base64"), mimeType: "image/png" },
+				],
+				timestamp: Date.now(),
+			},
+		],
+		tools: yutori.createComputerToolDefinitions(),
 	};
 }
 
@@ -185,21 +190,18 @@ describe("batch_computer_actions integration", () => {
 
 	const yutoriHasKey = !!process.env.YUTORI_API_KEY;
 	(yutoriHasKey ? it : it.skip)(
-		"yutori translates native left_click into a batch_computer_actions call",
+		"yutori translates native tool calls into canonical individual actions",
 		async () => {
 			const model = getCuaModel("yutori:n1.5-latest");
-			const context = await buildContext(() => yutori.createComputerToolDefinitions());
+			const context = await buildYutoriContext();
 			const response = await complete(model, context, {
 				apiKey: process.env.YUTORI_API_KEY,
 				maxTokens: 1024,
 			});
 
-			const batchCalls = response.content.filter((part) => part.type === "toolCall" && part.name === CUA_BATCH_TOOL_NAME);
-			expect(batchCalls.length, "yutori did not emit a translated batch call").toBeGreaterThan(0);
-			const args = batchCalls[0]!.arguments as { actions: Array<Record<string, unknown>> };
-			expect(Array.isArray(args.actions)).toBe(true);
-			expect(args.actions.length).toBeGreaterThan(0);
-			expect(args.actions[0]!.type).toBe("click");
+			const toolCalls = response.content.filter((part) => part.type === "toolCall");
+			expect(toolCalls.length, "yutori did not emit translated canonical tool calls").toBeGreaterThan(0);
+			expect(CUA_ACTION_TYPES).toContain(toolCalls[0]!.name as CuaActionType);
 		},
 		60_000,
 	);

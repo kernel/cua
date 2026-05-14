@@ -12,6 +12,7 @@ import {
 } from "../src/index";
 
 const providers = { openai, anthropic, gemini, tzafon, yutori };
+const batchToolProviders = { openai, anthropic, gemini, tzafon };
 
 function batchActionVariants(tool: { parameters: any }): any[] {
 	const items = tool.parameters.properties.actions.items;
@@ -19,7 +20,7 @@ function batchActionVariants(tool: { parameters: any }): any[] {
 }
 
 describe("computer tool definitions", () => {
-	for (const [provider, namespace] of Object.entries(providers)) {
+	for (const [provider, namespace] of Object.entries(batchToolProviders)) {
 		it(`returns a default batch tool for ${provider}`, () => {
 			const tools = namespace.createComputerToolDefinitions();
 			expect(tools.map((tool) => tool.name)).toEqual([CUA_BATCH_TOOL_NAME, CUA_NAVIGATION_TOOL_NAME]);
@@ -79,11 +80,24 @@ describe("computer tool definitions", () => {
 	});
 
 	it("exposes batch and navigation tool name constants identically across providers", () => {
-		for (const namespace of Object.values(providers)) {
+		for (const namespace of Object.values(batchToolProviders)) {
 			const tools = namespace.createComputerToolDefinitions();
 			expect(tools[0]!.name).toBe(CUA_BATCH_TOOL_NAME);
 			expect(tools[1]!.name).toBe(CUA_NAVIGATION_TOOL_NAME);
 		}
+	});
+
+	it("does not expose provider-facing computer tool definitions for Yutori", () => {
+		expect(yutori.createComputerToolDefinitions()).toEqual([]);
+	});
+
+	it("exports Yutori native action sets by model family", () => {
+		expect(yutori.yutoriNativeActionsForModel("n1-latest")).toEqual(yutori.YUTORI_N1_ACTION_TYPES);
+		expect(yutori.yutoriNativeActionsForModel("n1.5-latest")).toEqual(yutori.YUTORI_N15_CORE_ACTION_TYPES);
+		expect(yutori.YUTORI_N15_ACTION_TYPES).toEqual([
+			...yutori.YUTORI_N15_CORE_ACTION_TYPES,
+			...yutori.YUTORI_N15_EXPANDED_ACTION_TYPES,
+		]);
 	});
 
 	it("exports provider coordinate systems", () => {

@@ -60,6 +60,7 @@ export interface CuaActionTypeText {
 export interface CuaActionKeypress {
 	type: "keypress";
 	keys: string[];
+	duration?: number;
 }
 
 export interface CuaActionScroll {
@@ -191,6 +192,7 @@ const CUA_ACTION_SCHEMA_BY_TYPE = {
 		{
 			type: Type.Literal("keypress"),
 			keys: Type.Array(Type.String()),
+			duration: Type.Optional(Type.Number()),
 		},
 		{ additionalProperties: false },
 	),

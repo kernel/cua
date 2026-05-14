@@ -10,11 +10,16 @@ describe("resolveCuaRuntimeSpec", () => {
 			const spec = resolveCuaRuntimeSpec(model!.ref);
 			expect(spec.provider).toBe(provider);
 			expect(spec.model.id).toBe(model!.model);
-			expect(spec.toolDefinitions.length).toBeGreaterThan(0);
 			expect(typeof spec.defaultSystemPrompt).toBe("string");
-			expect(spec.defaultSystemPrompt.length).toBeGreaterThan(0);
-			expect(spec.toolDefinitions.map((tool) => tool.name)).toContain(CUA_BATCH_TOOL_NAME);
-			expect(spec.toolDefinitions.map((tool) => tool.name)).toContain(CUA_NAVIGATION_TOOL_NAME);
+			if (provider === "yutori") {
+				expect(spec.toolDefinitions).toEqual([]);
+				expect(spec.defaultSystemPrompt).toBe("");
+			} else {
+				expect(spec.toolDefinitions.length).toBeGreaterThan(0);
+				expect(spec.defaultSystemPrompt.length).toBeGreaterThan(0);
+				expect(spec.toolDefinitions.map((tool) => tool.name)).toContain(CUA_BATCH_TOOL_NAME);
+				expect(spec.toolDefinitions.map((tool) => tool.name)).toContain(CUA_NAVIGATION_TOOL_NAME);
+			}
 		}
 	});
 

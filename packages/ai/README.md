@@ -111,7 +111,7 @@ Top-level exports:
 runtime consumers:
 
 - canonical provider id
-- canonical CUA tool definitions
+- provider-facing CUA tool definitions
 - default system prompt text
 - optional provider payload middleware (for protocol quirks)
 
@@ -127,11 +127,11 @@ const allComputerTools = openai.createComputerToolDefinitions();
 const clickOnlyTools = openai.createComputerToolDefinitions({ actions: ["click"] });
 ```
 
-Every provider namespace synthesizes a `batch_computer_actions` tool definition.
-That gives models a consistent way to plan ordered browser actions even when the
-provider's native computer-use API has a different shape. Provider namespaces
-are still used so the definitions can diverge over time where provider protocol
-differences matter.
+Most provider namespaces synthesize a `batch_computer_actions` tool definition.
+Yutori is different: Navigator exposes browser actions through its documented
+`tool_set` request field, so `yutori.createComputerToolDefinitions()` returns
+an empty array and the Yutori stream adapter normalizes native Navigator tool
+calls to canonical individual `CuaAction` tool calls.
 
 Provider namespaces also expose `COMPUTER_TOOL_COORDINATES`, which describes
 the coordinates the provider's computer tool calls are expected to emit:
@@ -192,8 +192,9 @@ type CuaActionGoto = {
 };
 ```
 
-The provider namespace `createComputerToolDefinitions()` emits a
-`batch_computer_actions` tool whose input is:
+For providers that use model-facing CUA tools, the provider namespace
+`createComputerToolDefinitions()` emits a `batch_computer_actions` tool whose
+input is:
 
 ```ts
 type CuaBatchInput = {
@@ -221,9 +222,10 @@ Provider namespaces:
 - `anthropic`: `createComputerToolDefinitions`, `COMPUTER_TOOL_COORDINATES`, prompt helpers, and CUA batch schema aliases
 - `gemini`: `createComputerToolDefinitions`, `COMPUTER_TOOL_COORDINATES`, prompt helpers, and CUA batch schema aliases
 - `tzafon`: `createComputerToolDefinitions`, `COMPUTER_TOOL_COORDINATES`, prompt helpers, and local `tzafon-responses` stream adapter
-- `yutori`: Yutori prompt helpers, local `yutori-chat-completions` stream
-  adapter, `createComputerToolDefinitions`, `COMPUTER_TOOL_COORDINATES`, and
-  `yutoriBuiltinToolsOnPayload`
+- `yutori`: native Navigator action sets, native-to-canonical action helpers,
+  local `yutori-chat-completions` stream adapter,
+  `createComputerToolDefinitions` (empty by design),
+  `COMPUTER_TOOL_COORDINATES`, and `yutoriNativeToolSetOnPayload`
 
 This package does not execute browser actions. Use `@onkernel/cua-agent` when
 you want model tool calls executed against a Kernel browser.
