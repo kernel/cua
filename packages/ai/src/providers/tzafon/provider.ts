@@ -13,8 +13,17 @@ import {
 	type ToolCall,
 } from "@earendil-works/pi-ai";
 import Lightcone from "@tzafon/lightcone";
+import { canonicalToolCallArguments, canonicalToolCallName, CUA_ACTION_TYPES, type CuaAction } from "../common";
+import type { CuaPayloadContext } from "../../runtime-spec";
 
 export const TZAFON_RESPONSES_API = "tzafon-responses";
+const TZAFON_COMPUTER_USE_TOOL = {
+	type: "computer_use",
+	display_width: 1920,
+	display_height: 1080,
+	environment: "browser",
+} as const;
+const TZAFON_LOCAL_ACTION_TOOL_NAMES = new Set<string>(CUA_ACTION_TYPES);
 
 export interface TzafonResponsesOptions extends StreamOptions {
 	maxOutputTokens?: number;
@@ -41,9 +50,14 @@ export const streamTzafonResponses: StreamFunction<string, TzafonResponsesOption
 				temperature: options?.temperature ?? 0,
 				max_output_tokens: options?.maxOutputTokens ?? options?.maxTokens ?? model.maxTokens,
 			};
-			const nextPayload = await options?.onPayload?.(payload, model as Model<Api>);
+			const tzafonPayload = tzafonComputerUseOnPayload(payload, model as Model<Api>, {
+				keepToolNames: keepToolNamesFromContext(context),
+			});
+			const nextPayload = await options?.onPayload?.(tzafonPayload ?? payload, model as Model<Api>);
 			if (options?.signal?.aborted) throw new Error("Request was aborted");
-			const response = await client.responses.create((nextPayload ?? payload) as never, { signal: options?.signal });
+			const response = await client.responses.create((nextPayload ?? tzafonPayload ?? payload) as never, {
+				signal: options?.signal,
+			});
 			if (options?.signal?.aborted) throw new Error("Request was aborted");
 
 			stream.push({ type: "start", partial: output });
@@ -63,6 +77,24 @@ export const streamTzafonResponses: StreamFunction<string, TzafonResponsesOption
 						name: getString(item, "name"),
 						arguments: parseArguments(getValue(item, "arguments")),
 					});
+					continue;
+				}
+				if (type === "computer_call") {
+					const callId = getString(item, "call_id") || getString(item, "id") || `computer_call_${output.content.length}`;
+					let actionIndex = 0;
+					for (const action of toCanonicalActions(getValue(item, "action"))) {
+						if (action.type === "answer") {
+							emitText(stream, output, action.text);
+							continue;
+						}
+						emitToolCall(stream, output, {
+							type: "toolCall",
+							id: tzafonToolCallId(callId, actionIndex),
+							name: canonicalToolCallName(action),
+							arguments: canonicalToolCallArguments(action),
+						});
+						actionIndex += 1;
+					}
 				}
 			}
 
@@ -79,6 +111,30 @@ export const streamTzafonResponses: StreamFunction<string, TzafonResponsesOption
 
 	return stream;
 };
+
+export function tzafonComputerUseOnPayload(payload: unknown, _model?: Model<Api>, context?: CuaPayloadContext): unknown | undefined {
+	if (!payload || typeof payload !== "object") return undefined;
+	const current = payload as { tools?: unknown };
+	const keepToolNames = new Set(context?.keepToolNames ?? []);
+	const existingTools = Array.isArray(current.tools) ? current.tools : [];
+	const shouldAddComputerUse = existingTools.some((tool) => {
+		const name = readToolName(tool);
+		return Boolean(name && TZAFON_LOCAL_ACTION_TOOL_NAMES.has(name) && !keepToolNames.has(name));
+	});
+	const tools = existingTools.filter((tool) => {
+		const name = readToolName(tool);
+		return !name || keepToolNames.has(name) || !TZAFON_LOCAL_ACTION_TOOL_NAMES.has(name);
+	});
+	return {
+		...(payload as Record<string, unknown>),
+		tools: shouldAddComputerUse ? [TZAFON_COMPUTER_USE_TOOL, ...tools] : tools,
+	};
+}
+
+/** Derive a unique canonical tool-call id for a Tzafon computer action. */
+export function tzafonToolCallId(callId: string, actionIndex: number): string {
+	return actionIndex === 0 ? callId : `${callId}:${actionIndex}`;
+}
 
 function initialAssistantMessage(model: Model<string>): AssistantMessage {
 	return {
@@ -120,6 +176,96 @@ function emitToolCall(
 	stream.push({ type: "toolcall_end", contentIndex, toolCall, partial: output });
 }
 
+type TzafonCanonicalAction = CuaAction | { type: "answer"; text: string };
+
+function toCanonicalActions(action: unknown): TzafonCanonicalAction[] {
+	if (!action || typeof action !== "object") return [];
+	const current = action as Record<string, unknown>;
+	const type = getString(current, "type");
+	const x = readOptionalNumber(current, "x");
+	const y = readOptionalNumber(current, "y");
+	switch (type) {
+		case "click":
+		case "left_click":
+			return x !== undefined && y !== undefined ? [{ type: "click", x, y }] : [];
+		case "right_click":
+			return x !== undefined && y !== undefined ? [{ type: "click", x, y, button: "right" }] : [];
+		case "double_click":
+			return x !== undefined && y !== undefined ? [{ type: "double_click", x, y }] : [];
+		case "triple_click":
+			return x !== undefined && y !== undefined ? [{ type: "double_click", x, y }, { type: "click", x, y }] : [];
+		case "move":
+		case "hover":
+			return x !== undefined && y !== undefined ? [{ type: "move", x, y }] : [];
+		case "drag":
+			return toDragAction(current);
+		case "type":
+			return [{ type: "type", text: getString(current, "text") }];
+		case "keypress":
+		case "key":
+			return toKeypressAction(current);
+		case "scroll":
+			return [toScrollAction(current)];
+		case "hscroll":
+			return [{ type: "scroll", scroll_x: readOptionalNumber(current, "scroll_x") ?? readOptionalNumber(current, "amount") ?? 0 }];
+		case "navigate":
+			return [{ type: "goto", url: getString(current, "url") }];
+		case "wait":
+			return [{ type: "wait", ms: readOptionalNumber(current, "ms") ?? secondsToMs(readOptionalNumber(current, "seconds")) }];
+		case "screenshot":
+			return [{ type: "screenshot" }];
+		case "answer":
+		case "done":
+		case "terminate":
+			return [{ type: "answer", text: getString(current, "result") || getString(current, "text") || getString(current, "status") }];
+		default:
+			return [];
+	}
+}
+
+function toDragAction(action: Record<string, unknown>): CuaAction[] {
+	const path = getArray(action, "path")
+		.map((point) => {
+			if (!point || typeof point !== "object") return undefined;
+			const x = readOptionalNumber(point, "x");
+			const y = readOptionalNumber(point, "y");
+			return x !== undefined && y !== undefined ? { x, y } : undefined;
+		})
+		.filter((point): point is { x: number; y: number } => Boolean(point));
+	if (path.length >= 2) return [{ type: "drag", path }];
+
+	const x = readOptionalNumber(action, "x");
+	const y = readOptionalNumber(action, "y");
+	const endX = readOptionalNumber(action, "end_x") ?? readOptionalNumber(action, "x2");
+	const endY = readOptionalNumber(action, "end_y") ?? readOptionalNumber(action, "y2");
+	if (x === undefined || y === undefined || endX === undefined || endY === undefined) return [];
+	return [{ type: "drag", path: [{ x, y }, { x: endX, y: endY }] }];
+}
+
+function toKeypressAction(action: Record<string, unknown>): CuaAction[] {
+	const keys = getArray(action, "keys")
+		.map((key) => (typeof key === "string" ? key : undefined))
+		.filter((key): key is string => Boolean(key));
+	const key = getString(action, "key");
+	const text = getString(action, "text");
+	const value = keys.length > 0 ? keys : key ? [key] : text ? [text] : [];
+	return value.length > 0 ? [{ type: "keypress", keys: value }] : [];
+}
+
+function toScrollAction(action: Record<string, unknown>): CuaAction {
+	return {
+		type: "scroll",
+		x: readOptionalNumber(action, "x"),
+		y: readOptionalNumber(action, "y"),
+		scroll_x: readOptionalNumber(action, "scroll_x"),
+		scroll_y: readOptionalNumber(action, "scroll_y") ?? readOptionalNumber(action, "amount"),
+	};
+}
+
+function secondsToMs(seconds: number | undefined): number | undefined {
+	return seconds === undefined ? undefined : seconds * 1000;
+}
+
 function convertTools(tools: Tool[]): Array<Record<string, unknown>> {
 	return tools.map((tool) => ({
 		type: "function",
@@ -127,6 +273,20 @@ function convertTools(tools: Tool[]): Array<Record<string, unknown>> {
 		description: tool.description,
 		parameters: tool.parameters,
 	}));
+}
+
+function keepToolNamesFromContext(context: Context): string[] {
+	return (context.tools ?? [])
+		.map((tool) => tool.name)
+		.filter((name) => !TZAFON_LOCAL_ACTION_TOOL_NAMES.has(name));
+}
+
+function readToolName(tool: unknown): string | undefined {
+	if (!tool || typeof tool !== "object") return undefined;
+	const direct = getString(tool, "name");
+	if (direct) return direct;
+	const fn = getValue(tool, "function");
+	return getString(fn, "name");
 }
 
 function convertContextMessages(context: Context): Array<Record<string, unknown>> {
@@ -208,9 +368,28 @@ function parseArguments(value: unknown): Record<string, unknown> {
 	// (observed: { "actions": "[{...}]" }). Unwrap one level so consumers get real values.
 	const out: Record<string, unknown> = {};
 	for (const [key, val] of Object.entries(top)) {
-		out[key] = typeof val === "string" && looksLikeJson(val) ? safeJsonParse(val) ?? val : val;
+		out[key] = normalizeArgumentValue(key, val);
 	}
 	return out;
+}
+
+const NUMERIC_ARGUMENT_KEYS = new Set(["x", "y", "scroll_x", "scroll_y", "ms", "duration"]);
+
+function normalizeArgumentValue(key: string, value: unknown): unknown {
+	const parsed = typeof value === "string" && looksLikeJson(value) ? safeJsonParse(value) ?? value : value;
+	if (typeof parsed === "string" && NUMERIC_ARGUMENT_KEYS.has(key)) {
+		const number = Number.parseFloat(parsed);
+		return Number.isFinite(number) ? number : parsed;
+	}
+	if (Array.isArray(parsed)) {
+		return parsed.map((item) => normalizeArgumentValue(key, item));
+	}
+	if (parsed && typeof parsed === "object") {
+		return Object.fromEntries(
+			Object.entries(parsed).map(([childKey, childValue]) => [childKey, normalizeArgumentValue(childKey, childValue)]),
+		);
+	}
+	return parsed;
 }
 
 function safeJsonParse(value: string): Record<string, unknown> | unknown[] | null {
@@ -228,10 +407,10 @@ function looksLikeJson(value: string): boolean {
 }
 
 function usageFromTzafon(usage: unknown): AssistantMessage["usage"] {
-	const input = readNumber(usage, "input_tokens");
-	const output = readNumber(usage, "output_tokens");
-	const cacheRead = readNumber(getValue(usage, "input_tokens_details"), "cached_tokens");
-	const totalTokens = readNumber(usage, "total_tokens") || input + output;
+	const input = readUsageNumber(usage, "input_tokens");
+	const output = readUsageNumber(usage, "output_tokens");
+	const cacheRead = readUsageNumber(getValue(usage, "input_tokens_details"), "cached_tokens");
+	const totalTokens = readUsageNumber(usage, "total_tokens") || input + output;
 	return {
 		input,
 		output,
@@ -242,10 +421,19 @@ function usageFromTzafon(usage: unknown): AssistantMessage["usage"] {
 	};
 }
 
-function readNumber(obj: unknown, key: string): number {
-	if (!obj || typeof obj !== "object") return 0;
-	const n = (obj as Record<string, unknown>)[key];
-	return typeof n === "number" && Number.isFinite(n) ? n : 0;
+function readUsageNumber(obj: unknown, key: string): number {
+	return readOptionalNumber(obj, key) ?? 0;
+}
+
+function readOptionalNumber(obj: unknown, key: string): number | undefined {
+	if (!obj || typeof obj !== "object") return undefined;
+	const value = (obj as Record<string, unknown>)[key];
+	if (typeof value === "number" && Number.isFinite(value)) return value;
+	if (typeof value === "string" && value.trim()) {
+		const number = Number(value);
+		return Number.isFinite(number) ? number : undefined;
+	}
+	return undefined;
 }
 
 function getArray(obj: unknown, key: string): unknown[] {

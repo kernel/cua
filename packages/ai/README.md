@@ -32,11 +32,11 @@ const response = await complete(model, {
       timestamp: Date.now(),
     },
   ],
-  tools: openai.createComputerToolDefinitions({ actions: ["click"] }),
+  tools: openai.computerTools({ actions: ["click"] }),
 });
 
 for (const block of response.content) {
-  if (block.type === "toolCall" && block.name === "click_mouse") {
+  if (block.type === "toolCall" && block.name === "click") {
     console.log("click:", block.arguments);
   }
 }
@@ -111,27 +111,35 @@ Top-level exports:
 runtime consumers:
 
 - canonical provider id
-- provider-facing CUA tool definitions
+- CUA tool definitions installed by `CuaAgent`/`CuaAgentHarness`
 - default system prompt text
+- provider coordinate convention
+- optional provider screenshot input policy
 - optional provider payload middleware (for protocol quirks)
 
-Provider namespaces expose `createComputerToolDefinitions({ actions? })` for
-building model-facing pi-ai `Tool[]` definitions. Omit `actions` for the
-provider's default computer tool set, or pass an action subset to narrow the
-schema for a single `complete()` call:
+Provider namespaces expose `computerTools({ actions? })` for
+building the provider's default CUA `Tool[]` definitions. These are the tools
+that agent runtimes install and execute locally. Most providers send the same
+definitions to the model API; providers whose APIs expose tools through
+separate request fields can adapt the outgoing payload with runtime middleware.
+Omit `actions` for the provider's default computer tool set, or pass an action
+subset to narrow the schema for a single `complete()` call:
 
 ```ts
 import { openai } from "@onkernel/cua-ai";
 
-const allComputerTools = openai.createComputerToolDefinitions();
-const clickOnlyTools = openai.createComputerToolDefinitions({ actions: ["click"] });
+const allComputerTools = openai.computerTools();
+const clickOnlyTools = openai.computerTools({ actions: ["click"] });
 ```
 
-Most provider namespaces synthesize a `batch_computer_actions` tool definition.
-Yutori is different: Navigator exposes browser actions through its documented
-`tool_set` request field, so `yutori.createComputerToolDefinitions()` returns
-an empty array and the Yutori stream adapter normalizes native Navigator tool
-calls to canonical individual `CuaAction` tool calls.
+Provider namespaces expose individual canonical action definitions by default.
+Some providers are different on the wire: Yutori exposes browser actions
+through its documented `tool_set` request field, and Tzafon exposes them
+through its native `computer_use` Responses tool. Their payload adapters remove
+local canonical CUA action definitions before requests and enable the
+provider-native computer-use interface. Caller-provided tools that should
+remain on the provider payload can be preserved by payload middleware via
+`CuaPayloadContext.keepToolNames`.
 
 Provider namespaces also expose `COMPUTER_TOOL_COORDINATES`, which describes
 the coordinates the provider's computer tool calls are expected to emit:
@@ -192,9 +200,8 @@ type CuaActionGoto = {
 };
 ```
 
-For providers that use model-facing CUA tools, the provider namespace
-`createComputerToolDefinitions()` emits a `batch_computer_actions` tool whose
-input is:
+`createCuaBatchToolDefinition(actions?)` can synthesize a
+`batch_computer_actions` tool whose input is:
 
 ```ts
 type CuaBatchInput = {
@@ -202,11 +209,12 @@ type CuaBatchInput = {
 };
 ```
 
-The model can plan several writes and reads in one call. Read actions such as
-`screenshot`, `url`, and `cursor_position` can be interleaved with writes so
-your executor can return fresh state in the same order.
+Agent runtimes can opt into this as local sugar when they want the model to
+plan several writes and reads in one call. Read actions such as `screenshot`,
+`url`, and `cursor_position` can be interleaved with writes so your executor
+can return fresh state in the same order.
 
-When `actions` is omitted, the OpenAI namespace also emits a `computer_use_extra`
+`createCuaNavigationToolDefinition()` can synthesize a `computer_use_extra`
 navigation tool whose input is:
 
 ```ts
@@ -218,14 +226,13 @@ type CuaNavigationInput = {
 
 Provider namespaces:
 
-- `openai`: `createComputerToolDefinitions`, `COMPUTER_TOOL_COORDINATES`, OpenAI CUA action schemas, and `OPENAI_BATCH_INSTRUCTIONS`
-- `anthropic`: `createComputerToolDefinitions`, `COMPUTER_TOOL_COORDINATES`, prompt helpers, and CUA batch schema aliases
-- `gemini`: `createComputerToolDefinitions`, `COMPUTER_TOOL_COORDINATES`, prompt helpers, and CUA batch schema aliases
-- `tzafon`: `createComputerToolDefinitions`, `COMPUTER_TOOL_COORDINATES`, prompt helpers, and local `tzafon-responses` stream adapter
+- `openai`: `computerTools`, `COMPUTER_TOOL_COORDINATES`, OpenAI CUA action schemas, and prompt helpers
+- `anthropic`: `computerTools`, `COMPUTER_TOOL_COORDINATES`, prompt helpers, and CUA action schema aliases
+- `gemini`: `computerTools`, `COMPUTER_TOOL_COORDINATES`, prompt helpers, and CUA action schema aliases
+- `tzafon`: `computerTools`, `COMPUTER_TOOL_COORDINATES`, prompt helpers, and local `tzafon-responses` stream adapter
 - `yutori`: native Navigator action sets, native-to-canonical action helpers,
-  local `yutori-chat-completions` stream adapter,
-  `createComputerToolDefinitions` (empty by design),
-  `COMPUTER_TOOL_COORDINATES`, and `yutoriNativeToolSetOnPayload`
+  `computerTools`, `COMPUTER_TOOL_COORDINATES`, local
+  `yutori-chat-completions` stream adapter, and `yutoriNativeToolSetOnPayload`
 
 This package does not execute browser actions. Use `@onkernel/cua-agent` when
 you want model tool calls executed against a Kernel browser.

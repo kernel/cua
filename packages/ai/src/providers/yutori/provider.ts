@@ -14,18 +14,19 @@ import {
 	type ToolCall,
 } from "@earendil-works/pi-ai";
 import {
-	canonicalToolCallArguments,
-	canonicalToolCallName,
-	isCuaDefaultToolName,
+	isYutoriLocalActionToolName,
 	toCanonicalActions,
 	yutoriToolSetForModel,
 	YUTORI_N15_EXPANDED_ACTION_TYPES,
 } from "./actions";
+import { canonicalToolCallArguments, canonicalToolCallName } from "../common";
+import type { CuaPayloadContext } from "../../runtime-spec";
 
 export const YUTORI_CHAT_COMPLETIONS_API = "yutori-chat-completions";
 
 export interface YutoriOptions extends StreamOptions {
 	temperature?: number;
+	keepToolNames?: readonly string[];
 }
 
 export const streamYutori: StreamFunction<typeof YUTORI_CHAT_COMPLETIONS_API, YutoriOptions> = (model, context, options) => {
@@ -40,17 +41,18 @@ export const streamSimpleYutori: StreamFunction<typeof YUTORI_CHAT_COMPLETIONS_A
 	options,
 ) => streamYutori(model, context, options);
 
-export function yutoriBuiltinToolsOnPayload(payload: unknown, model?: Model<Api>): unknown | undefined {
-	return yutoriNativeToolSetOnPayload(payload, model);
+export function yutoriBuiltinToolsOnPayload(payload: unknown, model?: Model<Api>, context?: CuaPayloadContext): unknown | undefined {
+	return yutoriNativeToolSetOnPayload(payload, model, context);
 }
 
-export function yutoriNativeToolSetOnPayload(payload: unknown, model?: Model<Api>): unknown | undefined {
+export function yutoriNativeToolSetOnPayload(payload: unknown, model?: Model<Api>, context?: CuaPayloadContext): unknown | undefined {
 	if (!payload || typeof payload !== "object") return undefined;
 	const current = payload as { tools?: unknown };
+	const keepToolNames = new Set(context?.keepToolNames ?? []);
 	const tools = Array.isArray(current.tools)
 		? current.tools.filter((tool) => {
 				const name = readToolName(tool);
-				return !name || !isCuaDefaultToolName(name);
+				return !name || keepToolNames.has(name) || !isYutoriLocalActionToolName(name);
 			})
 		: undefined;
 	const toolSet = model ? yutoriToolSetForModel(model.id) : undefined;
@@ -84,7 +86,9 @@ async function runYutoriStream(
 		};
 		const tools = convertTools(context);
 		if (tools.length > 0) payload.tools = tools;
-		payload = yutoriNativeToolSetOnPayload(payload, model) as Record<string, unknown>;
+		payload = yutoriNativeToolSetOnPayload(payload, model, {
+			keepToolNames: [...keepToolNamesFromContext(context), ...(options?.keepToolNames ?? [])],
+		}) as Record<string, unknown>;
 		const nextPayload = await options?.onPayload?.(payload, model);
 		if (nextPayload !== undefined) payload = nextPayload as Record<string, unknown>;
 
@@ -149,6 +153,12 @@ async function runYutoriStream(
 		stream.push({ type: "error", reason: output.stopReason, error: output });
 		stream.end();
 	}
+}
+
+function keepToolNamesFromContext(context: Context): string[] {
+	return (context.tools ?? [])
+		.map((tool) => tool.name)
+		.filter((name) => !isYutoriLocalActionToolName(name));
 }
 
 function initialAssistantMessage(model: Model<Api>): AssistantMessage {

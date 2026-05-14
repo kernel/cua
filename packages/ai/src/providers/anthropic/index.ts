@@ -2,17 +2,12 @@ import type { ComputerToolCoordinateSystem } from "../common";
 
 export {
 	CUA_ACTION_TYPES as ANTHROPIC_CUA_ACTION_TYPES,
-	CUA_BATCH_TOOL_DESCRIPTION as ANTHROPIC_BATCH_DESCRIPTION,
-	CUA_BATCH_TOOL_NAME as ANTHROPIC_BATCH_TOOL_NAME,
-	createComputerToolDefinitions,
+	computerTools,
 	createCuaActionSchema as createActionSchema,
-	createCuaBatchSchema as createBatchSchema,
-	CuaBatchSchema as AnthropicBatchSchema,
 } from "../common";
 export type {
 	CuaAction as AnthropicAction,
-	CreateComputerToolDefinitionsOptions,
-	CuaBatchInput as AnthropicBatchInput,
+	ComputerToolsOptions,
 } from "../common";
 
 // Provider-native action vocabulary emitted on `tool_use.input.action`. Latest
@@ -26,7 +21,7 @@ export type {
 // Source: https://github.com/anthropics/anthropic-quickstarts/blob/main/computer-use-demo/computer_use_demo/tools/computer.py
 export const COMPUTER_TOOL_COORDINATES = { type: "pixel" } as const satisfies ComputerToolCoordinateSystem;
 
-export const ANTHROPIC_COMPUTER_INSTRUCTIONS = `You control a Kernel cloud browser through computer-use tools. Use batched actions for predictable browser interaction, keyboard navigation where possible, and explicit screenshot or url reads when you need to inspect state.`;
+export const ANTHROPIC_COMPUTER_INSTRUCTIONS = `You control a Kernel cloud browser through individual browser tools. Use keyboard navigation where possible, and request explicit screenshot or url reads when you need to inspect state.`;
 
 export function buildAnthropicSystemPrompt(opts: { suffix?: string } = {}): string {
 	return [ANTHROPIC_COMPUTER_INSTRUCTIONS, opts.suffix].filter(Boolean).join("\n\n");

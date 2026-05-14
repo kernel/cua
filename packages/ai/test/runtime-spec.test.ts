@@ -11,14 +11,18 @@ describe("resolveCuaRuntimeSpec", () => {
 			expect(spec.provider).toBe(provider);
 			expect(spec.model.id).toBe(model!.model);
 			expect(typeof spec.defaultSystemPrompt).toBe("string");
+			expect(spec.coordinateSystem).toBeDefined();
+			expect(spec.toolDefinitions.length).toBeGreaterThan(0);
+			expect(spec.toolDefinitions.map((tool) => tool.name)).not.toContain(CUA_BATCH_TOOL_NAME);
+			expect(spec.toolDefinitions.map((tool) => tool.name)).not.toContain(CUA_NAVIGATION_TOOL_NAME);
 			if (provider === "yutori") {
-				expect(spec.toolDefinitions).toEqual([]);
 				expect(spec.defaultSystemPrompt).toBe("");
+				expect(spec.screenshot).toEqual({
+					appendToLatestMessage: true,
+					transform: { width: 1280, height: 800, format: "webp", quality: 90 },
+				});
 			} else {
-				expect(spec.toolDefinitions.length).toBeGreaterThan(0);
 				expect(spec.defaultSystemPrompt.length).toBeGreaterThan(0);
-				expect(spec.toolDefinitions.map((tool) => tool.name)).toContain(CUA_BATCH_TOOL_NAME);
-				expect(spec.toolDefinitions.map((tool) => tool.name)).toContain(CUA_NAVIGATION_TOOL_NAME);
 			}
 		}
 	});
@@ -26,9 +30,11 @@ describe("resolveCuaRuntimeSpec", () => {
 	it("only sets payload middleware for providers that need it", () => {
 		const yutoriSpec = resolveCuaRuntimeSpec("yutori:n1.5-latest");
 		const openaiSpec = resolveCuaRuntimeSpec("openai:gpt-5.5");
+		const tzafonSpec = resolveCuaRuntimeSpec("tzafon:tzafon.northstar-cua-fast");
 		const anthropicSpec = resolveCuaRuntimeSpec("anthropic:claude-opus-4-7");
 		expect(yutoriSpec.onPayload).toBeTypeOf("function");
 		expect(openaiSpec.onPayload).toBeTypeOf("function");
+		expect(tzafonSpec.onPayload).toBeTypeOf("function");
 		expect(anthropicSpec.onPayload).toBeUndefined();
 	});
 });

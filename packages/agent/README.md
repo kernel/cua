@@ -84,6 +84,9 @@ Both classes mirror pi constructor shapes and behavior, with minimal additions:
 - `browser` (Kernel browser response)
 - `client` (Kernel SDK client)
 - CUA model refs (`"provider:model"`) accepted where pi expects a concrete model
+- `extraTools` to add your own pi tools alongside the built-in browser tools
+- `batchTool: true` to let the model run multiple browser actions in one tool call
+- `computerUseExtra: true` to let the model use a small navigation helper
 
 If auth callbacks are omitted, both classes default to CUA env var conventions:
 - OpenAI: `OPENAI_API_KEY`
@@ -94,9 +97,26 @@ If auth callbacks are omitted, both classes default to CUA env var conventions:
 
 ### Tool Defaults
 
-If tools are omitted, the classes install canonical CUA computer tool executors
-using runtime specs from `@onkernel/cua-ai`. If tools are provided, they are
-used exactly.
+By default, the classes install provider-selected canonical CUA computer tool
+executors using runtime specs from `@onkernel/cua-ai`. Use `extraTools` to add
+your own pi tools alongside the provider's computer-use tools. This is useful
+when the model needs to call application-specific code, such as looking up a
+record, writing a database row, or handing off to another service while it also
+controls the browser.
+
+`batchTool: true` adds the `batch_computer_actions` tool. Use it when you want
+the model to group several browser actions into one call, for example moving,
+clicking, typing, waiting, and then reading a screenshot. The batch tool is
+synthesized from the selected provider's normal browser action definitions, so
+it only batches actions that provider runtime already supports.
+
+`computerUseExtra: true` adds the `computer_use_extra` tool. Use it when you
+want one compact helper for common browser navigation/read operations:
+`goto`, `back`, `forward`, and `url`.
+
+The TypeScript API follows pi's camelCase option style (`extraTools`,
+`batchTool`, `computerUseExtra`). Names like `batch_computer_actions` and
+`computer_use_extra` are the literal tool names the model may see in traces.
 
 ### Model Switching
 
@@ -124,6 +144,7 @@ const tools = [
     browser,
     client,
     toolDefinitions: runtime.toolDefinitions,
+    batchTool: true,
   }),
   myCustomTool,
 ];

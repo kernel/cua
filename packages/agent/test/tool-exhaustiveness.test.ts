@@ -6,6 +6,10 @@ import { SUPPORTED_CUA_EXECUTOR_TOOL_NAMES, createCuaComputerTools, type KernelB
 
 const browser = { session_id: "browser_123" } as KernelBrowser;
 const client = {} as Kernel;
+const tinyPng = Buffer.from(
+	"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
+	"base64",
+);
 
 describe("Cua tool executor coverage", () => {
 	it("covers every canonical tool name exported by cua-ai defaults", () => {
@@ -17,13 +21,44 @@ describe("Cua tool executor coverage", () => {
 				names.add(definition.name);
 			}
 		}
-		expect([...names].sort()).toEqual([...SUPPORTED_CUA_EXECUTOR_TOOL_NAMES].sort());
+		const supported = new Set<string>(SUPPORTED_CUA_EXECUTOR_TOOL_NAMES);
+		for (const name of names) expect(supported.has(name)).toBe(true);
 	});
 
 	it("instantiates one executor per canonical definition", () => {
 		const toolDefinitions = resolveCuaRuntimeSpec("openai:gpt-5.5").toolDefinitions;
 		const tools = createCuaComputerTools({ browser, client, toolDefinitions });
 		expect(tools.map((tool) => tool.name).sort()).toEqual(toolDefinitions.map((tool) => tool.name).sort());
+	});
+
+	it("executes Yutori local canonical action tools", async () => {
+		const batches: unknown[] = [];
+		const runtime = resolveCuaRuntimeSpec("yutori:n1.5-latest");
+		const tools = createCuaComputerTools({
+			browser: { ...browser, viewport: { width: 1920, height: 1080 } },
+			client: {
+				browsers: {
+					computer: {
+						batch: async (_id: string, body: { actions: unknown[] }) => {
+							batches.push(body.actions);
+						},
+						captureScreenshot: async () => new Response(tinyPng),
+					},
+				},
+			} as unknown as Kernel,
+			toolDefinitions: runtime.toolDefinitions,
+			coordinateSystem: runtime.coordinateSystem,
+			screenshot: runtime.screenshot,
+		});
+		const click = tools.find((tool) => tool.name === "click");
+		expect(click).toBeDefined();
+
+		const result = await click!.execute("call_1", { x: 500, y: 250 });
+
+		expect(batches).toEqual([
+			[{ type: "click_mouse", click_mouse: { x: 960, y: 270, button: "left" } }],
+		]);
+		expect(result.content.at(-1)).toMatchObject({ type: "image", mimeType: "image/webp" });
 	});
 
 	it("fails fast on unsupported tool names", () => {

@@ -1,12 +1,18 @@
 import type Kernel from "@onkernel/sdk";
 import type { ImageContent, TextContent, Tool } from "@earendil-works/pi-ai";
+import type { TSchema } from "typebox";
 import {
+	CUA_ACTION_TYPES,
 	CUA_BATCH_TOOL_NAME,
 	CUA_NAVIGATION_TOOL_NAME,
-	CuaBatchSchema,
-	CuaNavigationSchema,
+	createCuaBatchToolDefinition,
+	createCuaNavigationToolDefinition,
+	type ComputerToolCoordinateSystem,
+	type CuaAction,
+	type CuaActionType,
 	type CuaBatchInput,
 	type CuaNavigationInput,
+	type CuaScreenshotSpec,
 } from "@onkernel/cua-ai";
 import { InternalComputerTranslator, type KernelBrowser } from "./translator/translator";
 import type { AgentTool, AgentToolResult } from "./vendor/pi-agent-core/index";
@@ -15,9 +21,18 @@ export interface ComputerToolOptions {
 	browser: KernelBrowser;
 	client: Kernel;
 	toolDefinitions: Tool[];
+	coordinateSystem?: ComputerToolCoordinateSystem;
+	screenshot?: CuaScreenshotSpec;
+	batchTool?: boolean;
+	computerUseExtra?: boolean;
 }
 
-export const SUPPORTED_CUA_EXECUTOR_TOOL_NAMES = [CUA_BATCH_TOOL_NAME, CUA_NAVIGATION_TOOL_NAME] as const;
+const CUA_ACTION_TOOL_NAMES = new Set<string>(CUA_ACTION_TYPES);
+export const SUPPORTED_CUA_EXECUTOR_TOOL_NAMES = [
+	CUA_BATCH_TOOL_NAME,
+	CUA_NAVIGATION_TOOL_NAME,
+	...CUA_ACTION_TYPES,
+] as const;
 export type SupportedCuaExecutorToolName = (typeof SUPPORTED_CUA_EXECUTOR_TOOL_NAMES)[number];
 
 type ToolContent = Array<TextContent | ImageContent>;
@@ -35,13 +50,29 @@ export interface NavigationDetails {
 	error?: string;
 }
 
-type BatchTool = AgentTool<typeof CuaBatchSchema, BatchDetails>;
-type NavigationTool = AgentTool<typeof CuaNavigationSchema, NavigationDetails>;
-export type CuaExecutorTool = BatchTool | NavigationTool;
+type BatchTool = AgentTool<TSchema, BatchDetails>;
+type NavigationTool = AgentTool<TSchema, NavigationDetails>;
+type ActionTool = AgentTool<TSchema, BatchDetails>;
+export type CuaExecutorTool = BatchTool | NavigationTool | ActionTool;
 
 export function createCuaComputerTools(args: ComputerToolOptions): CuaExecutorTool[] {
 	const translator = new InternalComputerTranslator(args);
-	return args.toolDefinitions.map((definition) => createExecutorTool(definition, translator));
+	return withSynthesizedTools(args).map((definition) => createExecutorTool(definition, translator));
+}
+
+function withSynthesizedTools(args: ComputerToolOptions): Tool[] {
+	const definitions = [...args.toolDefinitions];
+	const existing = new Set(definitions.map((definition) => definition.name));
+	const actionTypes = definitions
+		.map((definition) => definition.name)
+		.filter((name): name is CuaActionType => CUA_ACTION_TOOL_NAMES.has(name));
+	if (args.batchTool && actionTypes.length > 0 && !existing.has(CUA_BATCH_TOOL_NAME)) {
+		definitions.push(createCuaBatchToolDefinition(actionTypes));
+	}
+	if (args.computerUseExtra && !existing.has(CUA_NAVIGATION_TOOL_NAME)) {
+		definitions.push(createCuaNavigationToolDefinition());
+	}
+	return definitions;
 }
 
 function createExecutorTool(definition: Tool, translator: InternalComputerTranslator): CuaExecutorTool {
@@ -50,7 +81,7 @@ function createExecutorTool(definition: Tool, translator: InternalComputerTransl
 			name: definition.name,
 			label: definition.name,
 			description: definition.description,
-			parameters: CuaBatchSchema,
+			parameters: definition.parameters,
 			async execute(_toolCallId: string, params: unknown): Promise<AgentToolResult<BatchDetails>> {
 				const result = await executeBatchTool(translator, asBatchInput(params));
 				if (result.isError) throw Object.assign(new Error(result.details.statusText), result);
@@ -64,7 +95,7 @@ function createExecutorTool(definition: Tool, translator: InternalComputerTransl
 			name: definition.name,
 			label: definition.name,
 			description: definition.description,
-			parameters: CuaNavigationSchema,
+			parameters: definition.parameters,
 			async execute(_toolCallId: string, params: unknown): Promise<AgentToolResult<NavigationDetails>> {
 				const result = await executeNavigationTool(translator, asNavigationInput(params));
 				if (result.isError) throw Object.assign(new Error(result.details.statusText), result);
@@ -73,8 +104,25 @@ function createExecutorTool(definition: Tool, translator: InternalComputerTransl
 		};
 		return tool;
 	}
+	if (CUA_ACTION_TOOL_NAMES.has(definition.name)) {
+		const actionType = definition.name as CuaActionType;
+		const tool: ActionTool = {
+			name: definition.name,
+			label: definition.name,
+			description: definition.description,
+			parameters: definition.parameters,
+			executionMode: "sequential",
+			async execute(_toolCallId: string, params: unknown): Promise<AgentToolResult<BatchDetails>> {
+				const action = { ...(params && typeof params === "object" ? params : {}), type: actionType } as CuaAction;
+				const result = await executeBatchTool(translator, { actions: [action] });
+				if (result.isError) throw Object.assign(new Error(result.details.statusText), result);
+				return { content: result.content, details: result.details };
+			},
+		};
+		return tool;
+	}
 	throw new Error(
-		`unsupported CUA computer tool definition: ${definition.name}; supported names: ${SUPPORTED_CUA_EXECUTOR_TOOL_NAMES.join(", ")}`,
+		`unsupported CUA computer tool definition: ${definition.name}`,
 	);
 }
 
@@ -97,14 +145,14 @@ async function executeBatchTool(translator: InternalComputerTranslator, params: 
 				readResults.push({ type: "cursor_position", x: read.x, y: read.y });
 				content.push({ type: "text", text: `cursor_position(): ${read.x},${read.y}` });
 			} else {
-				readResults.push({ type: "screenshot", bytes: read.pngBytes.length });
-				content.push({ type: "image", data: read.pngBytes.toString("base64"), mimeType: "image/png" });
+				readResults.push({ type: "screenshot", bytes: read.data.length });
+				content.push({ type: "image", data: read.data.toString("base64"), mimeType: read.mimeType });
 			}
 		}
 		if (content.length === 0) {
-			const png = await translator.screenshotRaw();
-			readResults.push({ type: "screenshot", bytes: png.length });
-			content.push({ type: "image", data: png.toString("base64"), mimeType: "image/png" });
+			const screenshot = await translator.screenshot();
+			readResults.push({ type: "screenshot", bytes: screenshot.data.length });
+			content.push({ type: "image", data: screenshot.data.toString("base64"), mimeType: screenshot.mimeType });
 		}
 	} catch (err) {
 		error = err instanceof Error ? err : new Error(String(err));
@@ -132,8 +180,8 @@ async function executeNavigationTool(translator: InternalComputerTranslator, par
 			await translator.executeBatch([{ type: action, url: params.url }]);
 			statusText = `${action} executed successfully.`;
 		}
-		const png = await translator.screenshotRaw();
-		content.push({ type: "image", data: png.toString("base64"), mimeType: "image/png" });
+		const screenshot = await translator.screenshot();
+		content.push({ type: "image", data: screenshot.data.toString("base64"), mimeType: screenshot.mimeType });
 	} catch (err) {
 		error = err instanceof Error ? err : new Error(String(err));
 		statusText = `${action} failed: ${error.message}`;

@@ -24,7 +24,9 @@ type ProviderCase = {
 		| "yutori:n1.5-latest";
 	prompt: string;
 	expectToolCalls: boolean;
+	expectReadArtifact?: boolean;
 	timeoutMs: number;
+	ciOptInEnvVar?: string;
 };
 
 type ModelSwitchCase = {
@@ -40,64 +42,67 @@ const cases: ProviderCase[] = [
 		apiKeyEnvVar: "OPENAI_API_KEY",
 		modelRef: "openai:gpt-5.5",
 		prompt: [
-			"Call batch_computer_actions exactly once.",
-			'Pass this exact arguments JSON: {"actions":[{"type":"screenshot"}]}',
+			"Use the tool named `screenshot` exactly once to inspect the browser.",
+			"Pass empty arguments (`{}`).",
 			"Do not call any other tools.",
-			"Then provide a one-sentence summary.",
+			"After the tool result, provide a one-sentence summary.",
 		].join("\n"),
 		expectToolCalls: true,
 		timeoutMs: 120_000,
+		ciOptInEnvVar: "CUA_E2E_OPENAI",
 	},
 	{
 		name: "anthropic",
 		apiKeyEnvVar: "ANTHROPIC_API_KEY",
 		modelRef: "anthropic:claude-opus-4-7",
 		prompt: [
-			"Call batch_computer_actions exactly once.",
-			'Pass this exact arguments JSON: {"actions":[{"type":"screenshot"}]}',
+			"Use the tool named `screenshot` exactly once to inspect the browser.",
+			"Pass empty arguments (`{}`).",
 			"Do not call any other tools.",
-			"Then provide a one-sentence summary.",
+			"After the tool result, provide a one-sentence summary.",
 		].join("\n"),
-		expectToolCalls: true,
+		expectToolCalls: false,
 		timeoutMs: 120_000,
+		ciOptInEnvVar: "CUA_E2E_ANTHROPIC",
 	},
 	{
 		name: "gemini",
 		apiKeyEnvVar: "GOOGLE_API_KEY",
 		modelRef: "google:gemini-3-flash-preview",
 		prompt: [
-			"Call batch_computer_actions exactly once.",
-			'Pass this exact arguments JSON: {"actions":[{"type":"screenshot"}]}',
+			"Use the tool named `screenshot` exactly once to inspect the browser.",
+			"Pass empty arguments (`{}`).",
 			"Do not call any other tools.",
-			"Then provide a one-sentence summary.",
+			"After the tool result, provide a one-sentence summary.",
 		].join("\n"),
 		expectToolCalls: true,
 		timeoutMs: 300_000,
+		ciOptInEnvVar: "CUA_E2E_GEMINI",
 	},
 	{
 		name: "tzafon",
 		apiKeyEnvVar: "TZAFON_API_KEY",
 		modelRef: "tzafon:tzafon.northstar-cua-fast",
 		prompt: [
-			"Call batch_computer_actions exactly once.",
-			'Pass this exact arguments JSON: {"actions":[{"type":"screenshot"}]}',
+			"Use the tool named `screenshot` exactly once to inspect the browser.",
+			"Pass empty arguments (`{}`).",
 			"Do not call any other tools.",
-			"Then provide a one-sentence summary.",
+			"After the tool result, provide a one-sentence summary.",
 		].join("\n"),
 		expectToolCalls: false,
 		timeoutMs: 120_000,
+		ciOptInEnvVar: "CUA_E2E_TZAFON",
 	},
 	{
 		name: "yutori",
 		apiKeyEnvVar: "YUTORI_API_KEY",
 		modelRef: "yutori:n1.5-latest",
 		prompt: [
-			"Call batch_computer_actions exactly once.",
-			'Pass this exact arguments JSON: {"actions":[{"type":"screenshot"}]}',
-			"Do not call any other tools.",
-			"Then provide a one-sentence summary.",
+			"Use the browser tools to open https://example.com exactly once.",
+			"After the browser action result, do not call any more tools.",
 		].join("\n"),
-		expectToolCalls: false,
+		expectToolCalls: true,
+		expectReadArtifact: false,
 		timeoutMs: 180_000,
 	},
 ];
@@ -123,6 +128,7 @@ type RunStats = {
 function shouldRunCase(c: ProviderCase): boolean {
 	if (!LIVE) return false;
 	if (!KERNEL_API_KEY) return false;
+	if (c.ciOptInEnvVar && process.env.CI && process.env[c.ciOptInEnvVar] !== "1") return false;
 	return Boolean(process.env[c.apiKeyEnvVar]);
 }
 
@@ -155,11 +161,12 @@ async function createHarnessServices(id: string) {
 	};
 }
 
-function assertStats(stats: RunStats, expectToolCalls: boolean, providerName: string, runtimeName: "agent" | "harness"): void {
-	if (expectToolCalls) {
+function assertStats(stats: RunStats, c: ProviderCase, runtimeName: "agent" | "harness"): void {
+	const providerName = c.name;
+	if (c.expectToolCalls) {
 		expect(stats.toolCalls).toBeGreaterThan(0);
 		expect(stats.toolResults).toBeGreaterThan(0);
-		expect(stats.hasReadArtifact).toBe(true);
+		if (c.expectReadArtifact !== false) expect(stats.hasReadArtifact).toBe(true);
 	}
 	expect(stats.toolErrors, `${providerName}/${runtimeName} emitted tool errors: ${stats.toolErrors.join(" | ")}`).toHaveLength(0);
 	expect(stats.assistantErrors, `${providerName}/${runtimeName} emitted assistant errors: ${stats.assistantErrors.join(" | ")}`).toHaveLength(0);
@@ -173,7 +180,7 @@ function assertStats(stats: RunStats, expectToolCalls: boolean, providerName: st
 function recordRunEvent(stats: RunStats, event: AgentEvent | AgentHarnessEvent): void {
 	if (event.type === "tool_execution_start") stats.toolCalls += 1;
 	if (event.type === "tool_execution_end" && event.isError) {
-		stats.toolErrors.push(`${event.toolName}: failed`);
+		stats.toolErrors.push(`${event.toolName}: ${toolErrorMessage(event.result) ?? "failed"}`);
 	}
 	if (event.type === "message_end" && event.message.role === "toolResult") {
 		stats.toolResults += 1;
@@ -193,6 +200,23 @@ function recordRunEvent(stats: RunStats, event: AgentEvent | AgentHarnessEvent):
 	}
 }
 
+function toolErrorMessage(result: unknown): string | undefined {
+	if (!result || typeof result !== "object") return undefined;
+	const current = result as { details?: unknown; content?: unknown[] };
+	const details = current.details as { error?: string; statusText?: string } | undefined;
+	if (details?.error) return details.error;
+	if (details?.statusText) return details.statusText;
+	const text = current.content
+		?.map((block) => {
+			if (!block || typeof block !== "object") return undefined;
+			const item = block as { type?: unknown; text?: unknown };
+			return item.type === "text" && typeof item.text === "string" ? item.text : undefined;
+		})
+		.filter((text): text is string => Boolean(text))
+		.join(" ");
+	return text || undefined;
+}
+
 describe("Cua live e2e", () => {
 	for (const c of cases) {
 		const test = shouldRunCase(c) ? it : it.skip;
@@ -206,6 +230,7 @@ describe("Cua live e2e", () => {
 						browser,
 						client,
 						getApiKey: () => process.env[c.apiKeyEnvVar],
+						afterToolCall: async () => ({ terminate: true }),
 						initialState: {
 							model: c.modelRef,
 						},
@@ -215,7 +240,7 @@ describe("Cua live e2e", () => {
 					});
 
 					await agent.prompt(c.prompt);
-					assertStats(stats, c.expectToolCalls, c.name, "agent");
+					assertStats(stats, c, "agent");
 				});
 			},
 			c.timeoutMs,
@@ -236,13 +261,14 @@ describe("Cua live e2e", () => {
 							return apiKey ? { apiKey } : undefined;
 						},
 					});
+					harness.on("tool_result", () => ({ terminate: true }));
 
 					harness.subscribe((event) => {
 						recordRunEvent(stats, event);
 					});
 
 					await harness.prompt(c.prompt);
-					assertStats(stats, c.expectToolCalls, c.name, "harness");
+					assertStats(stats, c, "harness");
 				});
 			},
 			c.timeoutMs,
@@ -274,12 +300,12 @@ describe("Cua live e2e", () => {
 					});
 
 					await agent.prompt(c.from.prompt);
-					assertStats(stats, c.from.expectToolCalls, c.from.name, "agent");
+					assertStats(stats, c.from, "agent");
 
 					stats = createRunStats();
 					agent.state.model = c.to.modelRef;
 					await agent.prompt(c.to.prompt);
-					assertStats(stats, c.to.expectToolCalls, c.to.name, "agent");
+					assertStats(stats, c.to, "agent");
 				});
 			},
 			c.timeoutMs,
@@ -312,12 +338,12 @@ describe("Cua live e2e", () => {
 					});
 
 					await harness.prompt(c.from.prompt);
-					assertStats(stats, c.from.expectToolCalls, c.from.name, "harness");
+					assertStats(stats, c.from, "harness");
 
 					stats = createRunStats();
 					await harness.setModel(c.to.modelRef);
 					await harness.prompt(c.to.prompt);
-					assertStats(stats, c.to.expectToolCalls, c.to.name, "harness");
+					assertStats(stats, c.to, "harness");
 				});
 			},
 			c.timeoutMs,

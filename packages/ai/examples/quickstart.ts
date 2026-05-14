@@ -16,12 +16,12 @@ const screenshot = await readFile(screenshotPath);
 // const apiKey = process.env.ANTHROPIC_API_KEY;
 // const modelRef = "anthropic:claude-opus-4-7";
 // const model = getCuaModel(modelRef);
-// const tools = anthropic.createComputerToolDefinitions({ actions: ["click"] });
+// const tools = anthropic.computerTools({ actions: ["click"] });
 //
 // const apiKey = process.env.GOOGLE_API_KEY;
 // const modelRef = "google:gemini-2.5-computer-use-preview-10-2025";
 // const model = getCuaModel(modelRef);
-// const tools = gemini.createComputerToolDefinitions({ actions: ["click"] });
+// const tools = gemini.computerTools({ actions: ["click"] });
 
 const response = await complete(
 	model,
@@ -40,7 +40,7 @@ const response = await complete(
 				timestamp: Date.now(),
 			},
 		],
-		tools: openai.createComputerToolDefinitions({ actions: ["click"] }),
+		tools: openai.computerTools({ actions: ["click"] }),
 	},
 	{
 		apiKey,

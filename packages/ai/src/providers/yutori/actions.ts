@@ -1,10 +1,6 @@
 import {
-	CUA_ACTION_TYPES,
-	CUA_BATCH_TOOL_NAME,
-	CUA_NAVIGATION_TOOL_NAME,
-	normalizeCuaKeyCombo,
-	normalizeCuaKeySequence,
-	normalizeCuaModifierKey,
+	createCuaActionToolDefinitions,
+	normalizeGotoUrl,
 	type CuaAction,
 	type CuaActionType,
 } from "../common";
@@ -85,15 +81,26 @@ export const YUTORI_N15_ACTION_TYPES = [
 	...YUTORI_N15_EXPANDED_ACTION_TYPES,
 ] as const;
 
+export const YUTORI_CANONICAL_ACTION_TYPES = [
+	"click",
+	"double_click",
+	"mouse_down",
+	"mouse_up",
+	"type",
+	"keypress",
+	"scroll",
+	"move",
+	"drag",
+	"wait",
+	"goto",
+	"back",
+	"forward",
+] as const satisfies readonly CuaActionType[];
+
 export type YutoriN1ActionType = (typeof YUTORI_N1_ACTION_TYPES)[number];
 export type YutoriN15CoreActionType = (typeof YUTORI_N15_CORE_ACTION_TYPES)[number];
 export type YutoriN15ExpandedActionType = (typeof YUTORI_N15_EXPANDED_ACTION_TYPES)[number];
 export type YutoriNativeActionType = YutoriN1ActionType | YutoriN15CoreActionType | YutoriN15ExpandedActionType;
-
-const YUTORI_NATIVE_ACTION_NAMES = new Set<string>([
-	...YUTORI_N1_ACTION_TYPES,
-	...YUTORI_N15_ACTION_TYPES,
-]);
 
 const DEFAULT_SCROLL_AMOUNT = 3;
 const SCROLL_AMOUNT_PER_NOTCH = 120;
@@ -102,12 +109,13 @@ const NAVIGATION_WAIT_MS = 1500;
 const GOTO_WAIT_MS = 2000;
 
 /**
- * Yutori n1.5 exposes built-in browser tools via `tool_set`, not by accepting
- * client-supplied JSON tool definitions. Keeping this empty prevents us from
- * sending duplicate CUA batch/browser tools alongside Yutori's native tools.
+ * Build Yutori CUA computer-use tools.
+ *
+ * Use this when calling `complete()` or `stream()` directly and you need an
+ * array of `Tool` objects for Yutori browser actions.
  */
-export function createComputerToolDefinitions(_options?: unknown): [] {
-	return [];
+export function computerTools(_options?: unknown) {
+	return createCuaActionToolDefinitions(YUTORI_CANONICAL_ACTION_TYPES);
 }
 
 export function yutoriToolSetForModel(modelId: string): typeof YUTORI_N15_CORE_TOOL_SET | undefined {
@@ -118,16 +126,8 @@ export function yutoriNativeActionsForModel(modelId: string): readonly YutoriNat
 	return modelId.startsWith("n1.5") ? YUTORI_N15_CORE_ACTION_TYPES : YUTORI_N1_ACTION_TYPES;
 }
 
-export function isYutoriNativeActionName(name: string): boolean {
-	return YUTORI_NATIVE_ACTION_NAMES.has(name);
-}
-
-export function isCuaDefaultToolName(name: string): boolean {
-	return (
-		name === CUA_BATCH_TOOL_NAME ||
-		name === CUA_NAVIGATION_TOOL_NAME ||
-		(CUA_ACTION_TYPES as readonly string[]).includes(name)
-	);
+export function isYutoriLocalActionToolName(name: string): boolean {
+	return (YUTORI_CANONICAL_ACTION_TYPES as readonly string[]).includes(name);
 }
 
 export function toCanonicalActions(name: string, args: Record<string, unknown>): CuaAction[] | undefined {
@@ -168,7 +168,7 @@ export function toCanonicalActions(name: string, args: Record<string, unknown>):
 		case "hold_key":
 			return toHoldKeyAction(args);
 		case "goto_url": {
-			const url = typeof args.url === "string" ? args.url : undefined;
+			const url = normalizeGotoUrl(args.url);
 			return url ? [{ type: "goto", url }, { type: "wait", ms: GOTO_WAIT_MS }] : undefined;
 		}
 		case "go_back":
@@ -176,21 +176,12 @@ export function toCanonicalActions(name: string, args: Record<string, unknown>):
 		case "go_forward":
 			return [{ type: "forward" }, { type: "wait", ms: NAVIGATION_WAIT_MS }];
 		case "refresh":
-			return [{ type: "keypress", keys: ["F5"] }, { type: "wait", ms: DEFAULT_WAIT_MS }];
+			return [{ type: "keypress", keys: ["f5"] }, { type: "wait", ms: DEFAULT_WAIT_MS }];
 		case "wait":
 			return [{ type: "wait", ms: secondsToMs(args.duration, DEFAULT_WAIT_MS) }];
 		default:
 			return undefined;
 	}
-}
-
-export function canonicalToolCallName(action: CuaAction): CuaActionType {
-	return action.type;
-}
-
-export function canonicalToolCallArguments(action: CuaAction): Record<string, unknown> {
-	const { type: _type, ...args } = action as CuaAction & Record<string, unknown>;
-	return args;
 }
 
 function readPoint(value: unknown): { x: number; y: number } | undefined {
@@ -216,10 +207,10 @@ function toTypeActions(args: Record<string, unknown>): CuaAction[] | undefined {
 	if (text === undefined) return undefined;
 	const actions: CuaAction[] = [];
 	if (args.clear_before_typing === true) {
-		actions.push({ type: "keypress", keys: ["Control_L", "a"] }, { type: "keypress", keys: ["BackSpace"] });
+		actions.push({ type: "keypress", keys: ["ctrl", "a"] }, { type: "keypress", keys: ["backspace"] });
 	}
 	actions.push({ type: "type", text });
-	if (args.press_enter_after === true) actions.push({ type: "keypress", keys: ["Return"] });
+	if (args.press_enter_after === true) actions.push({ type: "keypress", keys: ["enter"] });
 	return actions;
 }
 
@@ -235,17 +226,24 @@ function toHoldKeyAction(args: Record<string, unknown>): CuaAction[] | undefined
 
 function readKeyCombo(value: unknown): string[] {
 	if (typeof value !== "string") return [];
-	return normalizeCuaKeyCombo(value);
+	return value
+		.split("+")
+		.map((part) => part.trim())
+		.filter(Boolean);
 }
 
 function readKeySequence(value: unknown): string[][] {
 	if (typeof value !== "string") return [];
-	return normalizeCuaKeySequence(value);
+	return value
+		.trim()
+		.split(/\s+/)
+		.map((part) => readKeyCombo(part))
+		.filter((combo) => combo.length > 0);
 }
 
 function holdKeys(value: unknown): { hold_keys?: string[] } {
 	if (typeof value !== "string") return {};
-	const key = normalizeCuaModifierKey(value);
+	const key = value.trim();
 	return key ? { hold_keys: [key] } : {};
 }
 

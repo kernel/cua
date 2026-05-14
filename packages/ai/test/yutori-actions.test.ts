@@ -58,21 +58,21 @@ describe("Yutori native action normalization", () => {
 			{ type: "drag", path: [{ x: 100, y: 200 }, { x: 300, y: 400 }], button: "left" },
 		]);
 		expect(yutori.toCanonicalActions("type", { text: "hello", clear_before_typing: true, press_enter_after: true })).toEqual([
-			{ type: "keypress", keys: ["Control_L", "a"] },
-			{ type: "keypress", keys: ["BackSpace"] },
+			{ type: "keypress", keys: ["ctrl", "a"] },
+			{ type: "keypress", keys: ["backspace"] },
 			{ type: "type", text: "hello" },
-			{ type: "keypress", keys: ["Return"] },
+			{ type: "keypress", keys: ["enter"] },
 		]);
 		expect(yutori.toCanonicalActions("hold_key", { key: "shift", duration: 1.5 })).toEqual([
-			{ type: "keypress", keys: ["Shift_L"], duration: 1500 },
+			{ type: "keypress", keys: ["shift"], duration: 1500 },
 		]);
 		expect(yutori.toCanonicalActions("key_press", { key: "ctrl+c" })).toEqual([
-			{ type: "keypress", keys: ["Control_L", "c"] },
+			{ type: "keypress", keys: ["ctrl", "c"] },
 		]);
 		expect(yutori.toCanonicalActions("key_press", { key: "down down enter" })).toEqual([
-			{ type: "keypress", keys: ["Down"] },
-			{ type: "keypress", keys: ["Down"] },
-			{ type: "keypress", keys: ["Return"] },
+			{ type: "keypress", keys: ["down"] },
+			{ type: "keypress", keys: ["down"] },
+			{ type: "keypress", keys: ["enter"] },
 		]);
 	});
 
@@ -84,8 +84,12 @@ describe("Yutori native action normalization", () => {
 			{ type: "goto", url: "https://example.com" },
 			{ type: "wait", ms: 2000 },
 		]);
+		expect(yutori.toCanonicalActions("goto_url", { url: "example.com" })).toEqual([
+			{ type: "goto", url: "https://example.com" },
+			{ type: "wait", ms: 2000 },
+		]);
 		expect(yutori.toCanonicalActions("refresh", {})).toEqual([
-			{ type: "keypress", keys: ["F5"] },
+			{ type: "keypress", keys: ["f5"] },
 			{ type: "wait", ms: 2000 },
 		]);
 	});

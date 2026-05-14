@@ -1,11 +1,11 @@
 import type { ComputerToolCoordinateSystem } from "../common";
 
 export {
-	createComputerToolDefinitions,
-	isYutoriNativeActionName,
+	computerTools,
 	toCanonicalActions,
 	yutoriNativeActionsForModel,
 	yutoriToolSetForModel,
+	YUTORI_CANONICAL_ACTION_TYPES,
 	YUTORI_N1_ACTION_TYPES,
 	YUTORI_N15_ACTION_TYPES,
 	YUTORI_N15_CORE_ACTION_TYPES,

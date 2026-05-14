@@ -57,6 +57,21 @@ describe("InternalComputerTranslator", () => {
 		]);
 	});
 
+	it("normalizes bare goto URLs before browser navigation", async () => {
+		const { batches, client } = createClient();
+		const translator = new InternalComputerTranslator({ browser, client });
+
+		await translator.executeBatch([{ type: "goto", url: "example.com" }]);
+
+		expect(batches).toEqual([
+			[
+				{ type: "press_key", press_key: { keys: ["l"], hold_keys: ["Control_L"] } },
+				{ type: "type_text", type_text: { text: "https://example.com" } },
+				{ type: "press_key", press_key: { keys: ["Return"] } },
+			],
+		]);
+	});
+
 	it("passes canonical modifier and key duration fields through to Kernel actions", async () => {
 		const { batches, client } = createClient();
 		const translator = new InternalComputerTranslator({ browser, client });
@@ -72,6 +87,27 @@ describe("InternalComputerTranslator", () => {
 				{ type: "click_mouse", click_mouse: { x: 10, y: 20, button: "left", hold_keys: ["Control_L"] } },
 				{ type: "scroll", scroll: { x: 10, y: 20, delta_x: 0, delta_y: 120, hold_keys: ["Shift_L"] } },
 				{ type: "press_key", press_key: { keys: ["Shift_L"], duration: 1500 } },
+			],
+		]);
+	});
+
+	it("denormalizes provider coordinates to the Kernel browser viewport", async () => {
+		const { batches, client } = createClient();
+		const translator = new InternalComputerTranslator({
+			browser: { ...browser, viewport: { width: 1920, height: 1080 } },
+			client,
+			coordinateSystem: { type: "normalized", range: [0, 1000] },
+		});
+
+		await translator.executeBatch([
+			{ type: "click", x: 500, y: 250 },
+			{ type: "drag", path: [{ x: 0, y: 0 }, { x: 1000, y: 1000 }] },
+		]);
+
+		expect(batches).toEqual([
+			[
+				{ type: "click_mouse", click_mouse: { x: 960, y: 270, button: "left" } },
+				{ type: "drag_mouse", drag_mouse: { path: [[0, 0], [1919, 1079]], button: "left" } },
 			],
 		]);
 	});
