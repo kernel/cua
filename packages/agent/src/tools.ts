@@ -1,5 +1,4 @@
 import type Kernel from "@onkernel/sdk";
-import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
 import type { ImageContent, TextContent, Tool } from "@earendil-works/pi-ai";
 import {
 	CUA_BATCH_TOOL_NAME,
@@ -10,6 +9,7 @@ import {
 	type CuaNavigationInput,
 } from "@onkernel/cua-ai";
 import { InternalComputerTranslator, type KernelBrowser } from "./translator/translator";
+import type { AgentTool, AgentToolResult } from "./vendor/pi-agent-core/index";
 
 export interface ComputerToolOptions {
 	browser: KernelBrowser;

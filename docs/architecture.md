@@ -41,7 +41,7 @@ someone who wants to read the code, contribute, or fork.
   - provider payload transforms and protocol quirks (for example, Yutori tool serialization policy)
   - canonical CUA tool-definition exports
 - `@onkernel/cua-agent` owns browser execution orchestration:
-  - `CuaAgent` / `CuaHarness` class wiring around `pi-agent-core`
+  - `CuaAgent` / `CuaAgentHarness` class wiring around vendored pi agent core
   - executing canonical CUA tool calls against Kernel browsers
   - typed executor coverage and translator integration
 
@@ -66,7 +66,7 @@ Dev/test:
 └── @onkernel/ptywright           (PTY-backed TUI regression harness)
 
 External:
-├── @earendil-works/pi-agent-core   # Agent loop, tool execution, streaming, steering
+├── vendored pi agent core          # Agent loop, tool execution, streaming, steering
 │   └── @earendil-works/pi-ai       # Provider transport (OpenAI Responses, Anthropic Messages, Google GenAI)
 ├── @earendil-works/pi-coding-agent # bash / read / write / edit / grep / find / ls AgentTools + SessionManager + skills
 ├── @earendil-works/pi-tui          # Terminal, Editor, Image, differential renderer

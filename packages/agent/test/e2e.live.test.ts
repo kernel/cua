@@ -1,7 +1,14 @@
 import Kernel from "@onkernel/sdk";
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { describe, expect, it } from "vitest";
-import { CuaAgent, CuaHarness } from "../src/index";
+import {
+	CuaAgent,
+	CuaAgentHarness,
+	InMemorySessionRepo,
+	NodeExecutionEnv,
+	type AgentEvent,
+	type AgentHarnessEvent,
+	type AgentMessage,
+} from "../src/index";
 
 const LIVE = process.env.CUA_E2E_LIVE === "1";
 const KERNEL_API_KEY = process.env.KERNEL_API_KEY;
@@ -17,6 +24,13 @@ type ProviderCase = {
 		| "yutori:n1.5-latest";
 	prompt: string;
 	expectToolCalls: boolean;
+	timeoutMs: number;
+};
+
+type ModelSwitchCase = {
+	name: string;
+	from: ProviderCase;
+	to: ProviderCase;
 	timeoutMs: number;
 };
 
@@ -88,6 +102,15 @@ const cases: ProviderCase[] = [
 	},
 ];
 
+const switchCases: ModelSwitchCase[] = [
+	{
+		name: "openai-to-gemini",
+		from: cases[0]!,
+		to: cases[2]!,
+		timeoutMs: 420_000,
+	},
+];
+
 type RunStats = {
 	toolCalls: number;
 	toolResults: number;
@@ -103,6 +126,14 @@ function shouldRunCase(c: ProviderCase): boolean {
 	return Boolean(process.env[c.apiKeyEnvVar]);
 }
 
+function shouldRunSwitchCase(c: ModelSwitchCase): boolean {
+	return shouldRunCase(c.from) && shouldRunCase(c.to);
+}
+
+function createRunStats(): RunStats {
+	return { toolCalls: 0, toolResults: 0, hasReadArtifact: false, toolErrors: [], assistantErrors: [] };
+}
+
 async function withBrowser<T>(run: (client: Kernel, browser: Awaited<ReturnType<Kernel["browsers"]["create"]>>) => Promise<T>): Promise<T> {
 	if (!KERNEL_API_KEY) {
 		throw new Error("KERNEL_API_KEY is required");
@@ -114,6 +145,14 @@ async function withBrowser<T>(run: (client: Kernel, browser: Awaited<ReturnType<
 	} finally {
 		await client.browsers.deleteByID(browser.session_id).catch(() => {});
 	}
+}
+
+async function createHarnessServices(id: string) {
+	const sessionRepo = new InMemorySessionRepo();
+	return {
+		env: new NodeExecutionEnv({ cwd: process.cwd() }),
+		session: await sessionRepo.create({ id }),
+	};
 }
 
 function assertStats(stats: RunStats, expectToolCalls: boolean, providerName: string, runtimeName: "agent" | "harness"): void {
@@ -131,6 +170,29 @@ function assertStats(stats: RunStats, expectToolCalls: boolean, providerName: st
 	}
 }
 
+function recordRunEvent(stats: RunStats, event: AgentEvent | AgentHarnessEvent): void {
+	if (event.type === "tool_execution_start") stats.toolCalls += 1;
+	if (event.type === "tool_execution_end" && event.isError) {
+		stats.toolErrors.push(`${event.toolName}: failed`);
+	}
+	if (event.type === "message_end" && event.message.role === "toolResult") {
+		stats.toolResults += 1;
+		if (
+			event.message.content.some(
+				(block) => block.type === "image" || (block.type === "text" && /url\(\)|Current URL:/.test(block.text)),
+			)
+		) {
+			stats.hasReadArtifact = true;
+		}
+	}
+	if (event.type === "message_end" && event.message.role === "assistant") {
+		stats.finalAssistant = event.message;
+		if (event.message.errorMessage) {
+			stats.assistantErrors.push(event.message.errorMessage);
+		}
+	}
+}
+
 describe("Cua live e2e", () => {
 	for (const c of cases) {
 		const test = shouldRunCase(c) ? it : it.skip;
@@ -139,7 +201,7 @@ describe("Cua live e2e", () => {
 			`${c.name}: CuaAgent executes browser steps`,
 			async () => {
 				await withBrowser(async (client, browser) => {
-					const stats: RunStats = { toolCalls: 0, toolResults: 0, hasReadArtifact: false, toolErrors: [], assistantErrors: [] };
+					const stats = createRunStats();
 					const agent = new CuaAgent({
 						browser,
 						client,
@@ -149,26 +211,7 @@ describe("Cua live e2e", () => {
 						},
 					});
 					agent.subscribe((event) => {
-						if (event.type === "tool_execution_start") stats.toolCalls += 1;
-						if (event.type === "tool_execution_end" && event.isError) {
-							stats.toolErrors.push(`${event.toolName}: failed`);
-						}
-						if (event.type === "message_end" && event.message.role === "toolResult") {
-							stats.toolResults += 1;
-							if (
-								event.message.content.some(
-									(block) => block.type === "image" || (block.type === "text" && /url\(\)|Current URL:/.test(block.text)),
-								)
-							) {
-								stats.hasReadArtifact = true;
-							}
-						}
-						if (event.type === "message_end" && event.message.role === "assistant") {
-							stats.finalAssistant = event.message;
-							if (event.message.errorMessage) {
-								stats.assistantErrors.push(event.message.errorMessage);
-							}
-						}
+						recordRunEvent(stats, event);
 					});
 
 					await agent.prompt(c.prompt);
@@ -179,42 +222,102 @@ describe("Cua live e2e", () => {
 		);
 
 		test(
-			`${c.name}: CuaHarness executes browser steps`,
+			`${c.name}: CuaAgentHarness executes browser steps`,
 			async () => {
 				await withBrowser(async (client, browser) => {
-					const stats: RunStats = { toolCalls: 0, toolResults: 0, hasReadArtifact: false, toolErrors: [], assistantErrors: [] };
-					const harness = new CuaHarness({
+					const stats = createRunStats();
+					const harness = new CuaAgentHarness({
+						...(await createHarnessServices(`${c.name}-harness`)),
 						browser,
 						client,
 						model: c.modelRef,
-						getApiKey: () => process.env[c.apiKeyEnvVar],
+						getApiKeyAndHeaders: async () => {
+							const apiKey = process.env[c.apiKeyEnvVar];
+							return apiKey ? { apiKey } : undefined;
+						},
 					});
 
 					harness.subscribe((event) => {
-						if (event.type === "tool_execution_start") stats.toolCalls += 1;
-						if (event.type === "tool_execution_end" && event.isError) {
-							stats.toolErrors.push(`${event.toolName}: failed`);
-						}
-						if (event.type === "message_end" && event.message.role === "toolResult") {
-							stats.toolResults += 1;
-							if (
-								event.message.content.some(
-									(block) => block.type === "image" || (block.type === "text" && /url\(\)|Current URL:/.test(block.text)),
-								)
-							) {
-								stats.hasReadArtifact = true;
-							}
-						}
-						if (event.type === "message_end" && event.message.role === "assistant") {
-							stats.finalAssistant = event.message;
-							if (event.message.errorMessage) {
-								stats.assistantErrors.push(event.message.errorMessage);
-							}
-						}
+						recordRunEvent(stats, event);
 					});
 
 					await harness.prompt(c.prompt);
 					assertStats(stats, c.expectToolCalls, c.name, "harness");
+				});
+			},
+			c.timeoutMs,
+		);
+	}
+
+	for (const c of switchCases) {
+		const test = shouldRunSwitchCase(c) ? it : it.skip;
+
+		test(
+			`${c.name}: CuaAgent switches models after a turn`,
+			async () => {
+				await withBrowser(async (client, browser) => {
+					let stats = createRunStats();
+					const agent = new CuaAgent({
+						browser,
+						client,
+						getApiKey: (provider) => {
+							if (provider === c.from.modelRef.split(":")[0]) return process.env[c.from.apiKeyEnvVar];
+							if (provider === c.to.modelRef.split(":")[0]) return process.env[c.to.apiKeyEnvVar];
+							return undefined;
+						},
+						initialState: {
+							model: c.from.modelRef,
+						},
+					});
+					agent.subscribe((event) => {
+						recordRunEvent(stats, event);
+					});
+
+					await agent.prompt(c.from.prompt);
+					assertStats(stats, c.from.expectToolCalls, c.from.name, "agent");
+
+					stats = createRunStats();
+					agent.state.model = c.to.modelRef;
+					await agent.prompt(c.to.prompt);
+					assertStats(stats, c.to.expectToolCalls, c.to.name, "agent");
+				});
+			},
+			c.timeoutMs,
+		);
+
+		test(
+			`${c.name}: CuaAgentHarness switches models after a turn`,
+			async () => {
+				await withBrowser(async (client, browser) => {
+					let stats = createRunStats();
+					const harness = new CuaAgentHarness({
+						...(await createHarnessServices(`${c.name}-harness-switch`)),
+						browser,
+						client,
+						model: c.from.modelRef,
+						getApiKeyAndHeaders: async (model) => {
+							if (model.provider === c.from.modelRef.split(":")[0]) {
+								const apiKey = process.env[c.from.apiKeyEnvVar];
+								return apiKey ? { apiKey } : undefined;
+							}
+							if (model.provider === c.to.modelRef.split(":")[0]) {
+								const apiKey = process.env[c.to.apiKeyEnvVar];
+								return apiKey ? { apiKey } : undefined;
+							}
+							return undefined;
+						},
+					});
+					harness.subscribe((event) => {
+						recordRunEvent(stats, event);
+					});
+
+					await harness.prompt(c.from.prompt);
+					assertStats(stats, c.from.expectToolCalls, c.from.name, "harness");
+
+					stats = createRunStats();
+					await harness.setModel(c.to.modelRef);
+					await harness.prompt(c.to.prompt);
+					assertStats(stats, c.to.expectToolCalls, c.to.name, "harness");
 				});
 			},
 			c.timeoutMs,
