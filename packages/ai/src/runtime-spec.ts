@@ -7,16 +7,15 @@ import * as tzafon from "./providers/tzafon/index";
 import * as yutori from "./providers/yutori/index";
 
 /**
- * Provider-resolved runtime defaults for CUA execution.
+ * Runtime configuration for a supported CUA model.
  *
- * `@onkernel/cua-agent` consumes this shape so it can stay provider-neutral:
- * it only needs model, tool definitions, and optional payload middleware,
- * without branching on provider-specific quirks.
+ * Use this to pair a model with the tool definitions, baseline prompt, and
+ * request payload middleware expected by its provider.
  */
 export interface CuaRuntimeSpec {
 	model: Model<Api>;
 	provider: CuaProvider;
-	/** Canonical CUA tool definitions exposed to the model. */
+	/** Model-facing CUA tool definitions for this provider. */
 	toolDefinitions: Tool[];
 	/** Provider-tuned baseline prompt for browser control behavior. */
 	defaultSystemPrompt: string;
@@ -27,11 +26,10 @@ export interface CuaRuntimeSpec {
 export type CuaRuntimeSpecInput = CuaModelRef | Model<Api>;
 
 /**
- * Resolve provider-owned policy from either a CUA model ref or a concrete model.
+ * Resolve provider defaults from either a CUA model ref or a concrete model.
  *
- * This is intentionally the only place where provider-specific defaults are
- * selected. Callers should consume the returned spec and avoid branching on
- * provider names directly.
+ * Use the returned spec to build computer-use requests without hard-coding
+ * model-provider rules in your application.
  */
 export function resolveCuaRuntimeSpec(input: CuaRuntimeSpecInput): CuaRuntimeSpec {
 	const model = typeof input === "string" ? getCuaModel(input) : input;
