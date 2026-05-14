@@ -1,7 +1,39 @@
 import { describe, expect, it } from "vitest";
-import { yutori } from "../src/index";
+import { type CuaAction, yutori } from "../src/index";
+
+const n15CoreActionArgs = {
+	left_click: { coordinates: [500, 250] },
+	double_click: { coordinates: [500, 250] },
+	triple_click: { coordinates: [500, 250] },
+	middle_click: { coordinates: [500, 250] },
+	right_click: { coordinates: [500, 250] },
+	mouse_move: { coordinates: [100, 200] },
+	mouse_down: { coordinates: [100, 200] },
+	mouse_up: { coordinates: [100, 200] },
+	drag: { start_coordinates: [100, 200], coordinates: [300, 400] },
+	scroll: { coordinates: [500, 500], direction: "down", amount: 3 },
+	type: { text: "hello" },
+	key_press: { key: "ctrl+c" },
+	hold_key: { key: "shift", duration: 1.5 },
+	goto_url: { url: "https://example.com" },
+	go_back: {},
+	go_forward: {},
+	refresh: {},
+	wait: { duration: 1 },
+} satisfies Record<(typeof yutori.YUTORI_N15_CORE_ACTION_TYPES)[number], Record<string, unknown>>;
 
 describe("Yutori native action normalization", () => {
+	it("has canonical mappings for every n1.5 core action", () => {
+		for (const action of yutori.YUTORI_N15_CORE_ACTION_TYPES) {
+			const canonical = yutori.toCanonicalActions(action, n15CoreActionArgs[action]);
+			expect(canonical, `${action} did not map to canonical CUA actions`).toBeDefined();
+			expect(canonical!.length, `${action} mapped to an empty action list`).toBeGreaterThan(0);
+			for (const item of canonical as CuaAction[]) {
+				expect(typeof item.type).toBe("string");
+			}
+		}
+	});
+
 	it("normalizes n1/n1.5 click actions to canonical individual actions", () => {
 		expect(yutori.toCanonicalActions("left_click", { coordinates: [500, 250] })).toEqual([
 			{ type: "click", x: 500, y: 250 },
@@ -26,13 +58,21 @@ describe("Yutori native action normalization", () => {
 			{ type: "drag", path: [{ x: 100, y: 200 }, { x: 300, y: 400 }], button: "left" },
 		]);
 		expect(yutori.toCanonicalActions("type", { text: "hello", clear_before_typing: true, press_enter_after: true })).toEqual([
-			{ type: "keypress", keys: ["Control", "a"] },
-			{ type: "keypress", keys: ["Backspace"] },
+			{ type: "keypress", keys: ["Control_L", "a"] },
+			{ type: "keypress", keys: ["BackSpace"] },
 			{ type: "type", text: "hello" },
-			{ type: "keypress", keys: ["Enter"] },
+			{ type: "keypress", keys: ["Return"] },
 		]);
-		expect(yutori.toCanonicalActions("hold_key", { key: "Shift", duration: 1.5 })).toEqual([
-			{ type: "keypress", keys: ["Shift"], duration: 1500 },
+		expect(yutori.toCanonicalActions("hold_key", { key: "shift", duration: 1.5 })).toEqual([
+			{ type: "keypress", keys: ["Shift_L"], duration: 1500 },
+		]);
+		expect(yutori.toCanonicalActions("key_press", { key: "ctrl+c" })).toEqual([
+			{ type: "keypress", keys: ["Control_L", "c"] },
+		]);
+		expect(yutori.toCanonicalActions("key_press", { key: "down down enter" })).toEqual([
+			{ type: "keypress", keys: ["Down"] },
+			{ type: "keypress", keys: ["Down"] },
+			{ type: "keypress", keys: ["Return"] },
 		]);
 	});
 

@@ -102,25 +102,30 @@ type DragMouseButton = "left" | "right" | "middle";
 function toSdkAction(type: string, action: ModelAction): KernelBatchAction {
 	switch (type) {
 		case "click":
+			const clickHoldKeys = readHoldKeys(action.hold_keys);
 			return {
 				type: "click_mouse",
 				click_mouse: {
 					x: toInt(action.x),
 					y: toInt(action.y),
 					button: clickMouseButtonOr(action.button, "left"),
+					...(clickHoldKeys.length > 0 ? { hold_keys: clickHoldKeys } : {}),
 				},
 			};
 		case "double_click":
+			const doubleClickHoldKeys = readHoldKeys(action.hold_keys);
 			return {
 				type: "click_mouse",
 				click_mouse: {
 					x: toInt(action.x),
 					y: toInt(action.y),
 					num_clicks: 2,
+					...(doubleClickHoldKeys.length > 0 ? { hold_keys: doubleClickHoldKeys } : {}),
 				},
 			};
 		case "mouse_down":
 		case "mouse_up":
+			const mouseHoldKeys = readHoldKeys(action.hold_keys);
 			return {
 				type: "click_mouse",
 				click_mouse: {
@@ -128,13 +133,15 @@ function toSdkAction(type: string, action: ModelAction): KernelBatchAction {
 					y: toInt(action.y),
 					button: clickMouseButtonOr(action.button, "left"),
 					click_type: type === "mouse_down" ? "down" : "up",
+					...(mouseHoldKeys.length > 0 ? { hold_keys: mouseHoldKeys } : {}),
 				},
 			};
 		case "type":
 			return { type: "type_text", type_text: { text: typeof action.text === "string" ? action.text : "" } };
 		case "keypress":
-			return keypress(toStringArray(action.keys));
+			return keypress(toStringArray(action.keys), action.duration);
 		case "scroll":
+			const scrollHoldKeys = readHoldKeys(action.hold_keys);
 			return {
 				type: "scroll",
 				scroll: {
@@ -142,12 +149,29 @@ function toSdkAction(type: string, action: ModelAction): KernelBatchAction {
 					y: toInt(action.y),
 					delta_x: toInt(action.scroll_x),
 					delta_y: toInt(action.scroll_y),
+					...(scrollHoldKeys.length > 0 ? { hold_keys: scrollHoldKeys } : {}),
 				},
 			};
 		case "move":
-			return { type: "move_mouse", move_mouse: { x: toInt(action.x), y: toInt(action.y) } };
+			const moveHoldKeys = readHoldKeys(action.hold_keys);
+			return {
+				type: "move_mouse",
+				move_mouse: {
+					x: toInt(action.x),
+					y: toInt(action.y),
+					...(moveHoldKeys.length > 0 ? { hold_keys: moveHoldKeys } : {}),
+				},
+			};
 		case "drag":
-			return { type: "drag_mouse", drag_mouse: { path: toPath(action.path), button: dragMouseButtonOr(action.button, "left") } };
+			const dragHoldKeys = readHoldKeys(action.hold_keys);
+			return {
+				type: "drag_mouse",
+				drag_mouse: {
+					path: toPath(action.path),
+					button: dragMouseButtonOr(action.button, "left"),
+					...(dragHoldKeys.length > 0 ? { hold_keys: dragHoldKeys } : {}),
+				},
+			};
 		case "wait":
 			return { type: "sleep", sleep: { duration_ms: typeof action.ms === "number" ? Math.trunc(action.ms) : 1000 } };
 		default:
@@ -188,7 +212,11 @@ function toStringArray(value: unknown): string[] {
 	return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
-function keypress(keys: string[]): KernelBatchAction {
+function readHoldKeys(value: unknown): string[] {
+	return toStringArray(value).flatMap((key) => translateKeys([key]));
+}
+
+function keypress(keys: string[], duration: unknown = undefined): KernelBatchAction {
 	const translated = translateKeys(keys);
 	const pressedKeys = translated.filter((key) => !isModifierKey(key));
 	const holdKeys = pressedKeys.length > 0 ? translated.filter(isModifierKey) : translated.slice(0, -1);
@@ -197,6 +225,7 @@ function keypress(keys: string[]): KernelBatchAction {
 		press_key: {
 			keys: pressedKeys.length > 0 ? pressedKeys : translated.slice(-1),
 			...(holdKeys.length > 0 ? { hold_keys: holdKeys } : {}),
+			...(typeof duration === "number" && Number.isFinite(duration) && duration > 0 ? { duration: Math.trunc(duration) } : {}),
 		},
 	};
 }
@@ -214,6 +243,7 @@ const KEY_ALIASES: Record<string, string> = {
 	shiftleft: "Shift_L",
 	meta: "Super_L",
 	super: "Super_L",
+	super_l: "Super_L",
 	cmd: "Super_L",
 	command: "Super_L",
 	enter: "Return",

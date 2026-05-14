@@ -33,12 +33,15 @@ export {
 //   n1.5 expanded (browser_tools_expanded-20260403): core +
 //     extract_elements, find, set_element_value, execute_js
 // Sources:
-//   https://github.com/yutori-ai/yutori-sdk-python/blob/main/api.md
-//   https://github.com/yutori-ai/yutori-sdk-python/blob/main/yutori/navigator/models.py
+//   https://docs.yutori.com/reference/n1
 //   https://docs.yutori.com/reference/n1-5
+//   https://docs.yutori.com/llm-quickstart.md
 //   https://github.com/yutori-ai/yutori-sdk-python/blob/main/yutori/navigator/coordinates.py
 export const COMPUTER_TOOL_COORDINATES = { type: "normalized", range: [0, 1000] } as const satisfies ComputerToolCoordinateSystem;
 
+// Yutori's Navigator quickstart recommends putting extra instructions in the
+// first user message instead of supplying a custom system prompt.
+// Source: https://docs.yutori.com/llm-quickstart.md
 export const YUTORI_INSTRUCTIONS_RAW = "";
 
 export function buildYutoriSystemPrompt(opts: { suffix?: string } = {}): string {

@@ -133,6 +133,83 @@ export type CuaAction =
 	| CuaActionUrl
 	| CuaActionCursorPosition;
 
+export const CUA_MODIFIER_KEYSYMS = ["Control_L", "Alt_L", "Shift_L", "Super_L"] as const;
+
+export type CuaModifierKeysym = (typeof CUA_MODIFIER_KEYSYMS)[number];
+
+const CUA_KEY_ALIASES: Record<string, string> = {
+	alt: "Alt_L",
+	alt_l: "Alt_L",
+	altleft: "Alt_L",
+	backspace: "BackSpace",
+	cmd: "Super_L",
+	command: "Super_L",
+	control: "Control_L",
+	control_l: "Control_L",
+	controlleft: "Control_L",
+	ctrl: "Control_L",
+	delete: "Delete",
+	down: "Down",
+	end: "End",
+	enter: "Return",
+	esc: "Escape",
+	escape: "Escape",
+	home: "Home",
+	left: "Left",
+	meta: "Super_L",
+	option: "Alt_L",
+	pagedown: "Next",
+	page_down: "Next",
+	pageup: "Prior",
+	page_up: "Prior",
+	return: "Return",
+	right: "Right",
+	shift: "Shift_L",
+	shift_l: "Shift_L",
+	shiftleft: "Shift_L",
+	space: "space",
+	super: "Super_L",
+	tab: "Tab",
+	up: "Up",
+};
+
+const CUA_MODIFIER_KEYSYM_SET = new Set<string>(CUA_MODIFIER_KEYSYMS);
+
+/**
+ * Normalize provider-emitted key aliases to Kernel's xdotool/X11 keysyms.
+ * Unknown values pass through so provider-specific or printable keys can still
+ * be executed when the Kernel computer API already understands them.
+ */
+export function normalizeCuaKey(value: string): string {
+	const trimmed = value.trim();
+	const lookup = trimmed.replace(/[-\s]/g, "_").toLowerCase();
+	const alias = CUA_KEY_ALIASES[lookup];
+	if (alias) return alias;
+	if (/^f\d{1,2}$/i.test(trimmed)) return trimmed.toUpperCase();
+	if (/^arrow/i.test(trimmed)) return normalizeCuaKey(trimmed.slice("arrow".length));
+	if (trimmed.length === 1 && trimmed >= "A" && trimmed <= "Z") return trimmed.toLowerCase();
+	return trimmed;
+}
+
+export function normalizeCuaModifierKey(value: string): CuaModifierKeysym | undefined {
+	const key = normalizeCuaKey(value);
+	return CUA_MODIFIER_KEYSYM_SET.has(key) ? (key as CuaModifierKeysym) : undefined;
+}
+
+export function normalizeCuaKeyCombo(value: string): string[] {
+	return value
+		.split("+")
+		.map((part) => normalizeCuaKey(part))
+		.filter(Boolean);
+}
+
+export function normalizeCuaKeySequence(value: string): string[][] {
+	return value
+		.split(/\s+/)
+		.map((part) => normalizeCuaKeyCombo(part))
+		.filter((combo) => combo.length > 0);
+}
+
 const PointSchema = Type.Object(
 	{
 		x: Type.Number(),

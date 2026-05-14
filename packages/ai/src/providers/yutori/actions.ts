@@ -2,13 +2,28 @@ import {
 	CUA_ACTION_TYPES,
 	CUA_BATCH_TOOL_NAME,
 	CUA_NAVIGATION_TOOL_NAME,
+	normalizeCuaKeyCombo,
+	normalizeCuaKeySequence,
+	normalizeCuaModifierKey,
 	type CuaAction,
 	type CuaActionType,
 } from "../common";
 
+/**
+ * Native Yutori Navigator n1.5 tool-set ids.
+ *
+ * Source of truth:
+ * - https://docs.yutori.com/reference/n1-5
+ * - https://docs.yutori.com/llm-quickstart.md
+ */
 export const YUTORI_N15_CORE_TOOL_SET = "browser_tools_core-20260403";
 export const YUTORI_N15_EXPANDED_TOOL_SET = "browser_tools_expanded-20260403";
 
+/**
+ * DOM/ref-backed Navigator n1.5 actions. We intentionally disable these until
+ * CuaAgent has the ref/DOM execution path that Yutori documents for the
+ * expanded tool set.
+ */
 export const YUTORI_N15_EXPANDED_ACTION_TYPES = [
 	"extract_elements",
 	"find",
@@ -16,6 +31,11 @@ export const YUTORI_N15_EXPANDED_ACTION_TYPES = [
 	"execute_js",
 ] as const;
 
+/**
+ * Navigator n1's fixed legacy browser action space.
+ *
+ * Source of truth: https://docs.yutori.com/reference/n1
+ */
 export const YUTORI_N1_ACTION_TYPES = [
 	"left_click",
 	"double_click",
@@ -32,6 +52,13 @@ export const YUTORI_N1_ACTION_TYPES = [
 	"wait",
 ] as const;
 
+/**
+ * Navigator n1.5 core visual action space. These are the actions available
+ * when `tool_set` is `browser_tools_core-20260403`, which keeps CuaAgent in the
+ * pure screenshot/coordinate path and avoids DOM refs.
+ *
+ * Source of truth: https://docs.yutori.com/reference/n1-5
+ */
 export const YUTORI_N15_CORE_ACTION_TYPES = [
 	"left_click",
 	"double_click",
@@ -74,17 +101,11 @@ const DEFAULT_WAIT_MS = 2000;
 const NAVIGATION_WAIT_MS = 1500;
 const GOTO_WAIT_MS = 2000;
 
-const MODIFIER_MAP: Record<string, string> = {
-	alt: "alt",
-	command: "super",
-	control: "ctrl",
-	ctrl: "ctrl",
-	cmd: "super",
-	meta: "super",
-	shift: "shift",
-	super: "super",
-};
-
+/**
+ * Yutori n1.5 exposes built-in browser tools via `tool_set`, not by accepting
+ * client-supplied JSON tool definitions. Keeping this empty prevents us from
+ * sending duplicate CUA batch/browser tools alongside Yutori's native tools.
+ */
 export function createComputerToolDefinitions(_options?: unknown): [] {
 	return [];
 }
@@ -195,34 +216,36 @@ function toTypeActions(args: Record<string, unknown>): CuaAction[] | undefined {
 	if (text === undefined) return undefined;
 	const actions: CuaAction[] = [];
 	if (args.clear_before_typing === true) {
-		actions.push({ type: "keypress", keys: ["Control", "a"] }, { type: "keypress", keys: ["Backspace"] });
+		actions.push({ type: "keypress", keys: ["Control_L", "a"] }, { type: "keypress", keys: ["BackSpace"] });
 	}
 	actions.push({ type: "type", text });
-	if (args.press_enter_after === true) actions.push({ type: "keypress", keys: ["Enter"] });
+	if (args.press_enter_after === true) actions.push({ type: "keypress", keys: ["Return"] });
 	return actions;
 }
 
 function toKeypressAction(args: Record<string, unknown>): CuaAction[] | undefined {
-	const keys = readKeys(args.key_comb ?? args.key);
-	return keys.length > 0 ? [{ type: "keypress", keys }] : undefined;
+	const sequence = readKeySequence(args.key_comb ?? args.key);
+	return sequence.length > 0 ? sequence.map((keys) => ({ type: "keypress", keys })) : undefined;
 }
 
 function toHoldKeyAction(args: Record<string, unknown>): CuaAction[] | undefined {
-	const keys = readKeys(args.key_comb ?? args.key);
+	const keys = readKeyCombo(args.key_comb ?? args.key);
 	return keys.length > 0 ? [{ type: "keypress", keys, duration: secondsToMs(args.duration, 1000) }] : undefined;
 }
 
-function readKeys(value: unknown): string[] {
+function readKeyCombo(value: unknown): string[] {
 	if (typeof value !== "string") return [];
-	return value
-		.split("+")
-		.map((part) => part.trim())
-		.filter(Boolean);
+	return normalizeCuaKeyCombo(value);
+}
+
+function readKeySequence(value: unknown): string[][] {
+	if (typeof value !== "string") return [];
+	return normalizeCuaKeySequence(value);
 }
 
 function holdKeys(value: unknown): { hold_keys?: string[] } {
 	if (typeof value !== "string") return {};
-	const key = MODIFIER_MAP[value.trim().toLowerCase()];
+	const key = normalizeCuaModifierKey(value);
 	return key ? { hold_keys: [key] } : {};
 }
 
