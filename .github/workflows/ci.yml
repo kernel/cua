@@ -45,7 +45,7 @@ jobs:
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
           TZAFON_API_KEY: ${{ secrets.TZAFON_API_KEY }}
           YUTORI_API_KEY: ${{ secrets.YUTORI_API_KEY }}
-        run: npm test --workspace @onkernel/cua-ai -- test/batch-tool.integration.test.ts
+        run: npm test --workspace @onkernel/cua-ai -- test/computer-tool.integration.test.ts
 
   agent-e2e:
     runs-on: ubuntu-latest

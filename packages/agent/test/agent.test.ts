@@ -9,7 +9,6 @@ import {
 	CuaAgentHarness,
 	InMemorySessionRepo,
 	NodeExecutionEnv,
-	createCuaComputerTools,
 	type AgentTool,
 	type KernelBrowser,
 	type StreamFn,
@@ -17,6 +16,10 @@ import {
 
 const browser = { session_id: "browser_123" } as KernelBrowser;
 const client = {} as Kernel;
+const tinyPng = Buffer.from(
+	"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
+	"base64",
+);
 
 function createAssistantMessage(model: { api: string; provider: string; id: string }): AssistantMessage {
 	return {
@@ -46,6 +49,18 @@ async function createHarnessServices() {
 	};
 }
 
+function createCustomTool(name = "custom"): AgentTool {
+	return {
+		name,
+		label: name,
+		description: "custom tool",
+		parameters: { type: "object", properties: {}, additionalProperties: false } as never,
+		async execute() {
+			return { content: [{ type: "text", text: "ok" }], details: {} };
+		},
+	};
+}
+
 describe("CuaAgent", () => {
 	it("extends pi Agent and resolves model refs in initialState", () => {
 		const runtime = resolveCuaRuntimeSpec("openai:gpt-5.5");
@@ -63,56 +78,57 @@ describe("CuaAgent", () => {
 		expect(agent.state.systemPrompt).toBe(runtime.defaultSystemPrompt);
 	});
 
-	it("uses provided tools exactly", () => {
-		const tool: AgentTool = {
-			name: "custom",
-			label: "custom",
-			description: "custom tool",
-			parameters: { type: "object", properties: {}, additionalProperties: false } as never,
-			async execute() {
-				return { content: [{ type: "text", text: "ok" }], details: {} };
-			},
-		};
+	it("appends extra tools to provider CUA tools", () => {
+		const runtime = resolveCuaRuntimeSpec("yutori:n1.5-latest");
+		const tool = createCustomTool();
 
 		const agent = new CuaAgent({
 			browser,
 			client,
+			extraTools: [tool],
 			initialState: {
 				model: "yutori:n1.5-latest",
-				tools: [tool],
 			},
 		});
 
-		expect(agent.state.tools).toEqual([tool]);
+		expect(agent.state.tools.map((item) => item.name)).toEqual([...runtime.toolDefinitions.map((item) => item.name), "custom"]);
 	});
 
-	it("lets users explicitly compose default tools", () => {
+	it("always keeps provider CUA tools when adding extra tools", () => {
 		const runtime = resolveCuaRuntimeSpec("openai:gpt-5.5");
-		const tools = [
-			...createCuaComputerTools({ browser, client, toolDefinitions: runtime.toolDefinitions }),
-			{
-				name: "custom",
-				label: "custom",
-				description: "custom tool",
-				parameters: { type: "object", properties: {}, additionalProperties: false } as never,
-				async execute() {
-					return { content: [{ type: "text", text: "ok" }], details: {} };
-				},
-			} satisfies AgentTool,
-		];
+		const tool = createCustomTool();
 
 		const agent = new CuaAgent({
 			browser,
 			client,
+			extraTools: [tool],
 			initialState: {
 				model: "openai:gpt-5.5",
-				tools,
 				systemPrompt: "Use the browser carefully.",
 			},
 		});
 
-		expect(agent.state.tools).toHaveLength(3);
+		expect(agent.state.tools.map((item) => item.name)).toEqual([...runtime.toolDefinitions.map((item) => item.name), "custom"]);
 		expect(agent.state.systemPrompt).toBe("Use the browser carefully.");
+	});
+
+	it("synthesizes batch and navigation tools when requested", () => {
+		const runtime = resolveCuaRuntimeSpec("openai:gpt-5.5");
+		const agent = new CuaAgent({
+			browser,
+			client,
+			batchTool: true,
+			computerUseExtra: true,
+			initialState: {
+				model: "openai:gpt-5.5",
+			},
+		});
+
+		expect(agent.state.tools.map((tool) => tool.name)).toEqual([
+			...runtime.toolDefinitions.map((tool) => tool.name),
+			"batch_computer_actions",
+			"computer_use_extra",
+		]);
 	});
 
 	it("refreshes CUA runtime state when state.model changes", () => {
@@ -132,29 +148,22 @@ describe("CuaAgent", () => {
 		expect(agent.state.tools).toHaveLength(runtime.toolDefinitions.length);
 	});
 
-	it("keeps caller-owned tools and system prompt when state.model changes", () => {
-		const tool: AgentTool = {
-			name: "custom",
-			label: "custom",
-			description: "custom tool",
-			parameters: { type: "object", properties: {}, additionalProperties: false } as never,
-			async execute() {
-				return { content: [{ type: "text", text: "ok" }], details: {} };
-			},
-		};
+	it("keeps extra tools and caller-owned system prompt when state.model changes", () => {
+		const tool = createCustomTool();
 		const agent = new CuaAgent({
 			browser,
 			client,
+			extraTools: [tool],
 			initialState: {
 				model: "openai:gpt-5.5",
-				tools: [tool],
 				systemPrompt: "custom prompt",
 			},
 		});
 
 		agent.state.model = "google:gemini-3-pro-preview";
 
-		expect(agent.state.tools).toEqual([tool]);
+		const runtime = resolveCuaRuntimeSpec("google:gemini-3-pro-preview");
+		expect(agent.state.tools.map((item) => item.name)).toEqual([...runtime.toolDefinitions.map((item) => item.name), "custom"]);
 		expect(agent.state.systemPrompt).toBe("custom prompt");
 	});
 
@@ -186,6 +195,68 @@ describe("CuaAgent", () => {
 
 		expect(payloads).toEqual([{ payload: { provider: "openai", store: true }, userHook: true }]);
 	});
+
+	it("uses yutori runtime hooks to append screenshots while stripping local executor tools", async () => {
+		const payloads: unknown[] = [];
+		const screenshotClient = {
+			browsers: {
+				computer: {
+					captureScreenshot: async () => new Response(tinyPng),
+				},
+			},
+		} as unknown as Kernel;
+		const streamFn: StreamFn = (model, _context, options) => {
+			const stream = createAssistantMessageEventStream();
+			void (async () => {
+				payloads.push(
+					await options?.onPayload?.(
+						{
+							messages: [{ role: "user", content: "Inspect the page" }],
+							tools: [
+								{ type: "function", function: { name: "click" } },
+								{ type: "function", function: { name: "batch_computer_actions" } },
+								{ type: "function", function: { name: "computer_use_extra" } },
+								{ type: "function", function: { name: "custom_tool" } },
+							],
+						},
+						model,
+					),
+				);
+				const message = createAssistantMessage(model);
+				stream.push({ type: "start", partial: message });
+				stream.push({ type: "done", reason: "stop", message });
+				stream.end(message);
+			})();
+			return stream;
+		};
+
+		const agent = new CuaAgent({
+			browser,
+			client: screenshotClient,
+			streamFn,
+			extraTools: [createCustomTool("custom_tool")],
+			batchTool: true,
+			computerUseExtra: true,
+			initialState: {
+				model: "yutori:n1.5-latest",
+			},
+		});
+
+		await agent.prompt("hello");
+
+		const payload = payloads[0] as {
+			messages: Array<{ content: Array<{ type: string; image_url?: { url: string } }> }>;
+			tools?: Array<{ function?: { name?: string } }>;
+			tool_set?: string;
+		};
+		expect(payload.tool_set).toBe("browser_tools_core-20260403");
+		expect(payload.tools?.map((tool) => tool.function?.name)).toEqual([
+			"batch_computer_actions",
+			"computer_use_extra",
+			"custom_tool",
+		]);
+		expect(payload.messages[0]!.content.at(-1)?.image_url?.url.startsWith("data:image/webp;base64,")).toBe(true);
+	});
 });
 
 describe("CuaAgentHarness", () => {
@@ -216,6 +287,23 @@ describe("CuaAgentHarness", () => {
 
 		expect(harness.agent.state.model.id).toBe(runtime.model.id);
 		expect(harness.agent.state.tools).toHaveLength(runtime.toolDefinitions.length);
+	});
+
+	it("appends extraTools in harness construction", async () => {
+		const runtime = resolveCuaRuntimeSpec("openai:gpt-5.5");
+		const tool = createCustomTool();
+		const harness = new CuaAgentHarness({
+			...(await createHarnessServices()),
+			browser,
+			client,
+			model: "openai:gpt-5.5",
+			extraTools: [tool],
+		});
+
+		expect(harness.agent.state.tools.map((item) => item.name)).toEqual([
+			...runtime.toolDefinitions.map((item) => item.name),
+			"custom",
+		]);
 	});
 
 	it("preserves active tool selection when setModel refreshes tools", async () => {

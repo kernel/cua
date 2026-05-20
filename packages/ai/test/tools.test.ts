@@ -3,6 +3,8 @@ import {
 	CUA_ACTION_TYPES,
 	CUA_BATCH_TOOL_NAME,
 	CUA_NAVIGATION_TOOL_NAME,
+	createCuaBatchToolDefinition,
+	createCuaNavigationToolDefinition,
 	type CuaActionType,
 	anthropic,
 	gemini,
@@ -11,7 +13,7 @@ import {
 	yutori,
 } from "../src/index";
 
-const providers = { openai, anthropic, gemini, tzafon, yutori };
+const providers = { openai, anthropic, gemini, tzafon };
 
 function batchActionVariants(tool: { parameters: any }): any[] {
 	const items = tool.parameters.properties.actions.items;
@@ -20,70 +22,61 @@ function batchActionVariants(tool: { parameters: any }): any[] {
 
 describe("computer tool definitions", () => {
 	for (const [provider, namespace] of Object.entries(providers)) {
-		it(`returns a default batch tool for ${provider}`, () => {
-			const tools = namespace.createComputerToolDefinitions();
-			expect(tools.map((tool) => tool.name)).toEqual([CUA_BATCH_TOOL_NAME, CUA_NAVIGATION_TOOL_NAME]);
+		it(`returns individual CUA action tools for ${provider}`, () => {
+			const tools = namespace.computerTools();
+			expect(tools.map((tool) => tool.name)).toEqual([...CUA_ACTION_TYPES]);
 		});
 
-		it(`returns a narrowed batch tool for ${provider}`, () => {
-			const tools = namespace.createComputerToolDefinitions({ actions: ["click"] });
-			expect(tools.map((tool) => tool.name)).toEqual([CUA_BATCH_TOOL_NAME]);
+		it(`returns narrowed individual tools for ${provider}`, () => {
+			const tools = namespace.computerTools({ actions: ["click"] });
+			expect(tools.map((tool) => tool.name)).toEqual(["click"]);
+			expect(tools[0]!.parameters.properties.type).toBeUndefined();
+			expect(tools[0]!.parameters.required).toEqual(["x", "y"]);
 		});
 
-		it(`default batch tool for ${provider} covers every CUA action type`, () => {
-			const tools = namespace.createComputerToolDefinitions();
-			const variants = batchActionVariants(tools[0]!);
-			const seen = variants.map((variant) => variant.properties.type.const).sort();
-			expect(seen).toEqual([...CUA_ACTION_TYPES].sort());
-		});
-
-		it(`each action variant for ${provider} accepts only declared fields`, () => {
-			const tools = namespace.createComputerToolDefinitions();
-			for (const variant of batchActionVariants(tools[0]!)) {
-				expect(variant.additionalProperties).toBe(false);
-				expect(variant.required).toContain("type");
+		it(`each individual action schema for ${provider} accepts only declared fields`, () => {
+			const tools = namespace.computerTools();
+			for (const tool of tools) {
+				expect(tool.parameters.additionalProperties).toBe(false);
+				expect(tool.parameters.properties.type).toBeUndefined();
 			}
 		});
 	}
 
-	it("narrows the batch action schema when actions are provided", () => {
-		const tools = openai.createComputerToolDefinitions({ actions: ["click"] });
-		expect(tools.map((tool) => tool.name)).toEqual([CUA_BATCH_TOOL_NAME]);
-
-		const variants = batchActionVariants(tools[0]!);
-		expect(variants).toHaveLength(1);
-		expect(variants[0].properties.type.const).toBe("click");
-		expect(variants[0].properties.x).toBeTruthy();
-		expect(variants[0].properties.text).toBeUndefined();
-	});
-
-	it("preserves action ordering in narrowed batch schemas", () => {
+	it("synthesizes a batch tool from an action subset", () => {
 		const subset: CuaActionType[] = ["screenshot", "type", "click"];
-		const tools = openai.createComputerToolDefinitions({ actions: subset });
-		const variants = batchActionVariants(tools[0]!);
-		expect(variants.map((v) => v.properties.type.const)).toEqual(subset);
+		const tool = createCuaBatchToolDefinition(subset);
+		expect(tool.name).toBe(CUA_BATCH_TOOL_NAME);
+		expect(batchActionVariants(tool).map((v) => v.properties.type.const)).toEqual(subset);
 	});
 
-	it("emits a single-variant schema (not a union) when narrowed to one action", () => {
-		const tools = openai.createComputerToolDefinitions({ actions: ["click"] });
-		const items = tools[0]!.parameters.properties.actions.items;
+	it("emits a single-variant batch schema when narrowed to one action", () => {
+		const tool = createCuaBatchToolDefinition(["click"]);
+		const items = tool.parameters.properties.actions.items;
 		expect(items.anyOf).toBeUndefined();
 		expect(items.oneOf).toBeUndefined();
 		expect(items.properties.type.const).toBe("click");
 	});
 
-	it("omits computer_use_extra navigation tool when actions are narrowed", () => {
-		const tools = openai.createComputerToolDefinitions({ actions: ["click", "goto"] });
-		expect(tools).toHaveLength(1);
-		expect(tools[0]!.name).toBe(CUA_BATCH_TOOL_NAME);
+	it("synthesizes the navigation helper separately", () => {
+		const tool = createCuaNavigationToolDefinition();
+		expect(tool.name).toBe(CUA_NAVIGATION_TOOL_NAME);
 	});
 
-	it("exposes batch and navigation tool name constants identically across providers", () => {
-		for (const namespace of Object.values(providers)) {
-			const tools = namespace.createComputerToolDefinitions();
-			expect(tools[0]!.name).toBe(CUA_BATCH_TOOL_NAME);
-			expect(tools[1]!.name).toBe(CUA_NAVIGATION_TOOL_NAME);
-		}
+	it("exposes local canonical executor definitions for Yutori", () => {
+		const tools = yutori.computerTools();
+		expect(tools.map((tool) => tool.name)).toEqual([...yutori.YUTORI_CANONICAL_ACTION_TYPES]);
+		expect(tools.map((tool) => tool.name)).not.toContain(CUA_BATCH_TOOL_NAME);
+		expect(tools.map((tool) => tool.name)).not.toContain(CUA_NAVIGATION_TOOL_NAME);
+	});
+
+	it("exports Yutori native action sets by model family", () => {
+		expect(yutori.yutoriNativeActionsForModel("n1-latest")).toEqual(yutori.YUTORI_N1_ACTION_TYPES);
+		expect(yutori.yutoriNativeActionsForModel("n1.5-latest")).toEqual(yutori.YUTORI_N15_CORE_ACTION_TYPES);
+		expect(yutori.YUTORI_N15_ACTION_TYPES).toEqual([
+			...yutori.YUTORI_N15_CORE_ACTION_TYPES,
+			...yutori.YUTORI_N15_EXPANDED_ACTION_TYPES,
+		]);
 	});
 
 	it("exports provider coordinate systems", () => {

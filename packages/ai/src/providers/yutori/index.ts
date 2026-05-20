@@ -1,24 +1,25 @@
 import type { ComputerToolCoordinateSystem } from "../common";
 
 export {
-	CUA_ACTION_TYPES as YUTORI_ACTION_TYPES,
-	CUA_BATCH_TOOL_DESCRIPTION as YUTORI_BATCH_DESCRIPTION,
-	CUA_BATCH_TOOL_NAME as YUTORI_BATCH_TOOL_NAME,
-	createComputerToolDefinitions,
-	createCuaActionSchema as createActionSchema,
-	createCuaBatchSchema as createBatchSchema,
-	CuaBatchSchema as YutoriBatchSchema,
-} from "../common";
-export type {
-	CuaAction as YutoriAction,
-	CreateComputerToolDefinitionsOptions,
-	CuaBatchInput as YutoriBatchInput,
-} from "../common";
+	computerTools,
+	toCanonicalActions,
+	yutoriNativeActionsForModel,
+	yutoriToolSetForModel,
+	YUTORI_CANONICAL_ACTION_TYPES,
+	YUTORI_N1_ACTION_TYPES,
+	YUTORI_N15_ACTION_TYPES,
+	YUTORI_N15_CORE_ACTION_TYPES,
+	YUTORI_N15_CORE_TOOL_SET,
+	YUTORI_N15_EXPANDED_ACTION_TYPES,
+	YUTORI_N15_EXPANDED_TOOL_SET,
+} from "./actions";
+export type { YutoriN1ActionType, YutoriN15CoreActionType, YutoriN15ExpandedActionType, YutoriNativeActionType } from "./actions";
 export {
 	YUTORI_CHAT_COMPLETIONS_API,
 	streamSimpleYutori,
 	streamYutori,
 	yutoriBuiltinToolsOnPayload,
+	yutoriNativeToolSetOnPayload,
 } from "./provider";
 
 // Provider-native action vocabulary differs between Navigator versions:
@@ -32,13 +33,16 @@ export {
 //   n1.5 expanded (browser_tools_expanded-20260403): core +
 //     extract_elements, find, set_element_value, execute_js
 // Sources:
-//   https://github.com/yutori-ai/yutori-sdk-python/blob/main/api.md
-//   https://github.com/yutori-ai/yutori-sdk-python/blob/main/yutori/navigator/models.py
+//   https://docs.yutori.com/reference/n1
 //   https://docs.yutori.com/reference/n1-5
+//   https://docs.yutori.com/llm-quickstart.md
 //   https://github.com/yutori-ai/yutori-sdk-python/blob/main/yutori/navigator/coordinates.py
 export const COMPUTER_TOOL_COORDINATES = { type: "normalized", range: [0, 1000] } as const satisfies ComputerToolCoordinateSystem;
 
-export const YUTORI_INSTRUCTIONS_RAW = `You control a Kernel cloud browser. Prefer batched computer actions for browser interaction and include screenshot or URL reads when you need updated state.`;
+// Yutori's Navigator quickstart recommends putting extra instructions in the
+// first user message instead of supplying a custom system prompt.
+// Source: https://docs.yutori.com/llm-quickstart.md
+export const YUTORI_INSTRUCTIONS_RAW = "";
 
 export function buildYutoriSystemPrompt(opts: { suffix?: string } = {}): string {
 	return [YUTORI_INSTRUCTIONS_RAW, opts.suffix].filter(Boolean).join("\n\n");

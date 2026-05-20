@@ -13,14 +13,20 @@ import {
 	type TextContent,
 	type ToolCall,
 } from "@earendil-works/pi-ai";
-import { CUA_ACTION_TYPES, CUA_BATCH_TOOL_NAME, type CuaAction } from "../common";
+import {
+	isYutoriLocalActionToolName,
+	toCanonicalActions,
+	yutoriToolSetForModel,
+	YUTORI_N15_EXPANDED_ACTION_TYPES,
+} from "./actions";
+import { canonicalToolCallArguments, canonicalToolCallName } from "../common";
+import type { CuaPayloadContext } from "../../runtime-spec";
 
 export const YUTORI_CHAT_COMPLETIONS_API = "yutori-chat-completions";
 
-const YUTORI_BUILTIN_TOOL_NAMES = new Set<string>(CUA_ACTION_TYPES);
-
 export interface YutoriOptions extends StreamOptions {
 	temperature?: number;
+	keepToolNames?: readonly string[];
 }
 
 export const streamYutori: StreamFunction<typeof YUTORI_CHAT_COMPLETIONS_API, YutoriOptions> = (model, context, options) => {
@@ -35,17 +41,25 @@ export const streamSimpleYutori: StreamFunction<typeof YUTORI_CHAT_COMPLETIONS_A
 	options,
 ) => streamYutori(model, context, options);
 
-export function yutoriBuiltinToolsOnPayload(payload: unknown): unknown | undefined {
+export function yutoriBuiltinToolsOnPayload(payload: unknown, model?: Model<Api>, context?: CuaPayloadContext): unknown | undefined {
+	return yutoriNativeToolSetOnPayload(payload, model, context);
+}
+
+export function yutoriNativeToolSetOnPayload(payload: unknown, model?: Model<Api>, context?: CuaPayloadContext): unknown | undefined {
 	if (!payload || typeof payload !== "object") return undefined;
 	const current = payload as { tools?: unknown };
-	if (!Array.isArray(current.tools)) return undefined;
-	const tools = current.tools.filter((tool) => {
-		const name = readToolName(tool);
-		return !name || !YUTORI_BUILTIN_TOOL_NAMES.has(name);
-	});
+	const keepToolNames = new Set(context?.keepToolNames ?? []);
+	const tools = Array.isArray(current.tools)
+		? current.tools.filter((tool) => {
+				const name = readToolName(tool);
+				return !name || keepToolNames.has(name) || !isYutoriLocalActionToolName(name);
+			})
+		: undefined;
+	const toolSet = model ? yutoriToolSetForModel(model.id) : undefined;
 	return {
 		...(payload as Record<string, unknown>),
-		...(tools.length > 0 ? { tools } : { tools: undefined }),
+		...(toolSet ? { tool_set: toolSet, disable_tools: [...YUTORI_N15_EXPANDED_ACTION_TYPES] } : {}),
+		...(tools && tools.length > 0 ? { tools } : { tools: undefined }),
 	};
 }
 
@@ -72,6 +86,9 @@ async function runYutoriStream(
 		};
 		const tools = convertTools(context);
 		if (tools.length > 0) payload.tools = tools;
+		payload = yutoriNativeToolSetOnPayload(payload, model, {
+			keepToolNames: [...keepToolNamesFromContext(context), ...(options?.keepToolNames ?? [])],
+		}) as Record<string, unknown>;
 		const nextPayload = await options?.onPayload?.(payload, model);
 		if (nextPayload !== undefined) payload = nextPayload as Record<string, unknown>;
 
@@ -92,17 +109,26 @@ async function runYutoriStream(
 		const text = typeof message?.content === "string" ? message.content : "";
 		if (text) emitText(stream, output, text);
 
-		const wantsBatch = (context.tools ?? []).some((tool) => tool.name === CUA_BATCH_TOOL_NAME);
-		const batchActions: CuaAction[] = [];
-		let firstBatchCallId: string | undefined;
-
 		for (const call of message?.tool_calls ?? []) {
 			if (call.type !== "function") continue;
 			const args = parseArguments(call.function.arguments);
-			const canonical = wantsBatch ? toCanonicalAction(call.function.name, args) : undefined;
-			if (canonical) {
-				batchActions.push(...canonical);
-				firstBatchCallId ??= call.id;
+			const canonical = toCanonicalActions(call.function.name, args);
+			if (canonical && canonical.length > 0) {
+				for (let i = 0; i < canonical.length; i++) {
+					const action = canonical[i]!;
+					const contentIndex = output.content.length;
+					const toolCall: ToolCall = {
+						type: "toolCall",
+						id: canonical.length === 1 ? call.id : `${call.id}_${i}`,
+						name: canonicalToolCallName(action),
+						arguments: canonicalToolCallArguments(action),
+					};
+					output.content.push(toolCall);
+					output.stopReason = "toolUse";
+					stream.push({ type: "toolcall_start", contentIndex, partial: output });
+					stream.push({ type: "toolcall_delta", contentIndex, delta: JSON.stringify(toolCall.arguments), partial: output });
+					stream.push({ type: "toolcall_end", contentIndex, toolCall, partial: output });
+				}
 				continue;
 			}
 			const contentIndex = output.content.length;
@@ -113,23 +139,9 @@ async function runYutoriStream(
 				arguments: args,
 			};
 			output.content.push(toolCall);
-			stream.push({ type: "toolcall_start", contentIndex, partial: output });
-			stream.push({ type: "toolcall_delta", contentIndex, delta: call.function.arguments ?? "", partial: output });
-			stream.push({ type: "toolcall_end", contentIndex, toolCall, partial: output });
-		}
-
-		if (batchActions.length > 0) {
-			const contentIndex = output.content.length;
-			const toolCall: ToolCall = {
-				type: "toolCall",
-				id: firstBatchCallId ?? `yutori_batch_${Date.now()}`,
-				name: CUA_BATCH_TOOL_NAME,
-				arguments: { actions: batchActions },
-			};
-			output.content.push(toolCall);
 			output.stopReason = "toolUse";
 			stream.push({ type: "toolcall_start", contentIndex, partial: output });
-			stream.push({ type: "toolcall_delta", contentIndex, delta: JSON.stringify(toolCall.arguments), partial: output });
+			stream.push({ type: "toolcall_delta", contentIndex, delta: call.function.arguments ?? "", partial: output });
 			stream.push({ type: "toolcall_end", contentIndex, toolCall, partial: output });
 		}
 
@@ -141,6 +153,12 @@ async function runYutoriStream(
 		stream.push({ type: "error", reason: output.stopReason, error: output });
 		stream.end();
 	}
+}
+
+function keepToolNamesFromContext(context: Context): string[] {
+	return (context.tools ?? [])
+		.map((tool) => tool.name)
+		.filter((name) => !isYutoriLocalActionToolName(name));
 }
 
 function initialAssistantMessage(model: Model<Api>): AssistantMessage {
@@ -201,16 +219,14 @@ function convertMessages(context: Context): ChatCompletionMessageParam[] {
 }
 
 function convertTools(context: Context): Array<Record<string, unknown>> {
-	return (context.tools ?? [])
-		.filter((tool) => !YUTORI_BUILTIN_TOOL_NAMES.has(tool.name))
-		.map((tool) => ({
-			type: "function",
-			function: {
-				name: tool.name,
-				description: tool.description,
-				parameters: tool.parameters,
-			},
-		}));
+	return (context.tools ?? []).map((tool) => ({
+		type: "function",
+		function: {
+			name: tool.name,
+			description: tool.description,
+			parameters: tool.parameters,
+		},
+	}));
 }
 
 function emitText(stream: ReturnType<typeof createAssistantMessageEventStream>, output: AssistantMessage, text: string): void {
@@ -230,72 +246,6 @@ function toOpenAIContentPart(part: TextContent | ImageContent): Record<string, u
 function parseArguments(value: string | undefined): Record<string, unknown> {
 	if (!value?.trim()) return {};
 	return JSON.parse(value) as Record<string, unknown>;
-}
-
-const SCROLL_AMOUNT_PER_NOTCH = 120;
-
-function readPoint(value: unknown): { x: number; y: number } | undefined {
-	if (!Array.isArray(value) || value.length < 2) return undefined;
-	const x = Number(value[0]);
-	const y = Number(value[1]);
-	if (!Number.isFinite(x) || !Number.isFinite(y)) return undefined;
-	return { x, y };
-}
-
-function toCanonicalAction(name: string, args: Record<string, unknown>): CuaAction[] | undefined {
-	const coords = readPoint(args.coordinates);
-	switch (name) {
-		case "left_click":
-			return coords ? [{ type: "click", x: coords.x, y: coords.y }] : undefined;
-		case "right_click":
-			return coords ? [{ type: "click", x: coords.x, y: coords.y, button: "right" }] : undefined;
-		case "middle_click":
-			return coords ? [{ type: "click", x: coords.x, y: coords.y, button: "middle" }] : undefined;
-		case "double_click":
-			return coords ? [{ type: "double_click", x: coords.x, y: coords.y }] : undefined;
-		case "mouse_move":
-		case "hover":
-			return coords ? [{ type: "move", x: coords.x, y: coords.y }] : undefined;
-		case "mouse_down":
-			return coords ? [{ type: "mouse_down", x: coords.x, y: coords.y }] : undefined;
-		case "mouse_up":
-			return coords ? [{ type: "mouse_up", x: coords.x, y: coords.y }] : undefined;
-		case "type": {
-			const text = typeof args.text === "string" ? args.text : undefined;
-			return text !== undefined ? [{ type: "type", text }] : undefined;
-		}
-		case "key_press":
-		case "hold_key": {
-			const key = typeof args.key === "string" ? args.key : undefined;
-			return key ? [{ type: "keypress", keys: [key] }] : undefined;
-		}
-		case "scroll": {
-			if (!coords) return undefined;
-			const amount = typeof args.amount === "number" ? args.amount : 1;
-			const direction = typeof args.direction === "string" ? args.direction : "down";
-			const ticks = amount * SCROLL_AMOUNT_PER_NOTCH;
-			const dx = direction === "left" ? -ticks : direction === "right" ? ticks : 0;
-			const dy = direction === "up" ? -ticks : direction === "down" ? ticks : 0;
-			return [{ type: "scroll", x: coords.x, y: coords.y, scroll_x: dx, scroll_y: dy }];
-		}
-		case "drag": {
-			const start = readPoint(args.start_coordinates);
-			if (!start || !coords) return undefined;
-			return [{ type: "drag", path: [start, coords] }];
-		}
-		case "wait":
-			return [{ type: "wait" }];
-		case "go_back":
-			return [{ type: "back" }];
-		case "go_forward":
-			return [{ type: "forward" }];
-		case "goto_url": {
-			const url = typeof args.url === "string" ? args.url : undefined;
-			return url ? [{ type: "goto", url }] : undefined;
-		}
-		default:
-			return undefined;
-	}
 }
 
 function usageFromYutori(usage: unknown): AssistantMessage["usage"] {

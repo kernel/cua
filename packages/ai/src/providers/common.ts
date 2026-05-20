@@ -60,6 +60,7 @@ export interface CuaActionTypeText {
 export interface CuaActionKeypress {
 	type: "keypress";
 	keys: string[];
+	duration?: number;
 }
 
 export interface CuaActionScroll {
@@ -191,6 +192,7 @@ const CUA_ACTION_SCHEMA_BY_TYPE = {
 		{
 			type: Type.Literal("keypress"),
 			keys: Type.Array(Type.String()),
+			duration: Type.Optional(Type.Number()),
 		},
 		{ additionalProperties: false },
 	),
@@ -243,10 +245,25 @@ const CUA_ACTION_SCHEMA_BY_TYPE = {
 	cursor_position: Type.Object({ type: Type.Literal("cursor_position") }, { additionalProperties: false }),
 } satisfies Record<CuaActionType, TSchema>;
 
+type ObjectSchemaWithProperties = TSchema & { properties: Record<string, TSchema> };
+
+function createCuaActionArgumentSchema(action: CuaActionType): TSchema {
+	const { type: _type, ...properties } = (CUA_ACTION_SCHEMA_BY_TYPE[action] as ObjectSchemaWithProperties).properties;
+	return Type.Object(properties, { additionalProperties: false });
+}
+
 export function createCuaActionSchema(actions: readonly CuaActionType[] = CUA_ACTION_TYPES): TSchema {
 	if (actions.length === 0) throw new Error("actions must include at least one CUA action type");
 	if (actions.length === 1) return CUA_ACTION_SCHEMA_BY_TYPE[actions[0]!];
 	return Type.Union(actions.map((action) => CUA_ACTION_SCHEMA_BY_TYPE[action]));
+}
+
+export function createCuaActionToolDefinitions(actions: readonly CuaActionType[] = CUA_ACTION_TYPES): Tool[] {
+	return actions.map((action) => ({
+		name: action,
+		description: `Execute one ${action} computer action.`,
+		parameters: createCuaActionArgumentSchema(action),
+	}));
 }
 
 export const CuaActionSchema = createCuaActionSchema();
@@ -283,7 +300,7 @@ export const CUA_BATCH_TOOL_DESCRIPTION = [
 
 export const CUA_NAVIGATION_TOOL_DESCRIPTION = "High-level browser navigation helpers for goto, back, forward, and url.";
 
-export interface CreateComputerToolDefinitionsOptions {
+export interface ComputerToolsOptions {
 	actions?: readonly CuaActionType[];
 }
 
@@ -296,22 +313,48 @@ export type ComputerToolCoordinateSystem =
 			range: readonly [number, number];
 		};
 
-export function createComputerToolDefinitions(options: CreateComputerToolDefinitionsOptions = {}): Tool[] {
-	const actions = options.actions;
-	return [
-		{
-			name: CUA_BATCH_TOOL_NAME,
-			description: CUA_BATCH_TOOL_DESCRIPTION,
-			parameters: createCuaBatchSchema(actions),
-		},
-		...(actions === undefined
-			? [
-					{
-						name: CUA_NAVIGATION_TOOL_NAME,
-						description: CUA_NAVIGATION_TOOL_DESCRIPTION,
-						parameters: CuaNavigationSchema,
-					},
-				]
-			: []),
-	];
+/**
+ * Build the provider's CUA computer-use tools.
+ *
+ * Use this when calling `complete()` or `stream()` directly and you need an
+ * array of `Tool` objects for browser actions. Pass `actions` to expose only a
+ * smaller set, such as `["click"]`.
+ */
+export function computerTools(options: ComputerToolsOptions = {}): Tool[] {
+	return createCuaActionToolDefinitions(options.actions);
+}
+
+/** Return the canonical tool name that should execute a normalized CUA action. */
+export function canonicalToolCallName(action: CuaAction): CuaActionType {
+	return action.type;
+}
+
+/** Convert a normalized CUA action into tool-call arguments by removing its `type` tag. */
+export function canonicalToolCallArguments(action: CuaAction): Record<string, unknown> {
+	const { type: _type, ...args } = action as CuaAction & Record<string, unknown>;
+	return args;
+}
+
+/** Prefix bare hostnames/paths with `https://` before browser navigation. */
+export function normalizeGotoUrl(value: unknown): string | undefined {
+	if (typeof value !== "string") return undefined;
+	const url = value.trim();
+	if (!url) return undefined;
+	return /^[a-z][a-z0-9+.-]*:\/\//i.test(url) ? url : `https://${url}`;
+}
+
+export function createCuaBatchToolDefinition(actions?: readonly CuaActionType[]): Tool {
+	return {
+		name: CUA_BATCH_TOOL_NAME,
+		description: CUA_BATCH_TOOL_DESCRIPTION,
+		parameters: createCuaBatchSchema(actions),
+	};
+}
+
+export function createCuaNavigationToolDefinition(): Tool {
+	return {
+		name: CUA_NAVIGATION_TOOL_NAME,
+		description: CUA_NAVIGATION_TOOL_DESCRIPTION,
+		parameters: CuaNavigationSchema,
+	};
 }
