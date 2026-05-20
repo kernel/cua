@@ -1,34 +1,30 @@
-import { Type, type Tool } from "@onkernel/cua-ai";
 import { CUA_PROVIDERS, listCuaModels, resolveCuaRuntimeSpec } from "@onkernel/cua-ai";
 import type Kernel from "@onkernel/sdk";
 import { describe, expect, it } from "vitest";
-import { SUPPORTED_CUA_EXECUTOR_TOOL_NAMES, createCuaComputerTools, type KernelBrowser } from "../src/index";
+import { createCuaComputerTools, type KernelBrowser } from "../src/index";
 
 const browser = { session_id: "browser_123" } as KernelBrowser;
 const client = {} as Kernel;
+const ANTHROPIC_BATCH_TOOL_NAME = "computer_batch";
 const tinyPng = Buffer.from(
 	"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
 	"base64",
 );
 
 describe("Cua tool executor coverage", () => {
-	it("covers every canonical tool name exported by cua-ai defaults", () => {
-		const names = new Set<string>();
+	it("covers every tool executor exported by cua-ai defaults", () => {
 		for (const provider of CUA_PROVIDERS) {
 			const model = listCuaModels(provider)[0];
 			expect(model, `no CUA model for provider ${provider}`).toBeDefined();
-			for (const definition of resolveCuaRuntimeSpec(model!.ref).toolDefinitions) {
-				names.add(definition.name);
-			}
+			const runtime = resolveCuaRuntimeSpec(model!.ref);
+			expect(() => createCuaComputerTools({ browser, client, toolExecutors: runtime.toolExecutors })).not.toThrow();
 		}
-		const supported = new Set<string>(SUPPORTED_CUA_EXECUTOR_TOOL_NAMES);
-		for (const name of names) expect(supported.has(name)).toBe(true);
 	});
 
-	it("instantiates one executor per canonical definition", () => {
-		const toolDefinitions = resolveCuaRuntimeSpec("openai:gpt-5.5").toolDefinitions;
-		const tools = createCuaComputerTools({ browser, client, toolDefinitions });
-		expect(tools.map((tool) => tool.name).sort()).toEqual(toolDefinitions.map((tool) => tool.name).sort());
+	it("instantiates one executor per provider execution adapter", () => {
+		const toolExecutors = resolveCuaRuntimeSpec("openai:gpt-5.5").toolExecutors;
+		const tools = createCuaComputerTools({ browser, client, toolExecutors });
+		expect(tools.map((tool) => tool.name).sort()).toEqual(toolExecutors.map((tool) => tool.definition.name).sort());
 	});
 
 	it("executes Yutori local canonical action tools", async () => {
@@ -46,7 +42,7 @@ describe("Cua tool executor coverage", () => {
 					},
 				},
 			} as unknown as Kernel,
-			toolDefinitions: runtime.toolDefinitions,
+			toolExecutors: runtime.toolExecutors,
 			coordinateSystem: runtime.coordinateSystem,
 			screenshot: runtime.screenshot,
 		});
@@ -61,20 +57,32 @@ describe("Cua tool executor coverage", () => {
 		expect(result.content.at(-1)).toMatchObject({ type: "image", mimeType: "image/webp" });
 	});
 
-	it("fails fast on unsupported tool names", () => {
-		const unsupportedDefinitions: Tool[] = [
-			{
-				name: "unknown_tool",
-				description: "unsupported",
-				parameters: Type.Object({}),
-			},
-		];
-		expect(() =>
-			createCuaComputerTools({
-				browser,
-				client,
-				toolDefinitions: unsupportedDefinitions,
-			}),
-		).toThrow(/unsupported CUA computer tool definition/);
+	it("executes provider-defined batch tools as canonical CUA batches", async () => {
+		const batches: unknown[] = [];
+		const runtime = resolveCuaRuntimeSpec("anthropic:claude-opus-4-7");
+		const tools = createCuaComputerTools({
+			browser,
+			client: {
+				browsers: {
+					computer: {
+						batch: async (_id: string, body: { actions: unknown[] }) => {
+							batches.push(body.actions);
+						},
+						captureScreenshot: async () => new Response(tinyPng),
+					},
+				},
+			} as unknown as Kernel,
+			toolExecutors: runtime.toolExecutors,
+			coordinateSystem: runtime.coordinateSystem,
+		});
+		const batch = tools.find((tool) => tool.name === ANTHROPIC_BATCH_TOOL_NAME);
+		expect(batch).toBeDefined();
+
+		const result = await batch!.execute("call_1", { actions: [{ type: "click", x: 10, y: 20 }] });
+
+		expect(batches).toEqual([
+			[{ type: "click_mouse", click_mouse: { x: 10, y: 20, button: "left" } }],
+		]);
+		expect(result.content.at(-1)).toMatchObject({ type: "image", mimeType: "image/png" });
 	});
 });

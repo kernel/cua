@@ -11,7 +11,6 @@ import {
 } from "./vendor/pi-agent-core/index";
 import {
 	type Api,
-	CUA_BATCH_TOOL_NAME,
 	CUA_NAVIGATION_TOOL_NAME,
 	type CuaModelRef,
 	getCuaEnvApiKey,
@@ -65,8 +64,6 @@ export type CuaAgentOptions = Omit<AgentOptions, "initialState"> & {
 	initialState: CuaAgentInitialState;
 	/** Add your own pi tools alongside the built-in browser tools. */
 	extraTools?: AgentTool[];
-	/** Expose a batch tool so the model can run multiple browser actions in one call. */
-	batchTool?: boolean;
 	/** Expose a helper for browser navigation and URL reads. */
 	computerUseExtra?: boolean;
 };
@@ -90,8 +87,6 @@ export type CuaAgentHarnessOptions<
 	model: CuaRuntimeInput;
 	/** Add your own pi tools alongside the built-in browser tools. */
 	extraTools?: AgentTool[];
-	/** Expose a batch tool so the model can run multiple browser actions in one call. */
-	batchTool?: boolean;
 	/** Expose a helper for browser navigation and URL reads. */
 	computerUseExtra?: boolean;
 	/** Optional payload hook composed after the provider-specific CUA payload hook. */
@@ -115,7 +110,6 @@ class CuaRuntimeController {
 			client: Kernel;
 			model: CuaRuntimeInput;
 			extraTools?: AgentTool[];
-			batchTool?: boolean;
 			computerUseExtra?: boolean;
 			systemPrompt?: unknown;
 			onPayload?: SimpleStreamOptions["onPayload"];
@@ -149,10 +143,9 @@ class CuaRuntimeController {
 			...createCuaComputerTools({
 				browser: this.options.browser,
 				client: this.options.client,
-				toolDefinitions: this.runtimeSpec.toolDefinitions,
+				toolExecutors: this.runtimeSpec.toolExecutors,
 				coordinateSystem: this.runtimeSpec.coordinateSystem,
 				screenshot: this.runtimeSpec.screenshot,
-				batchTool: this.options.batchTool,
 				computerUseExtra: this.options.computerUseExtra,
 			}),
 			...(this.options.extraTools ?? []),
@@ -170,7 +163,6 @@ class CuaRuntimeController {
 	keepToolNames(): string[] {
 		return [
 			...(this.options.extraTools ?? []).map((tool) => tool.name),
-			...(this.options.batchTool ? [CUA_BATCH_TOOL_NAME] : []),
 			...(this.options.computerUseExtra ? [CUA_NAVIGATION_TOOL_NAME] : []),
 		];
 	}
@@ -242,7 +234,6 @@ export class CuaAgent extends Agent {
 			streamFn,
 			prepareNextTurn,
 			extraTools,
-			batchTool,
 			computerUseExtra,
 			...agentOptions
 		} = options;
@@ -251,7 +242,6 @@ export class CuaAgent extends Agent {
 			client,
 			model: initialState.model,
 			extraTools,
-			batchTool,
 			computerUseExtra,
 			systemPrompt: initialState.systemPrompt,
 			onPayload,
@@ -362,7 +352,6 @@ export class CuaAgentHarness<
 			client,
 			model,
 			extraTools,
-			batchTool,
 			computerUseExtra,
 			systemPrompt,
 			getApiKeyAndHeaders,
@@ -375,7 +364,6 @@ export class CuaAgentHarness<
 			client,
 			model,
 			extraTools,
-			batchTool,
 			computerUseExtra,
 			systemPrompt,
 			onPayload,

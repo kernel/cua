@@ -1,6 +1,7 @@
 import type { ComputerToolCoordinateSystem } from "../common";
 
 export {
+	computerToolExecutors,
 	computerTools,
 	toCanonicalActions,
 	yutoriNativeActionsForModel,

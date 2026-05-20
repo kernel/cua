@@ -5,7 +5,7 @@ import * as gemini from "./providers/gemini/index";
 import * as openai from "./providers/openai/index";
 import * as tzafon from "./providers/tzafon/index";
 import * as yutori from "./providers/yutori/index";
-import type { ComputerToolCoordinateSystem } from "./providers/common";
+import type { ComputerToolCoordinateSystem, CuaToolExecutorSpec } from "./providers/common";
 
 export interface CuaScreenshotTransformSpec {
 	width: number;
@@ -38,8 +38,10 @@ export type CuaPayloadHook = (payload: unknown, model: Model<Api>, context?: Cua
 export interface CuaRuntimeSpec {
 	model: Model<Api>;
 	provider: CuaProvider;
-	/** CUA tool definitions installed by CuaAgent/CuaAgentHarness for local execution. */
+	/** Provider-facing CUA tool definitions used for model requests. */
 	toolDefinitions: Tool[];
+	/** Local execution adapters that turn provider tool calls into canonical CUA actions. */
+	toolExecutors: CuaToolExecutorSpec[];
 	/** Provider-tuned baseline prompt for browser control behavior. */
 	defaultSystemPrompt: string;
 	/** Coordinate convention emitted by provider tool calls. */
@@ -67,6 +69,7 @@ export function resolveCuaRuntimeSpec(input: CuaRuntimeSpecInput): CuaRuntimeSpe
 				model,
 				provider,
 				toolDefinitions: anthropic.computerTools(),
+				toolExecutors: anthropic.computerToolExecutors(),
 				defaultSystemPrompt: anthropic.buildAnthropicSystemPrompt(),
 				coordinateSystem: anthropic.COMPUTER_TOOL_COORDINATES,
 			};
@@ -75,6 +78,7 @@ export function resolveCuaRuntimeSpec(input: CuaRuntimeSpecInput): CuaRuntimeSpe
 				model,
 				provider,
 				toolDefinitions: gemini.computerTools(),
+				toolExecutors: gemini.computerToolExecutors(),
 				defaultSystemPrompt: gemini.buildGeminiSystemPrompt(),
 				coordinateSystem: gemini.COMPUTER_TOOL_COORDINATES,
 			};
@@ -83,6 +87,7 @@ export function resolveCuaRuntimeSpec(input: CuaRuntimeSpecInput): CuaRuntimeSpe
 				model,
 				provider,
 				toolDefinitions: tzafon.computerTools(),
+				toolExecutors: tzafon.computerToolExecutors(),
 				defaultSystemPrompt: tzafon.buildTzafonSystemPrompt(),
 				coordinateSystem: tzafon.COMPUTER_TOOL_COORDINATES,
 				onPayload: tzafon.tzafonComputerUseOnPayload,
@@ -91,7 +96,8 @@ export function resolveCuaRuntimeSpec(input: CuaRuntimeSpecInput): CuaRuntimeSpe
 			return {
 				model,
 				provider,
-				toolDefinitions: yutori.computerTools(),
+				toolDefinitions: [],
+				toolExecutors: yutori.computerToolExecutors(),
 				defaultSystemPrompt: yutori.buildYutoriSystemPrompt(),
 				coordinateSystem: yutori.COMPUTER_TOOL_COORDINATES,
 				screenshot: {
@@ -106,6 +112,7 @@ export function resolveCuaRuntimeSpec(input: CuaRuntimeSpecInput): CuaRuntimeSpe
 				model,
 				provider,
 				toolDefinitions: openai.computerTools(),
+				toolExecutors: openai.computerToolExecutors(),
 				defaultSystemPrompt: openai.OPENAI_COMPUTER_INSTRUCTIONS,
 				coordinateSystem: openai.COMPUTER_TOOL_COORDINATES,
 				onPayload: openai.openaiResponsesStoreOnPayload,

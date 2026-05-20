@@ -13,7 +13,8 @@ import {
 	yutori,
 } from "../src/index";
 
-const providers = { openai, anthropic, gemini, tzafon };
+const providers = { openai, gemini, tzafon };
+const ANTHROPIC_BATCH_TOOL_NAME = "computer_batch";
 
 function batchActionVariants(tool: { parameters: any }): any[] {
 	const items = tool.parameters.properties.actions.items;
@@ -77,6 +78,47 @@ describe("computer tool definitions", () => {
 			...yutori.YUTORI_N15_CORE_ACTION_TYPES,
 			...yutori.YUTORI_N15_EXPANDED_ACTION_TYPES,
 		]);
+	});
+
+	it("exposes Anthropic-supported canonical action tools", () => {
+		const tools = anthropic.computerTools();
+		expect(tools.map((tool) => tool.name)).toEqual([
+			"click",
+			"double_click",
+			"mouse_down",
+			"mouse_up",
+			"type",
+			"keypress",
+			"scroll",
+			"move",
+			"drag",
+			"wait",
+			"screenshot",
+			"goto",
+			"cursor_position",
+			ANTHROPIC_BATCH_TOOL_NAME,
+		]);
+		expect(tools.map((tool) => tool.name)).not.toContain("back");
+		expect(tools.map((tool) => tool.name)).not.toContain("forward");
+		expect(tools.map((tool) => tool.name)).not.toContain("url");
+	});
+
+	it("narrows Anthropic tools to supported actions", () => {
+		const tools = anthropic.computerTools({ actions: ["click"], excludeBatch: true });
+		expect(tools.map((tool) => tool.name)).toEqual(["click"]);
+		expect(tools[0]!.parameters.properties.type).toBeUndefined();
+		expect(tools[0]!.parameters.required).toEqual(["x", "y"]);
+	});
+
+	it("includes an Anthropic batch tool by default", () => {
+		const tool = anthropic.computerTools({ actions: ["click"] }).find((item) => item.name === ANTHROPIC_BATCH_TOOL_NAME);
+		expect(tool).toBeDefined();
+		expect(batchActionVariants(tool!).map((variant) => variant.properties.type.const)).toEqual(["click"]);
+	});
+
+	it("rejects unsupported Anthropic action narrowing", () => {
+		expect(() => anthropic.computerTools({ actions: ["url"] })).toThrow("unsupported Anthropic canonical action(s): url");
+		expect(() => anthropic.createActionSchema(["url"])).toThrow("unsupported Anthropic canonical action(s): url");
 	});
 
 	it("exports provider coordinate systems", () => {

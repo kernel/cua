@@ -111,7 +111,8 @@ Top-level exports:
 runtime consumers:
 
 - canonical provider id
-- CUA tool definitions installed by `CuaAgent`/`CuaAgentHarness`
+- provider-facing CUA tool definitions used in model requests
+- local execution adapters used by `CuaAgent`/`CuaAgentHarness`
 - default system prompt text
 - provider coordinate convention
 - optional provider screenshot input policy
@@ -119,11 +120,12 @@ runtime consumers:
 
 Provider namespaces expose `computerTools({ actions? })` for
 building the provider's default CUA `Tool[]` definitions. These are the tools
-that agent runtimes install and execute locally. Most providers send the same
-definitions to the model API; providers whose APIs expose tools through
-separate request fields can adapt the outgoing payload with runtime middleware.
-Omit `actions` for the provider's default computer tool set, or pass an action
-subset to narrow the schema for a single `complete()` call:
+sent to the model when you call `complete()` or `stream()` directly. The
+default set can differ by provider: Anthropic includes its `computer_batch`
+tool from the computer-use best-practices reference, while providers such as
+OpenAI currently expose individual canonical browser actions. Omit `actions`
+for the provider's default computer tool set, or pass an action subset to narrow
+the schema for a single `complete()` call:
 
 ```ts
 import { openai } from "@onkernel/cua-ai";
@@ -132,14 +134,19 @@ const allComputerTools = openai.computerTools();
 const clickOnlyTools = openai.computerTools({ actions: ["click"] });
 ```
 
-Provider namespaces expose individual canonical action definitions by default.
-Some providers are different on the wire: Yutori exposes browser actions
-through its documented `tool_set` request field, and Tzafon exposes them
-through its native `computer_use` Responses tool. Their payload adapters remove
-local canonical CUA action definitions before requests and enable the
-provider-native computer-use interface. Caller-provided tools that should
-remain on the provider payload can be preserved by payload middleware via
-`CuaPayloadContext.keepToolNames`.
+When `actions` is provided, it must be a subset of that provider's supported
+canonical action set.
+
+Runtime specs also include `toolExecutors`: provider-owned adapters that use
+the same tool-call names as the model-facing tools and translate their
+arguments into canonical CUA actions for `@onkernel/cua-agent`. For most
+providers, `toolDefinitions` and `toolExecutors` line up one-for-one. Some
+providers are different on the wire: Yutori exposes browser actions through its
+documented `tool_set` request field, so its runtime spec has no model-facing
+`toolDefinitions` but still provides local `toolExecutors` for the canonical
+actions emitted after Yutori's native tool calls are normalized. Caller-provided
+tools that should remain on the provider payload can be preserved by payload
+middleware via `CuaPayloadContext.keepToolNames`.
 
 Provider namespaces also expose `COMPUTER_TOOL_COORDINATES`, which describes
 the coordinates the provider's computer tool calls are expected to emit:
@@ -155,7 +162,7 @@ gemini.COMPUTER_TOOL_COORDINATES
 Current coordinate contracts:
 
 - `openai`: pixel coordinates
-- `anthropic`: pixel coordinates
+- `anthropic`: pixel coordinates, matching Anthropic's computer-use quickstart
 - `gemini`: normalized coordinates in the 0-999 range ([source](https://ai.google.dev/gemini-api/docs/computer-use))
 - `yutori`: normalized coordinates in the 0-1000 range ([source](https://docs.yutori.com/reference/navigator), [SDK helper](https://github.com/yutori-ai/yutori-sdk-python/blob/main/yutori/navigator/coordinates.py))
 - `tzafon`: normalized coordinates in the 0-999 range ([source](https://docs.lightcone.ai/guides/coordinates/), [model card](https://huggingface.co/Tzafon/Northstar-CUA-Fast))
@@ -200,8 +207,8 @@ type CuaActionGoto = {
 };
 ```
 
-`createCuaBatchToolDefinition(actions?)` can synthesize a
-`batch_computer_actions` tool whose input is:
+`createCuaBatchToolDefinition(actions?, options?)` builds a batch tool schema
+whose input is:
 
 ```ts
 type CuaBatchInput = {
@@ -209,10 +216,10 @@ type CuaBatchInput = {
 };
 ```
 
-Agent runtimes can opt into this as local sugar when they want the model to
-plan several writes and reads in one call. Read actions such as `screenshot`,
-`url`, and `cursor_position` can be interleaved with writes so your executor
-can return fresh state in the same order.
+Providers can include a batch tool when their model is expected to use one.
+Anthropic does this by default with `computer_batch`; Yutori does not.
+`createCuaBatchToolExecutor()` is the matching execution adapter for turning
+that provider-defined batch input into canonical CUA actions.
 
 `createCuaNavigationToolDefinition()` can synthesize a `computer_use_extra`
 navigation tool whose input is:
@@ -226,12 +233,12 @@ type CuaNavigationInput = {
 
 Provider namespaces:
 
-- `openai`: `computerTools`, `COMPUTER_TOOL_COORDINATES`, OpenAI CUA action schemas, and prompt helpers
-- `anthropic`: `computerTools`, `COMPUTER_TOOL_COORDINATES`, prompt helpers, and CUA action schema aliases
-- `gemini`: `computerTools`, `COMPUTER_TOOL_COORDINATES`, prompt helpers, and CUA action schema aliases
-- `tzafon`: `computerTools`, `COMPUTER_TOOL_COORDINATES`, prompt helpers, and local `tzafon-responses` stream adapter
+- `openai`: `computerTools`, `computerToolExecutors`, `COMPUTER_TOOL_COORDINATES`, OpenAI CUA action schemas, and prompt helpers
+- `anthropic`: `computerTools`, `computerToolExecutors`, `COMPUTER_TOOL_COORDINATES`, prompt helpers, and CUA action schema aliases
+- `gemini`: `computerTools`, `computerToolExecutors`, `COMPUTER_TOOL_COORDINATES`, prompt helpers, and CUA action schema aliases
+- `tzafon`: `computerTools`, `computerToolExecutors`, `COMPUTER_TOOL_COORDINATES`, prompt helpers, and local `tzafon-responses` stream adapter
 - `yutori`: native Navigator action sets, native-to-canonical action helpers,
-  `computerTools`, `COMPUTER_TOOL_COORDINATES`, local
+  `computerTools`, `computerToolExecutors`, `COMPUTER_TOOL_COORDINATES`, local
   `yutori-chat-completions` stream adapter, and `yutoriNativeToolSetOnPayload`
 
 This package does not execute browser actions. Use `@onkernel/cua-agent` when

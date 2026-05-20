@@ -2,6 +2,7 @@ import type { ComputerToolCoordinateSystem } from "../common";
 
 export {
 	CUA_ACTION_TYPES as GEMINI_CUA_ACTION_TYPES,
+	computerToolExecutors,
 	computerTools,
 	createCuaActionSchema as createActionSchema,
 } from "../common";

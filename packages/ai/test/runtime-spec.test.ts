@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CUA_BATCH_TOOL_NAME, CUA_NAVIGATION_TOOL_NAME, CUA_PROVIDERS, listCuaModels, resolveCuaRuntimeSpec } from "../src/index";
+import { CUA_NAVIGATION_TOOL_NAME, CUA_PROVIDERS, listCuaModels, resolveCuaRuntimeSpec } from "../src/index";
 
 describe("resolveCuaRuntimeSpec", () => {
 	it("resolves a runtime spec for every CUA provider", () => {
@@ -12,10 +12,14 @@ describe("resolveCuaRuntimeSpec", () => {
 			expect(spec.model.id).toBe(model!.model);
 			expect(typeof spec.defaultSystemPrompt).toBe("string");
 			expect(spec.coordinateSystem).toBeDefined();
-			expect(spec.toolDefinitions.length).toBeGreaterThan(0);
-			expect(spec.toolDefinitions.map((tool) => tool.name)).not.toContain(CUA_BATCH_TOOL_NAME);
+			expect(spec.toolExecutors.length).toBeGreaterThan(0);
 			expect(spec.toolDefinitions.map((tool) => tool.name)).not.toContain(CUA_NAVIGATION_TOOL_NAME);
+			if (provider === "anthropic") {
+				expect(spec.toolDefinitions.map((tool) => tool.name)).toContain("computer_batch");
+				expect(spec.toolExecutors.map((executor) => executor.definition.name)).toContain("computer_batch");
+			}
 			if (provider === "yutori") {
+				expect(spec.toolDefinitions).toEqual([]);
 				expect(spec.defaultSystemPrompt).toBe("");
 				expect(spec.screenshot).toEqual({
 					appendToLatestMessage: true,

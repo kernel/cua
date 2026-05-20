@@ -4,6 +4,7 @@ export {
 	CUA_ACTION_TYPES as OPENAI_CUA_ACTION_TYPES,
 	CUA_NAVIGATION_TOOL_DESCRIPTION as OPENAI_EXTRA_TOOL_DESCRIPTION,
 	CUA_NAVIGATION_TOOL_NAME as OPENAI_EXTRA_TOOL_NAME,
+	computerToolExecutors,
 	computerTools,
 	createCuaActionSchema as createActionSchema,
 	CuaNavigationSchema as OpenAIExtraSchema,
