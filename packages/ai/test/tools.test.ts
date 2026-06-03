@@ -122,10 +122,10 @@ describe("computer tool definitions", () => {
 	});
 
 	it("exports provider coordinate systems", () => {
-		expect(openai.COMPUTER_TOOL_COORDINATES).toEqual({ type: "pixel" });
-		expect(anthropic.COMPUTER_TOOL_COORDINATES).toEqual({ type: "pixel" });
-		expect(gemini.COMPUTER_TOOL_COORDINATES).toEqual({ type: "normalized", range: [0, 999] });
-		expect(yutori.COMPUTER_TOOL_COORDINATES).toEqual({ type: "normalized", range: [0, 1000] });
-		expect(tzafon.COMPUTER_TOOL_COORDINATES).toEqual({ type: "normalized", range: [0, 999] });
+		expect(openai.coordinateSystem()).toEqual({ type: "pixel" });
+		expect(anthropic.coordinateSystem()).toEqual({ type: "pixel" });
+		expect(gemini.coordinateSystem()).toEqual({ type: "normalized", range: [0, 999] });
+		expect(yutori.coordinateSystem()).toEqual({ type: "normalized", range: [0, 1000] });
+		expect(tzafon.coordinateSystem()).toEqual({ type: "normalized", range: [0, 999] });
 	});
 });

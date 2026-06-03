@@ -1,4 +1,5 @@
-import type { ComputerToolCoordinateSystem } from "../common";
+import { computerToolExecutors, computerTools } from "../common";
+import type { ComputerToolCoordinateSystem, CuaProviderModule } from "../common";
 
 export {
 	CUA_ACTION_TYPES as GEMINI_CUA_ACTION_TYPES,
@@ -18,10 +19,19 @@ export type {
 // Coordinates are normalized to 0-999 regardless of input image size.
 // Source: https://github.com/google/computer-use-preview/blob/main/agent.py
 // Docs: https://ai.google.dev/gemini-api/docs/computer-use
-export const COMPUTER_TOOL_COORDINATES = { type: "normalized", range: [0, 999] } as const satisfies ComputerToolCoordinateSystem;
+export function coordinateSystem(): ComputerToolCoordinateSystem {
+	return { type: "normalized", range: [0, 999] };
+}
 
 export const GEMINI_INSTRUCTIONS_RAW = `You control a Kernel cloud browser through individual browser tools. Use the provider coordinate system for tool calls, and request screenshots or URL reads when state changes.`;
 
 export function buildGeminiSystemPrompt(opts: { suffix?: string } = {}): string {
 	return [GEMINI_INSTRUCTIONS_RAW, opts.suffix].filter(Boolean).join("\n\n");
 }
+
+export const providerModule = {
+	toolDefinitions: computerTools,
+	toolExecutors: computerToolExecutors,
+	coordinateSystem,
+	buildSystemPrompt: buildGeminiSystemPrompt,
+} satisfies CuaProviderModule;

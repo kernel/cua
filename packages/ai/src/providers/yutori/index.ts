@@ -1,4 +1,6 @@
-import type { ComputerToolCoordinateSystem } from "../common";
+import type { ComputerToolCoordinateSystem, CuaProviderModule } from "../common";
+import { computerToolExecutors } from "./actions";
+import { yutoriNativeToolSetOnPayload } from "./provider";
 
 export {
 	computerToolExecutors,
@@ -19,7 +21,6 @@ export {
 	YUTORI_CHAT_COMPLETIONS_API,
 	streamSimpleYutori,
 	streamYutori,
-	yutoriBuiltinToolsOnPayload,
 	yutoriNativeToolSetOnPayload,
 } from "./provider";
 
@@ -38,7 +39,9 @@ export {
 //   https://docs.yutori.com/reference/n1-5
 //   https://docs.yutori.com/llm-quickstart.md
 //   https://github.com/yutori-ai/yutori-sdk-python/blob/main/yutori/navigator/coordinates.py
-export const COMPUTER_TOOL_COORDINATES = { type: "normalized", range: [0, 1000] } as const satisfies ComputerToolCoordinateSystem;
+export function coordinateSystem(): ComputerToolCoordinateSystem {
+	return { type: "normalized", range: [0, 1000] };
+}
 
 // Yutori's Navigator quickstart recommends putting extra instructions in the
 // first user message instead of supplying a custom system prompt.
@@ -48,3 +51,15 @@ export const YUTORI_INSTRUCTIONS_RAW = "";
 export function buildYutoriSystemPrompt(opts: { suffix?: string } = {}): string {
 	return [YUTORI_INSTRUCTIONS_RAW, opts.suffix].filter(Boolean).join("\n\n");
 }
+
+export const providerModule = {
+	toolDefinitions: () => [],
+	toolExecutors: computerToolExecutors,
+	coordinateSystem,
+	buildSystemPrompt: buildYutoriSystemPrompt,
+	onPayload: yutoriNativeToolSetOnPayload,
+	screenshot: {
+		appendToLatestMessage: true,
+		transform: { width: 1280, height: 800, format: "webp", quality: 90 },
+	},
+} satisfies CuaProviderModule;

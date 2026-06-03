@@ -148,14 +148,14 @@ actions emitted after Yutori's native tool calls are normalized. Caller-provided
 tools that should remain on the provider payload can be preserved by payload
 middleware via `CuaPayloadContext.keepToolNames`.
 
-Provider namespaces also expose `COMPUTER_TOOL_COORDINATES`, which describes
-the coordinates the provider's computer tool calls are expected to emit:
+Provider namespaces also expose `coordinateSystem()`, which returns the
+coordinates the provider's computer tool calls are expected to emit:
 
 ```ts
-openai.COMPUTER_TOOL_COORDINATES
+openai.coordinateSystem()
 // { type: "pixel" }
 
-gemini.COMPUTER_TOOL_COORDINATES
+gemini.coordinateSystem()
 // { type: "normalized", range: [0, 999] }
 ```
 
@@ -233,13 +233,18 @@ type CuaNavigationInput = {
 
 Provider namespaces:
 
-- `openai`: `computerTools`, `computerToolExecutors`, `COMPUTER_TOOL_COORDINATES`, OpenAI CUA action schemas, and prompt helpers
-- `anthropic`: `computerTools`, `computerToolExecutors`, `COMPUTER_TOOL_COORDINATES`, prompt helpers, and CUA action schema aliases
-- `gemini`: `computerTools`, `computerToolExecutors`, `COMPUTER_TOOL_COORDINATES`, prompt helpers, and CUA action schema aliases
-- `tzafon`: `computerTools`, `computerToolExecutors`, `COMPUTER_TOOL_COORDINATES`, prompt helpers, and local `tzafon-responses` stream adapter
-- `yutori`: native Navigator action sets, native-to-canonical action helpers,
-  `computerTools`, `computerToolExecutors`, `COMPUTER_TOOL_COORDINATES`, local
-  `yutori-chat-completions` stream adapter, and `yutoriNativeToolSetOnPayload`
+Each provider namespace exposes `computerTools`, `computerToolExecutors`,
+`coordinateSystem`, a `build<Provider>SystemPrompt` helper, and a
+`providerModule` object wiring those functions to the uniform
+`CuaProviderModule` contract that `resolveCuaRuntimeSpec` looks up:
+
+- `openai`: `buildOpenAISystemPrompt`, OpenAI CUA action schemas
+- `anthropic`: `buildAnthropicSystemPrompt`, CUA action schema aliases
+- `gemini`: `buildGeminiSystemPrompt`, CUA action schema aliases
+- `tzafon`: `buildTzafonSystemPrompt`, local `tzafon-responses` stream adapter
+- `yutori`: `buildYutoriSystemPrompt`, native Navigator action sets,
+  native-to-canonical action helpers, local `yutori-chat-completions` stream
+  adapter, and `yutoriNativeToolSetOnPayload`
 
 This package does not execute browser actions. Use `@onkernel/cua-agent` when
 you want model tool calls executed against a Kernel browser.

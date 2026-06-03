@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { yutori } from "../src/index";
 
-describe("yutoriBuiltinToolsOnPayload", () => {
+describe("yutoriNativeToolSetOnPayload", () => {
 	it("removes local Yutori action tool definitions from payload.tools", () => {
 		const payload = {
 			tools: [
@@ -12,7 +12,7 @@ describe("yutoriBuiltinToolsOnPayload", () => {
 				{ type: "function", function: { name: "custom_tool" } },
 			],
 		};
-		const next = yutori.yutoriBuiltinToolsOnPayload(payload) as { tools?: Array<{ function?: { name?: string } }> };
+		const next = yutori.yutoriNativeToolSetOnPayload(payload) as { tools?: Array<{ function?: { name?: string } }> };
 		expect(next.tools?.map((tool) => tool.function?.name)).toEqual([
 			"batch_computer_actions",
 			"computer_use_extra",
@@ -40,7 +40,7 @@ describe("yutoriBuiltinToolsOnPayload", () => {
 	});
 
 	it("returns undefined for non-object payloads", () => {
-		expect(yutori.yutoriBuiltinToolsOnPayload(undefined)).toBeUndefined();
-		expect(yutori.yutoriBuiltinToolsOnPayload("x")).toBeUndefined();
+		expect(yutori.yutoriNativeToolSetOnPayload(undefined)).toBeUndefined();
+		expect(yutori.yutoriNativeToolSetOnPayload("x")).toBeUndefined();
 	});
 });

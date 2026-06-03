@@ -1,4 +1,5 @@
-import { Type, type Static, type TSchema, type Tool } from "@earendil-works/pi-ai";
+import { Type, type Api, type Model, type Static, type TSchema, type Tool } from "@earendil-works/pi-ai";
+import type { CuaModelRef, CuaProvider } from "../models";
 
 export const CUA_ACTION_TYPES = [
 	"click",
@@ -405,4 +406,67 @@ export function createCuaNavigationToolDefinition(): Tool {
 		description: CUA_NAVIGATION_TOOL_DESCRIPTION,
 		parameters: CuaNavigationSchema,
 	};
+}
+
+export interface CuaScreenshotTransformSpec {
+	width: number;
+	height: number;
+	format: "png" | "jpeg" | "webp";
+	quality?: number;
+}
+
+export interface CuaScreenshotSpec {
+	/** Append a provider-prepared screenshot to the latest user/tool message before each request. */
+	appendToLatestMessage?: boolean;
+	/** Optional image transform applied to Kernel screenshots before they are sent to the provider. */
+	transform?: CuaScreenshotTransformSpec;
+}
+
+export interface CuaPayloadContext {
+	/** Tool names that should remain in the outbound provider payload even if the provider strips local CUA executors. */
+	keepToolNames?: readonly string[];
+}
+
+export type CuaPayloadHook = (payload: unknown, model: Model<Api>, context?: CuaPayloadContext) => unknown | Promise<unknown>;
+
+/**
+ * Runtime configuration for a supported CUA model.
+ *
+ * Use this to pair a model with the agent tool definitions, baseline prompt,
+ * coordinate convention, screenshot policy, and request payload middleware
+ * expected by its provider.
+ */
+export interface CuaRuntimeSpec {
+	model: Model<Api>;
+	provider: CuaProvider;
+	/** Provider-facing CUA tool definitions used for model requests. */
+	toolDefinitions: Tool[];
+	/** Local execution adapters that turn provider tool calls into canonical CUA actions. */
+	toolExecutors: CuaToolExecutorSpec[];
+	/** Provider-tuned baseline prompt for browser control behavior. */
+	defaultSystemPrompt: string;
+	/** Coordinate convention emitted by provider tool calls. */
+	coordinateSystem: ComputerToolCoordinateSystem;
+	/** Optional provider screenshot input policy used by CuaAgent/CuaAgentHarness. */
+	screenshot?: CuaScreenshotSpec;
+	/** Optional provider middleware for request payload adaptation. */
+	onPayload?: CuaPayloadHook;
+}
+
+export type CuaRuntimeSpecInput = CuaModelRef | Model<Api>;
+
+/** Uniform provider contract resolved by the CUA runtime registry. */
+export interface CuaProviderModule {
+	/** Model-facing CUA tool definitions sent in provider requests. */
+	toolDefinitions(options?: ComputerToolsOptions): Tool[];
+	/** Local execution adapters (provider tool-call name -> canonical CUA actions). */
+	toolExecutors(options?: ComputerToolsOptions): CuaToolExecutorSpec[];
+	/** Coordinate convention emitted by this provider's tool calls. */
+	coordinateSystem(): ComputerToolCoordinateSystem;
+	/** Provider-tuned baseline browser-control system prompt. */
+	buildSystemPrompt(opts?: { suffix?: string }): string;
+	/** Optional request-payload middleware for provider protocol quirks. */
+	onPayload?: CuaPayloadHook;
+	/** Optional provider screenshot input policy. */
+	screenshot?: CuaScreenshotSpec;
 }
