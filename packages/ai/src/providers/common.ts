@@ -1,4 +1,5 @@
-import { Type, type Static, type TSchema, type Tool } from "@earendil-works/pi-ai";
+import { Type, type Api, type Model, type Static, type TSchema, type Tool } from "@earendil-works/pi-ai";
+import type { CuaModelRef, CuaProvider } from "../models";
 
 export const CUA_ACTION_TYPES = [
 	"click",
@@ -289,6 +290,14 @@ export interface CuaBatchInput {
 }
 export type CuaNavigationInput = Static<typeof CuaNavigationSchema>;
 
+/** Tool schema plus execution adapter for a browser computer-use tool. */
+export interface CuaToolExecutorSpec {
+	/** Tool schema installed by CuaAgent/CuaAgentHarness. The name must match the provider tool call name. */
+	definition: Tool;
+	/** Convert that tool's arguments into canonical CUA actions for browser execution. */
+	toActions(args: unknown): CuaAction[];
+}
+
 export const CUA_BATCH_TOOL_NAME = "batch_computer_actions";
 export const CUA_NAVIGATION_TOOL_NAME = "computer_use_extra";
 
@@ -324,6 +333,19 @@ export function computerTools(options: ComputerToolsOptions = {}): Tool[] {
 	return createCuaActionToolDefinitions(options.actions);
 }
 
+/** Build execution adapters for individual canonical CUA action tools. */
+export function createCuaActionToolExecutors(actions: readonly CuaActionType[] = CUA_ACTION_TYPES): CuaToolExecutorSpec[] {
+	return createCuaActionToolDefinitions(actions).map((definition) => {
+		const actionType = definition.name as CuaActionType;
+		return {
+			definition,
+			toActions(args: unknown): CuaAction[] {
+				return [{ ...(args && typeof args === "object" ? args : {}), type: actionType } as CuaAction];
+			},
+		};
+	});
+}
+
 /** Return the canonical tool name that should execute a normalized CUA action. */
 export function canonicalToolCallName(action: CuaAction): CuaActionType {
 	return action.type;
@@ -343,12 +365,39 @@ export function normalizeGotoUrl(value: unknown): string | undefined {
 	return /^[a-z][a-z0-9+.-]*:\/\//i.test(url) ? url : `https://${url}`;
 }
 
-export function createCuaBatchToolDefinition(actions?: readonly CuaActionType[]): Tool {
+export function createCuaBatchToolDefinition(
+	actions?: readonly CuaActionType[],
+	options: { name?: string; description?: string } = {},
+): Tool {
 	return {
-		name: CUA_BATCH_TOOL_NAME,
-		description: CUA_BATCH_TOOL_DESCRIPTION,
+		name: options.name ?? CUA_BATCH_TOOL_NAME,
+		description: options.description ?? CUA_BATCH_TOOL_DESCRIPTION,
 		parameters: createCuaBatchSchema(actions),
 	};
+}
+
+/** Build an execution adapter for a batch tool whose input is `{ actions }`. */
+export function createCuaBatchToolExecutor(
+	actions?: readonly CuaActionType[],
+	options: { name?: string; description?: string } = {},
+): CuaToolExecutorSpec {
+	const definition = createCuaBatchToolDefinition(actions, options);
+	return {
+		definition,
+		toActions(args: unknown): CuaAction[] {
+			if (!isBatchInput(args)) throw new Error("invalid batch tool parameters");
+			return args.actions;
+		},
+	};
+}
+
+/** Build the provider's default CUA tool execution adapters. */
+export function computerToolExecutors(options: ComputerToolsOptions = {}): CuaToolExecutorSpec[] {
+	return createCuaActionToolExecutors(options.actions);
+}
+
+function isBatchInput(value: unknown): value is CuaBatchInput {
+	return Boolean(value && typeof value === "object" && Array.isArray((value as { actions?: unknown }).actions));
 }
 
 export function createCuaNavigationToolDefinition(): Tool {
@@ -357,4 +406,67 @@ export function createCuaNavigationToolDefinition(): Tool {
 		description: CUA_NAVIGATION_TOOL_DESCRIPTION,
 		parameters: CuaNavigationSchema,
 	};
+}
+
+export interface CuaScreenshotTransformSpec {
+	width: number;
+	height: number;
+	format: "png" | "jpeg" | "webp";
+	quality?: number;
+}
+
+export interface CuaScreenshotSpec {
+	/** Append a provider-prepared screenshot to the latest user/tool message before each request. */
+	appendToLatestMessage?: boolean;
+	/** Optional image transform applied to Kernel screenshots before they are sent to the provider. */
+	transform?: CuaScreenshotTransformSpec;
+}
+
+export interface CuaPayloadContext {
+	/** Tool names that should remain in the outbound provider payload even if the provider strips local CUA executors. */
+	keepToolNames?: readonly string[];
+}
+
+export type CuaPayloadHook = (payload: unknown, model: Model<Api>, context?: CuaPayloadContext) => unknown | Promise<unknown>;
+
+/**
+ * Runtime configuration for a supported CUA model.
+ *
+ * Use this to pair a model with the agent tool definitions, baseline prompt,
+ * coordinate convention, screenshot policy, and request payload middleware
+ * expected by its provider.
+ */
+export interface CuaRuntimeSpec {
+	model: Model<Api>;
+	provider: CuaProvider;
+	/** Provider-facing CUA tool definitions used for model requests. */
+	toolDefinitions: Tool[];
+	/** Local execution adapters that turn provider tool calls into canonical CUA actions. */
+	toolExecutors: CuaToolExecutorSpec[];
+	/** Provider-tuned baseline prompt for browser control behavior. */
+	defaultSystemPrompt: string;
+	/** Coordinate convention emitted by provider tool calls. */
+	coordinateSystem: ComputerToolCoordinateSystem;
+	/** Optional provider screenshot input policy used by CuaAgent/CuaAgentHarness. */
+	screenshot?: CuaScreenshotSpec;
+	/** Optional provider middleware for request payload adaptation. */
+	onPayload?: CuaPayloadHook;
+}
+
+export type CuaRuntimeSpecInput = CuaModelRef | Model<Api>;
+
+/** Uniform provider contract resolved by the CUA runtime registry. */
+export interface CuaProviderModule {
+	/** Model-facing CUA tool definitions sent in provider requests. */
+	toolDefinitions(options?: ComputerToolsOptions): Tool[];
+	/** Local execution adapters (provider tool-call name -> canonical CUA actions). */
+	toolExecutors(options?: ComputerToolsOptions): CuaToolExecutorSpec[];
+	/** Coordinate convention emitted by this provider's tool calls. */
+	coordinateSystem(): ComputerToolCoordinateSystem;
+	/** Provider-tuned baseline browser-control system prompt. */
+	buildSystemPrompt(opts?: { suffix?: string }): string;
+	/** Optional request-payload middleware for provider protocol quirks. */
+	onPayload?: CuaPayloadHook;
+	/** Optional provider screenshot input policy. */
+	screenshot?: CuaScreenshotSpec;
 }

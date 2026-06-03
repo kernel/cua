@@ -7,8 +7,6 @@ export type {
 	ComputerToolOptions,
 	CuaExecutorTool,
 	NavigationDetails,
-	SupportedCuaExecutorToolName,
 } from "./tools";
-export { SUPPORTED_CUA_EXECUTOR_TOOL_NAMES } from "./tools";
 export { CuaAgent, CuaAgentHarness } from "./agent";
 export type { CuaAgentHarnessOptions, CuaAgentOptions, CuaAgentState } from "./agent";

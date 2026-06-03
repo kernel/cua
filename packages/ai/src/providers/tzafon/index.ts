@@ -1,7 +1,9 @@
-import type { ComputerToolCoordinateSystem } from "../common";
+import { computerToolExecutors, computerTools, type ComputerToolCoordinateSystem, type CuaProviderModule } from "../common";
+import { tzafonComputerUseOnPayload } from "./provider";
 
 export {
 	CUA_ACTION_TYPES as TZAFON_ACTION_TYPES,
+	computerToolExecutors,
 	computerTools,
 	createCuaActionSchema as createActionSchema,
 } from "../common";
@@ -27,10 +29,21 @@ export {
 //   https://huggingface.co/Tzafon/Northstar-CUA-Fast
 //   https://docs.lightcone.ai/guides/cua-protocol/
 //   https://docs.lightcone.ai/guides/coordinates/
-export const COMPUTER_TOOL_COORDINATES = { type: "normalized", range: [0, 999] } as const satisfies ComputerToolCoordinateSystem;
+export function coordinateSystem(): ComputerToolCoordinateSystem {
+	return { type: "normalized", range: [0, 999] };
+}
 
 export const TZAFON_INSTRUCTIONS_RAW = `You control a Kernel cloud browser through individual browser tools. Include screenshot or URL reads when you need updated state.`;
 
+/** Build the default system prompt used with Tzafon CUA models. */
 export function buildTzafonSystemPrompt(opts: { suffix?: string } = {}): string {
 	return [TZAFON_INSTRUCTIONS_RAW, opts.suffix].filter(Boolean).join("\n\n");
 }
+
+export const providerModule = {
+	toolDefinitions: computerTools,
+	toolExecutors: computerToolExecutors,
+	coordinateSystem,
+	buildSystemPrompt: buildTzafonSystemPrompt,
+	onPayload: tzafonComputerUseOnPayload,
+} satisfies CuaProviderModule;

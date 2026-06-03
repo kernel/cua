@@ -12,7 +12,8 @@ const modelRef = "openai:gpt-5.5";
 const model = getCuaModel(modelRef);
 const screenshot = await readFile(screenshotPath);
 
-// Other provider examples:
+// Other provider examples. Add the provider namespace to the top-level import
+// before switching these values.
 // const apiKey = process.env.ANTHROPIC_API_KEY;
 // const modelRef = "anthropic:claude-opus-4-7";
 // const model = getCuaModel(modelRef);

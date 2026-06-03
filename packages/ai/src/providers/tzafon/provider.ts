@@ -13,8 +13,7 @@ import {
 	type ToolCall,
 } from "@earendil-works/pi-ai";
 import Lightcone from "@tzafon/lightcone";
-import { canonicalToolCallArguments, canonicalToolCallName, CUA_ACTION_TYPES, type CuaAction } from "../common";
-import type { CuaPayloadContext } from "../../runtime-spec";
+import { canonicalToolCallArguments, canonicalToolCallName, CUA_ACTION_TYPES, type CuaAction, type CuaPayloadContext } from "../common";
 
 export const TZAFON_RESPONSES_API = "tzafon-responses";
 const TZAFON_COMPUTER_USE_TOOL = {

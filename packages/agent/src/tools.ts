@@ -2,17 +2,13 @@ import type Kernel from "@onkernel/sdk";
 import type { ImageContent, TextContent, Tool } from "@earendil-works/pi-ai";
 import type { TSchema } from "typebox";
 import {
-	CUA_ACTION_TYPES,
-	CUA_BATCH_TOOL_NAME,
 	CUA_NAVIGATION_TOOL_NAME,
-	createCuaBatchToolDefinition,
 	createCuaNavigationToolDefinition,
 	type ComputerToolCoordinateSystem,
-	type CuaAction,
-	type CuaActionType,
 	type CuaBatchInput,
 	type CuaNavigationInput,
 	type CuaScreenshotSpec,
+	type CuaToolExecutorSpec,
 } from "@onkernel/cua-ai";
 import { InternalComputerTranslator, type KernelBrowser } from "./translator/translator";
 import type { AgentTool, AgentToolResult } from "./vendor/pi-agent-core/index";
@@ -20,20 +16,11 @@ import type { AgentTool, AgentToolResult } from "./vendor/pi-agent-core/index";
 export interface ComputerToolOptions {
 	browser: KernelBrowser;
 	client: Kernel;
-	toolDefinitions: Tool[];
+	toolExecutors: CuaToolExecutorSpec[];
 	coordinateSystem?: ComputerToolCoordinateSystem;
 	screenshot?: CuaScreenshotSpec;
-	batchTool?: boolean;
 	computerUseExtra?: boolean;
 }
-
-const CUA_ACTION_TOOL_NAMES = new Set<string>(CUA_ACTION_TYPES);
-export const SUPPORTED_CUA_EXECUTOR_TOOL_NAMES = [
-	CUA_BATCH_TOOL_NAME,
-	CUA_NAVIGATION_TOOL_NAME,
-	...CUA_ACTION_TYPES,
-] as const;
-export type SupportedCuaExecutorToolName = (typeof SUPPORTED_CUA_EXECUTOR_TOOL_NAMES)[number];
 
 type ToolContent = Array<TextContent | ImageContent>;
 
@@ -54,43 +41,27 @@ type BatchTool = AgentTool<TSchema, BatchDetails>;
 type NavigationTool = AgentTool<TSchema, NavigationDetails>;
 type ActionTool = AgentTool<TSchema, BatchDetails>;
 export type CuaExecutorTool = BatchTool | NavigationTool | ActionTool;
+type NavigationExecutorSpec = { kind: "navigation"; definition: Tool };
+type ComputerExecutorSpec = CuaToolExecutorSpec | NavigationExecutorSpec;
 
 export function createCuaComputerTools(args: ComputerToolOptions): CuaExecutorTool[] {
 	const translator = new InternalComputerTranslator(args);
-	return withSynthesizedTools(args).map((definition) => createExecutorTool(definition, translator));
+	return withNavigationTool(args).map((executor) => createExecutorTool(executor, translator));
 }
 
-function withSynthesizedTools(args: ComputerToolOptions): Tool[] {
-	const definitions = [...args.toolDefinitions];
-	const existing = new Set(definitions.map((definition) => definition.name));
-	const actionTypes = definitions
-		.map((definition) => definition.name)
-		.filter((name): name is CuaActionType => CUA_ACTION_TOOL_NAMES.has(name));
-	if (args.batchTool && actionTypes.length > 0 && !existing.has(CUA_BATCH_TOOL_NAME)) {
-		definitions.push(createCuaBatchToolDefinition(actionTypes));
-	}
+function withNavigationTool(args: ComputerToolOptions): ComputerExecutorSpec[] {
+	const executors: ComputerExecutorSpec[] = [...args.toolExecutors];
+	const existing = new Set(executors.map((executor) => executor.definition.name));
 	if (args.computerUseExtra && !existing.has(CUA_NAVIGATION_TOOL_NAME)) {
-		definitions.push(createCuaNavigationToolDefinition());
+		const definition = createCuaNavigationToolDefinition();
+		executors.push({ kind: "navigation", definition });
 	}
-	return definitions;
+	return executors;
 }
 
-function createExecutorTool(definition: Tool, translator: InternalComputerTranslator): CuaExecutorTool {
-	if (definition.name === CUA_BATCH_TOOL_NAME) {
-		const tool: BatchTool = {
-			name: definition.name,
-			label: definition.name,
-			description: definition.description,
-			parameters: definition.parameters,
-			async execute(_toolCallId: string, params: unknown): Promise<AgentToolResult<BatchDetails>> {
-				const result = await executeBatchTool(translator, asBatchInput(params));
-				if (result.isError) throw Object.assign(new Error(result.details.statusText), result);
-				return { content: result.content, details: result.details };
-			},
-		};
-		return tool;
-	}
-	if (definition.name === CUA_NAVIGATION_TOOL_NAME) {
+function createExecutorTool(executor: ComputerExecutorSpec, translator: InternalComputerTranslator): CuaExecutorTool {
+	const { definition } = executor;
+	if (isNavigationExecutor(executor)) {
 		const tool: NavigationTool = {
 			name: definition.name,
 			label: definition.name,
@@ -104,26 +75,23 @@ function createExecutorTool(definition: Tool, translator: InternalComputerTransl
 		};
 		return tool;
 	}
-	if (CUA_ACTION_TOOL_NAMES.has(definition.name)) {
-		const actionType = definition.name as CuaActionType;
-		const tool: ActionTool = {
-			name: definition.name,
-			label: definition.name,
-			description: definition.description,
-			parameters: definition.parameters,
-			executionMode: "sequential",
-			async execute(_toolCallId: string, params: unknown): Promise<AgentToolResult<BatchDetails>> {
-				const action = { ...(params && typeof params === "object" ? params : {}), type: actionType } as CuaAction;
-				const result = await executeBatchTool(translator, { actions: [action] });
-				if (result.isError) throw Object.assign(new Error(result.details.statusText), result);
-				return { content: result.content, details: result.details };
-			},
-		};
-		return tool;
-	}
-	throw new Error(
-		`unsupported CUA computer tool definition: ${definition.name}`,
-	);
+	const tool: ActionTool = {
+		name: definition.name,
+		label: definition.name,
+		description: definition.description,
+		parameters: definition.parameters,
+		executionMode: "sequential",
+		async execute(_toolCallId: string, params: unknown): Promise<AgentToolResult<BatchDetails>> {
+			const result = await executeBatchTool(translator, { actions: executor.toActions(params) });
+			if (result.isError) throw Object.assign(new Error(result.details.statusText), result);
+			return { content: result.content, details: result.details };
+		},
+	};
+	return tool;
+}
+
+function isNavigationExecutor(executor: ComputerExecutorSpec): executor is NavigationExecutorSpec {
+	return "kind" in executor && executor.kind === "navigation";
 }
 
 async function executeBatchTool(translator: InternalComputerTranslator, params: CuaBatchInput): Promise<{
@@ -188,17 +156,6 @@ async function executeNavigationTool(translator: InternalComputerTranslator, par
 	}
 	content.unshift({ type: "text", text: statusText });
 	return { content, details: { action, statusText, ...(url ? { url } : {}), ...(error ? { error: error.message } : {}) }, isError: Boolean(error) };
-}
-
-function asBatchInput(value: unknown): CuaBatchInput {
-	if (
-		value &&
-		typeof value === "object" &&
-		Array.isArray((value as { actions?: unknown }).actions)
-	) {
-		return value as CuaBatchInput;
-	}
-	throw new Error("invalid batch_computer_actions parameters");
 }
 
 function asNavigationInput(value: unknown): CuaNavigationInput {

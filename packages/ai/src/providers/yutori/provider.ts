@@ -19,8 +19,7 @@ import {
 	yutoriToolSetForModel,
 	YUTORI_N15_EXPANDED_ACTION_TYPES,
 } from "./actions";
-import { canonicalToolCallArguments, canonicalToolCallName } from "../common";
-import type { CuaPayloadContext } from "../../runtime-spec";
+import { canonicalToolCallArguments, canonicalToolCallName, type CuaPayloadContext } from "../common";
 
 export const YUTORI_CHAT_COMPLETIONS_API = "yutori-chat-completions";
 
@@ -40,10 +39,6 @@ export const streamSimpleYutori: StreamFunction<typeof YUTORI_CHAT_COMPLETIONS_A
 	context,
 	options,
 ) => streamYutori(model, context, options);
-
-export function yutoriBuiltinToolsOnPayload(payload: unknown, model?: Model<Api>, context?: CuaPayloadContext): unknown | undefined {
-	return yutoriNativeToolSetOnPayload(payload, model, context);
-}
 
 export function yutoriNativeToolSetOnPayload(payload: unknown, model?: Model<Api>, context?: CuaPayloadContext): unknown | undefined {
 	if (!payload || typeof payload !== "object") return undefined;

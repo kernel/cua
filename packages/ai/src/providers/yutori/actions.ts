@@ -1,7 +1,9 @@
 import {
 	createCuaActionToolDefinitions,
+	createCuaActionToolExecutors,
 	normalizeGotoUrl,
 	type CuaAction,
+	type CuaToolExecutorSpec,
 	type CuaActionType,
 } from "../common";
 
@@ -116,6 +118,11 @@ const GOTO_WAIT_MS = 2000;
  */
 export function computerTools(_options?: unknown) {
 	return createCuaActionToolDefinitions(YUTORI_CANONICAL_ACTION_TYPES);
+}
+
+/** Build the local execution adapters used by CuaAgent and CuaAgentHarness. */
+export function computerToolExecutors(_options?: unknown): CuaToolExecutorSpec[] {
+	return createCuaActionToolExecutors(YUTORI_CANONICAL_ACTION_TYPES);
 }
 
 export function yutoriToolSetForModel(modelId: string): typeof YUTORI_N15_CORE_TOOL_SET | undefined {

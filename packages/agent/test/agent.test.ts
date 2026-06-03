@@ -16,6 +16,7 @@ import {
 
 const browser = { session_id: "browser_123" } as KernelBrowser;
 const client = {} as Kernel;
+const ANTHROPIC_BATCH_TOOL_NAME = "computer_batch";
 const tinyPng = Buffer.from(
 	"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
 	"base64",
@@ -91,7 +92,7 @@ describe("CuaAgent", () => {
 			},
 		});
 
-		expect(agent.state.tools.map((item) => item.name)).toEqual([...runtime.toolDefinitions.map((item) => item.name), "custom"]);
+		expect(agent.state.tools.map((item) => item.name)).toEqual([...runtime.toolExecutors.map((item) => item.definition.name), "custom"]);
 	});
 
 	it("always keeps provider CUA tools when adding extra tools", () => {
@@ -108,16 +109,29 @@ describe("CuaAgent", () => {
 			},
 		});
 
-		expect(agent.state.tools.map((item) => item.name)).toEqual([...runtime.toolDefinitions.map((item) => item.name), "custom"]);
+		expect(agent.state.tools.map((item) => item.name)).toEqual([...runtime.toolExecutors.map((item) => item.definition.name), "custom"]);
 		expect(agent.state.systemPrompt).toBe("Use the browser carefully.");
 	});
 
-	it("synthesizes batch and navigation tools when requested", () => {
+	it("installs provider-defined batch tools", () => {
+		const runtime = resolveCuaRuntimeSpec("anthropic:claude-opus-4-7");
+		const agent = new CuaAgent({
+			browser,
+			client,
+			initialState: {
+				model: "anthropic:claude-opus-4-7",
+			},
+		});
+
+		expect(runtime.toolDefinitions.map((tool) => tool.name)).toContain(ANTHROPIC_BATCH_TOOL_NAME);
+		expect(agent.state.tools.map((tool) => tool.name)).toEqual(runtime.toolExecutors.map((tool) => tool.definition.name));
+	});
+
+	it("synthesizes navigation tools when requested", () => {
 		const runtime = resolveCuaRuntimeSpec("openai:gpt-5.5");
 		const agent = new CuaAgent({
 			browser,
 			client,
-			batchTool: true,
 			computerUseExtra: true,
 			initialState: {
 				model: "openai:gpt-5.5",
@@ -125,8 +139,7 @@ describe("CuaAgent", () => {
 		});
 
 		expect(agent.state.tools.map((tool) => tool.name)).toEqual([
-			...runtime.toolDefinitions.map((tool) => tool.name),
-			"batch_computer_actions",
+			...runtime.toolExecutors.map((tool) => tool.definition.name),
 			"computer_use_extra",
 		]);
 	});
@@ -145,7 +158,7 @@ describe("CuaAgent", () => {
 
 		expect(agent.state.model.id).toBe(runtime.model.id);
 		expect(agent.state.systemPrompt).toBe(runtime.defaultSystemPrompt);
-		expect(agent.state.tools).toHaveLength(runtime.toolDefinitions.length);
+		expect(agent.state.tools).toHaveLength(runtime.toolExecutors.length);
 	});
 
 	it("keeps extra tools and caller-owned system prompt when state.model changes", () => {
@@ -163,7 +176,7 @@ describe("CuaAgent", () => {
 		agent.state.model = "google:gemini-3-pro-preview";
 
 		const runtime = resolveCuaRuntimeSpec("google:gemini-3-pro-preview");
-		expect(agent.state.tools.map((item) => item.name)).toEqual([...runtime.toolDefinitions.map((item) => item.name), "custom"]);
+		expect(agent.state.tools.map((item) => item.name)).toEqual([...runtime.toolExecutors.map((item) => item.definition.name), "custom"]);
 		expect(agent.state.systemPrompt).toBe("custom prompt");
 	});
 
@@ -214,7 +227,6 @@ describe("CuaAgent", () => {
 							messages: [{ role: "user", content: "Inspect the page" }],
 							tools: [
 								{ type: "function", function: { name: "click" } },
-								{ type: "function", function: { name: "batch_computer_actions" } },
 								{ type: "function", function: { name: "computer_use_extra" } },
 								{ type: "function", function: { name: "custom_tool" } },
 							],
@@ -235,7 +247,6 @@ describe("CuaAgent", () => {
 			client: screenshotClient,
 			streamFn,
 			extraTools: [createCustomTool("custom_tool")],
-			batchTool: true,
 			computerUseExtra: true,
 			initialState: {
 				model: "yutori:n1.5-latest",
@@ -251,7 +262,6 @@ describe("CuaAgent", () => {
 		};
 		expect(payload.tool_set).toBe("browser_tools_core-20260403");
 		expect(payload.tools?.map((tool) => tool.function?.name)).toEqual([
-			"batch_computer_actions",
 			"computer_use_extra",
 			"custom_tool",
 		]);
@@ -286,7 +296,7 @@ describe("CuaAgentHarness", () => {
 		await harness.setModel("google:gemini-3-pro-preview");
 
 		expect(harness.agent.state.model.id).toBe(runtime.model.id);
-		expect(harness.agent.state.tools).toHaveLength(runtime.toolDefinitions.length);
+		expect(harness.agent.state.tools).toHaveLength(runtime.toolExecutors.length);
 	});
 
 	it("appends extraTools in harness construction", async () => {
@@ -301,7 +311,7 @@ describe("CuaAgentHarness", () => {
 		});
 
 		expect(harness.agent.state.tools.map((item) => item.name)).toEqual([
-			...runtime.toolDefinitions.map((item) => item.name),
+			...runtime.toolExecutors.map((item) => item.definition.name),
 			"custom",
 		]);
 	});
