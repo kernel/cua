@@ -139,9 +139,14 @@ For `@onkernel/cua-agent`:
 ```bash
 npm run build --workspace @onkernel/cua-ai
 npm run build --workspace @onkernel/cua-agent
-npm test --workspace @onkernel/cua-agent -- test/agent.test.ts test/tool-exhaustiveness.test.ts
+npm test --workspace @onkernel/cua-agent
 npm pack --workspace @onkernel/cua-agent --dry-run
 ```
+
+Run the full unit suites — do not pass individual test files. `cua-ai`
+excludes integration/live tests by default (`npm run test:integration
+--workspace @onkernel/cua-ai` runs them separately), and the `cua-agent` live
+e2e tests skip unless `CUA_E2E_LIVE=1` is set.
 
 Do not push release tags if build, tests, or pack dry-runs fail.
 
@@ -200,6 +205,19 @@ npm dist-tag ls @onkernel/cua-ai
 npm view @onkernel/cua-agent@<version> version
 npm dist-tag ls @onkernel/cua-agent
 ```
+
+Then verify the published artifact actually imports — `npm view` only proves
+the version exists, not that the tarball is loadable:
+
+```bash
+cd "$(mktemp -d)"
+npm init -y
+npm install @onkernel/cua-ai@<version>
+node --input-type=module -e "import('@onkernel/cua-ai').then((m) => { if (typeof m.getCuaModel !== 'function') process.exit(1); })"
+```
+
+For `@onkernel/cua-agent`, install `@onkernel/cua-agent@<version>` the same
+way and check `typeof m.CuaAgent === "function"`.
 
 If a workflow fails after a tag is pushed, do not reuse the same package
 version unless npm did not publish it. Fix forward with a new commit and a new

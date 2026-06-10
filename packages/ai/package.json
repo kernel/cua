@@ -1,6 +1,6 @@
 {
   "name": "@onkernel/cua-ai",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Kernel-curated computer-use model access built on pi-ai",
   "license": "MIT",
   "type": "module",
@@ -24,6 +24,7 @@
   },
   "files": [
     "dist",
+    "docs",
     "examples",
     "README.md",
     "CHANGELOG.md"
@@ -34,7 +35,7 @@
   "scripts": {
     "build": "tsc -b",
     "clean": "tsc -b --clean",
-    "example:quickstart": "tsx examples/quickstart.ts",
+    "example:quickstart": "NODE_OPTIONS=--conditions=source tsx examples/quickstart.ts",
     "test": "vitest --run",
     "test:integration": "vitest --run --config vitest.integration.config.ts"
   },

@@ -1,5 +1,101 @@
 # Changelog
 
+## 0.2.0 - 2026-06-10
+
+### Fixed
+
+- The published package is now importable under plain Node ESM. 0.1.0 shipped
+  extensionless relative imports in `dist/`, so `import "@onkernel/cua-ai"`
+  failed outside bundlers; compiled output now uses explicit `.js` specifiers.
+- The shipped `examples/quickstart.ts` imports `@onkernel/cua-ai` instead of a
+  `../src` path that does not exist in the tarball, checks `stopReason` so
+  provider errors are no longer silent, resolves its API key via
+  `requireCuaEnvApiKeyForModel`, and switches providers with the `CUA_MODEL`
+  env var.
+- `docs/` (the supported-models list the README links to) is now included in
+  the npm tarball.
+- A malformed Yutori tool call now degrades to an empty-arguments call instead
+  of failing the entire response, matching the existing Tzafon hardening.
+
+### Breaking changes
+
+- Provider namespaces follow one convention. Every namespace now exports
+  `computerTools({ actions? })` / `computerToolExecutors({ actions? })`,
+  `createActionSchema`, `coordinateSystem()`, `providerModule`,
+  `<PROVIDER>_CUA_ACTION_TYPES`, `<PROVIDER>_COMPUTER_INSTRUCTIONS`, a
+  `<Provider>Action` type, and `ComputerToolsOptions`. This replaces 0.1.0's
+  `createComputerToolDefinitions(options)` /
+  `CreateComputerToolDefinitionsOptions`, the per-namespace
+  `COMPUTER_TOOL_COORDINATES` constants, `TZAFON_ACTION_TYPES` /
+  `YUTORI_ACTION_TYPES`, and the `OPENAI_BATCH_INSTRUCTIONS` /
+  `GEMINI_INSTRUCTIONS_RAW` / `TZAFON_INSTRUCTIONS_RAW` /
+  `YUTORI_INSTRUCTIONS_RAW` prompt constants.
+- `CUA_BATCH_TOOL_NAME` is now `"computer_batch"` (was
+  `"batch_computer_actions"`), matching the batch tool Anthropic ships by
+  default. `anthropic.ANTHROPIC_BATCH_TOOL_NAME` carries the same new value;
+  the other per-namespace batch aliases (`TZAFON_BATCH_TOOL_NAME`,
+  `YUTORI_BATCH_TOOL_NAME`, `*_BATCH_DESCRIPTION`, `*BatchSchema`,
+  `*BatchInput`) were removed — use `CUA_BATCH_TOOL_NAME`,
+  `CUA_BATCH_TOOL_DESCRIPTION`, `CuaBatchSchema`, and `CuaBatchInput`.
+- Anthropic tools are now the 13 canonical browser actions Anthropic supports
+  (no `back`/`forward`/`url`) plus a `computer_batch` batch tool by default;
+  pass `excludeBatch: true` to omit it. Unsupported `actions` entries throw.
+  `anthropic.ANTHROPIC_CUA_ACTION_TYPES` reflects the supported subset rather
+  than aliasing the full canonical list.
+- Yutori models now use Yutori's documented native `tool_set` request field.
+  `streamYutori` strips canonical action tools from the outbound payload
+  (preserve specific tools via the `keepToolNames` stream option), selects the
+  n1.5 core tool set where applicable, and normalizes native tool calls back
+  to canonical names. `yutori.providerModule.toolDefinitions()` is `[]`;
+  `yutori.computerTools()` builds local mirrors for executor lookup, validates
+  `{ actions }` against the supported subset, and throws on unsupported
+  actions. `yutoriBuiltinToolsOnPayload` was replaced by
+  `yutoriNativeToolSetOnPayload`. The Yutori runtime spec also carries a
+  screenshot policy (append a 1280x800 webp screenshot to the latest message).
+- Family model annotations now match only the family root plus numeric
+  revision or dated-snapshot suffixes (`claude-opus-4-7`,
+  `gpt-5.5-2026-04-23`). Named sibling variants such as `gpt-5.4-mini` are no
+  longer listed by `listCuaModels()` or accepted by `getCuaModel()` without
+  their own annotation.
+- `google:gemini-2.5-computer-use-preview-10-2025` was removed from the
+  catalog: it rejects the standard function declarations this package sends
+  and requires Google's native `tools.computer_use` wrapper. Use
+  `google:gemini-3-flash-preview` or `google:gemini-3-pro-preview`.
+- `streamTzafonResponses` no longer accepts a `maxOutputTokens` option — use
+  the standard `maxTokens` stream option.
+
+### Added
+
+- `CuaProviderModule` contract plus a `providerModule` export per namespace,
+  and a richer `CuaRuntimeSpec`: `toolExecutors` (local adapters that turn
+  provider tool calls into canonical `CuaAction`s via `CuaToolExecutorSpec`),
+  `coordinateSystem`, and optional `screenshot` policy alongside the existing
+  tool definitions, default prompt, and payload middleware.
+- `resolveCuaRuntimeSpec(input, options?)` accepts `ComputerToolsOptions` and
+  forwards it to the provider module, so runtime consumers can narrow tool
+  definitions and executors (e.g. `{ actions: ["click"] }`).
+- `registerCuaProviders()` is exported: importing the package still registers
+  the Yutori/Tzafon stream providers automatically, and this restores them
+  after pi-ai registry mutators (`clearApiProviders`, `resetApiProviders`,
+  `unregisterApiProviders`).
+- `parseCuaModelRef` / `getCuaModel` accept `"gemini:"` refs as an alias for
+  `"google:"`, and unsupported-provider errors now list the valid providers.
+- `CuaMouseButton` and `CuaDragMouseButton` closed unions type the `button`
+  field on click/mouse_down/mouse_up and drag actions.
+- `yutori.YutoriOptions` and `tzafon.TzafonResponsesOptions` are exported and
+  aligned; both support `keepToolNames` to preserve caller tools that collide
+  with canonical action names on the wire.
+- Yutori native action vocabulary exports: `YUTORI_N1_ACTION_TYPES`,
+  `YUTORI_N15_CORE_ACTION_TYPES`, `YUTORI_N15_EXPANDED_ACTION_TYPES`,
+  tool-set ids, `yutoriToolSetForModel`, `yutoriNativeActionsForModel`, and
+  `toCanonicalActions`; Tzafon exports `toCanonicalActions`,
+  `TzafonCanonicalAction`, `tzafonComputerUseOnPayload`, and
+  `tzafonToolCallId`.
+- README and JSDoc coverage across the public surface: API key prerequisites
+  and helpers, error handling (`stopReason` semantics), a multi-turn
+  tool-result example, the complete export list, and per-provider canonical
+  action subsets.
+
 ## 0.1.0
 
 - Provider-qualified CUA model catalog with support annotations and curated overrides.
