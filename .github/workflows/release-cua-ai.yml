@@ -71,7 +71,7 @@ jobs:
           cd "$RUNNER_TEMP/esm-smoke"
           npm init -y
           npm install "$RUNNER_TEMP"/onkernel-cua-ai-*.tgz
-          node --input-type=module -e "import('@onkernel/cua-ai').then((m) => { if (typeof m.getCuaModel !== 'function') process.exit(1); })"
+          node --input-type=module -e "import('@onkernel/cua-ai').then((m) => { if (typeof m.getCuaModel !== 'function') process.exit(1); }).catch((err) => { console.error(err); process.exit(1); })"
 
       - name: Publish to npm
         run: npm publish --workspace @onkernel/cua-ai --access public
