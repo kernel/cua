@@ -23,10 +23,10 @@ export function coordinateSystem(): ComputerToolCoordinateSystem {
 	return { type: "normalized", range: [0, 999] };
 }
 
-export const GEMINI_INSTRUCTIONS_RAW = `You control a Kernel cloud browser through individual browser tools. Use the provider coordinate system for tool calls, and request screenshots or URL reads when state changes.`;
+export const GEMINI_COMPUTER_INSTRUCTIONS = `You control a Kernel cloud browser through individual browser tools. Use the provider coordinate system for tool calls, and request screenshots or URL reads when state changes.`;
 
 export function buildGeminiSystemPrompt(opts: { suffix?: string } = {}): string {
-	return [GEMINI_INSTRUCTIONS_RAW, opts.suffix].filter(Boolean).join("\n\n");
+	return [GEMINI_COMPUTER_INSTRUCTIONS, opts.suffix].filter(Boolean).join("\n\n");
 }
 
 export const providerModule = {

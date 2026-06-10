@@ -14,7 +14,7 @@ import {
 } from "../src/index.js";
 
 const providers = { openai, gemini, tzafon };
-const ANTHROPIC_BATCH_TOOL_NAME = "computer_batch";
+const ANTHROPIC_BATCH_TOOL_NAME = anthropic.ANTHROPIC_BATCH_TOOL_NAME;
 
 function batchActionVariants(tool: { parameters: any }): any[] {
 	const items = tool.parameters.properties.actions.items;
@@ -51,6 +51,11 @@ describe("computer tool definitions", () => {
 		expect(batchActionVariants(tool).map((v) => v.properties.type.const)).toEqual(subset);
 	});
 
+	it("names the default batch tool after the one Anthropic ships", () => {
+		expect(CUA_BATCH_TOOL_NAME).toBe("computer_batch");
+		expect(anthropic.ANTHROPIC_BATCH_TOOL_NAME).toBe(CUA_BATCH_TOOL_NAME);
+	});
+
 	it("emits a single-variant batch schema when narrowed to one action", () => {
 		const tool = createCuaBatchToolDefinition(["click"]);
 		const items = tool.parameters.properties.actions.items;
@@ -66,9 +71,23 @@ describe("computer tool definitions", () => {
 
 	it("exposes local canonical executor definitions for Yutori", () => {
 		const tools = yutori.computerTools();
-		expect(tools.map((tool) => tool.name)).toEqual([...yutori.YUTORI_CANONICAL_ACTION_TYPES]);
+		expect(tools.map((tool) => tool.name)).toEqual([...yutori.YUTORI_CUA_ACTION_TYPES]);
 		expect(tools.map((tool) => tool.name)).not.toContain(CUA_BATCH_TOOL_NAME);
 		expect(tools.map((tool) => tool.name)).not.toContain(CUA_NAVIGATION_TOOL_NAME);
+	});
+
+	it("narrows Yutori tools and executors to a supported subset", () => {
+		const tools = yutori.computerTools({ actions: ["click"] });
+		expect(tools.map((tool) => tool.name)).toEqual(["click"]);
+		const executors = yutori.computerToolExecutors({ actions: ["click", "type"] });
+		expect(executors.map((executor) => executor.definition.name)).toEqual(["click", "type"]);
+	});
+
+	it("rejects unsupported Yutori action narrowing", () => {
+		expect(() => yutori.computerTools({ actions: ["url"] })).toThrow("unsupported Yutori canonical action(s): url");
+		expect(() => yutori.createActionSchema(["screenshot"])).toThrow(
+			"unsupported Yutori canonical action(s): screenshot",
+		);
 	});
 
 	it("exports Yutori native action sets by model family", () => {

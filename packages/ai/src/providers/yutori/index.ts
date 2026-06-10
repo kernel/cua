@@ -5,10 +5,11 @@ import { yutoriNativeToolSetOnPayload } from "./provider.js";
 export {
 	computerToolExecutors,
 	computerTools,
+	createActionSchema,
 	toCanonicalActions,
 	yutoriNativeActionsForModel,
 	yutoriToolSetForModel,
-	YUTORI_CANONICAL_ACTION_TYPES,
+	YUTORI_CUA_ACTION_TYPES,
 	YUTORI_N1_ACTION_TYPES,
 	YUTORI_N15_ACTION_TYPES,
 	YUTORI_N15_CORE_ACTION_TYPES,
@@ -16,13 +17,21 @@ export {
 	YUTORI_N15_EXPANDED_ACTION_TYPES,
 	YUTORI_N15_EXPANDED_TOOL_SET,
 } from "./actions.js";
-export type { YutoriN1ActionType, YutoriN15CoreActionType, YutoriN15ExpandedActionType, YutoriNativeActionType } from "./actions.js";
+export type {
+	YutoriAction,
+	YutoriN1ActionType,
+	YutoriN15CoreActionType,
+	YutoriN15ExpandedActionType,
+	YutoriNativeActionType,
+} from "./actions.js";
+export type { ComputerToolsOptions } from "../common.js";
 export {
 	YUTORI_CHAT_COMPLETIONS_API,
 	streamSimpleYutori,
 	streamYutori,
 	yutoriNativeToolSetOnPayload,
 } from "./provider.js";
+export type { YutoriOptions } from "./provider.js";
 
 // Provider-native action vocabulary differs between Navigator versions:
 //   n1 (fixed tool set):
@@ -46,10 +55,10 @@ export function coordinateSystem(): ComputerToolCoordinateSystem {
 // Yutori's Navigator quickstart recommends putting extra instructions in the
 // first user message instead of supplying a custom system prompt.
 // Source: https://docs.yutori.com/llm-quickstart.md
-export const YUTORI_INSTRUCTIONS_RAW = "";
+export const YUTORI_COMPUTER_INSTRUCTIONS = "";
 
 export function buildYutoriSystemPrompt(opts: { suffix?: string } = {}): string {
-	return [YUTORI_INSTRUCTIONS_RAW, opts.suffix].filter(Boolean).join("\n\n");
+	return [YUTORI_COMPUTER_INSTRUCTIONS, opts.suffix].filter(Boolean).join("\n\n");
 }
 
 export const providerModule = {

@@ -2,7 +2,7 @@ import { computerToolExecutors, computerTools, type ComputerToolCoordinateSystem
 import { tzafonComputerUseOnPayload } from "./provider.js";
 
 export {
-	CUA_ACTION_TYPES as TZAFON_ACTION_TYPES,
+	CUA_ACTION_TYPES as TZAFON_CUA_ACTION_TYPES,
 	computerToolExecutors,
 	computerTools,
 	createCuaActionSchema as createActionSchema,
@@ -15,9 +15,11 @@ export {
 	TZAFON_RESPONSES_API,
 	streamSimpleTzafonResponses,
 	streamTzafonResponses,
+	toCanonicalActions,
 	tzafonComputerUseOnPayload,
 	tzafonToolCallId,
 } from "./provider.js";
+export type { TzafonCanonicalAction, TzafonResponsesOptions } from "./provider.js";
 
 // Provider-native action vocabulary. The model card lists supported actions;
 // the Responses API loop dispatches on `action.type` and adds terminal control
@@ -33,11 +35,11 @@ export function coordinateSystem(): ComputerToolCoordinateSystem {
 	return { type: "normalized", range: [0, 999] };
 }
 
-export const TZAFON_INSTRUCTIONS_RAW = `You control a Kernel cloud browser through individual browser tools. Include screenshot or URL reads when you need updated state.`;
+export const TZAFON_COMPUTER_INSTRUCTIONS = `You control a Kernel cloud browser through individual browser tools. Include screenshot or URL reads when you need updated state.`;
 
 /** Build the default system prompt used with Tzafon CUA models. */
 export function buildTzafonSystemPrompt(opts: { suffix?: string } = {}): string {
-	return [TZAFON_INSTRUCTIONS_RAW, opts.suffix].filter(Boolean).join("\n\n");
+	return [TZAFON_COMPUTER_INSTRUCTIONS, opts.suffix].filter(Boolean).join("\n\n");
 }
 
 export const providerModule = {

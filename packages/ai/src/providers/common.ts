@@ -22,11 +22,23 @@ export const CUA_ACTION_TYPES = [
 
 export type CuaActionType = (typeof CUA_ACTION_TYPES)[number];
 
+/**
+ * Mouse buttons accepted by click, mouse_down, and mouse_up actions. The
+ * executor coerces anything outside this set to "left".
+ */
+export type CuaMouseButton = "left" | "right" | "middle" | "back" | "forward";
+
+/**
+ * Mouse buttons accepted by drag actions. The executor coerces anything
+ * outside this set to "left".
+ */
+export type CuaDragMouseButton = "left" | "right" | "middle";
+
 export interface CuaActionClick {
 	type: "click";
 	x: number;
 	y: number;
-	button?: string;
+	button?: CuaMouseButton;
 	hold_keys?: string[];
 }
 
@@ -41,7 +53,7 @@ export interface CuaActionMouseDown {
 	type: "mouse_down";
 	x: number;
 	y: number;
-	button?: string;
+	button?: CuaMouseButton;
 	hold_keys?: string[];
 }
 
@@ -49,7 +61,7 @@ export interface CuaActionMouseUp {
 	type: "mouse_up";
 	x: number;
 	y: number;
-	button?: string;
+	button?: CuaMouseButton;
 	hold_keys?: string[];
 }
 
@@ -82,7 +94,7 @@ export interface CuaActionMove {
 export interface CuaActionDrag {
 	type: "drag";
 	path: Array<{ x: number; y: number }>;
-	button?: string;
+	button?: CuaDragMouseButton;
 	hold_keys?: string[];
 }
 
@@ -298,7 +310,12 @@ export interface CuaToolExecutorSpec {
 	toActions(args: unknown): CuaAction[];
 }
 
-export const CUA_BATCH_TOOL_NAME = "batch_computer_actions";
+/**
+ * Default name for batch computer-action tools created by
+ * {@link createCuaBatchToolDefinition} and the name Anthropic's batch tool
+ * ships under (the only provider that includes one by default).
+ */
+export const CUA_BATCH_TOOL_NAME = "computer_batch";
 export const CUA_NAVIGATION_TOOL_NAME = "computer_use_extra";
 
 export const CUA_BATCH_TOOL_DESCRIPTION = [

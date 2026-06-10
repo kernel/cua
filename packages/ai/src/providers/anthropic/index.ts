@@ -2,6 +2,8 @@ import type { ComputerToolCoordinateSystem, CuaProviderModule } from "../common.
 import { computerToolExecutors, computerTools } from "./actions.js";
 
 export {
+	ANTHROPIC_BATCH_TOOL_NAME,
+	ANTHROPIC_CUA_ACTION_TYPES,
 	computerToolExecutors,
 	computerTools,
 	createActionSchema,
