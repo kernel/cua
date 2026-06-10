@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { tzafon } from "../src/index";
+import { tzafon } from "../src/index.js";
 
 describe("tzafonComputerUseOnPayload", () => {
 	it("replaces local CUA action tools with the native computer_use tool", () => {

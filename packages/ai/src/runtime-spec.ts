@@ -1,15 +1,15 @@
-import type { CuaProvider } from "./models";
-import { getCuaModel, providerForModel } from "./models";
-import { providerModule as anthropic } from "./providers/anthropic/index";
-import { providerModule as gemini } from "./providers/gemini/index";
-import { providerModule as openai } from "./providers/openai/index";
-import { providerModule as tzafon } from "./providers/tzafon/index";
-import { providerModule as yutori } from "./providers/yutori/index";
+import type { CuaProvider } from "./models.js";
+import { getCuaModel, providerForModel } from "./models.js";
+import { providerModule as anthropic } from "./providers/anthropic/index.js";
+import { providerModule as gemini } from "./providers/gemini/index.js";
+import { providerModule as openai } from "./providers/openai/index.js";
+import { providerModule as tzafon } from "./providers/tzafon/index.js";
+import { providerModule as yutori } from "./providers/yutori/index.js";
 import type {
 	CuaProviderModule,
 	CuaRuntimeSpec,
 	CuaRuntimeSpecInput,
-} from "./providers/common";
+} from "./providers/common.js";
 
 const PROVIDERS = {
 	openai,

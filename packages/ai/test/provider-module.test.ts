@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { anthropic, CUA_PROVIDERS, type CuaProvider, gemini, openai, tzafon, yutori } from "../src/index";
-import type { CuaProviderModule } from "../src/providers/common";
+import { anthropic, CUA_PROVIDERS, type CuaProvider, gemini, openai, tzafon, yutori } from "../src/index.js";
+import type { CuaProviderModule } from "../src/providers/common.js";
 
 const MODULES: Record<CuaProvider, { providerModule: CuaProviderModule }> = {
 	openai,

@@ -10,7 +10,7 @@ import {
 	type CuaAction,
 	type CuaActionType,
 	type CuaToolExecutorSpec,
-} from "../common";
+} from "../common.js";
 
 // Source of truth: Anthropic's computer-use best-practices quickstart
 // computer/browser tool action enums. These are the browser actions Anthropic

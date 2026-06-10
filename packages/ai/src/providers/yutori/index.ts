@@ -1,6 +1,6 @@
-import type { ComputerToolCoordinateSystem, CuaProviderModule } from "../common";
-import { computerToolExecutors } from "./actions";
-import { yutoriNativeToolSetOnPayload } from "./provider";
+import type { ComputerToolCoordinateSystem, CuaProviderModule } from "../common.js";
+import { computerToolExecutors } from "./actions.js";
+import { yutoriNativeToolSetOnPayload } from "./provider.js";
 
 export {
 	computerToolExecutors,
@@ -15,14 +15,14 @@ export {
 	YUTORI_N15_CORE_TOOL_SET,
 	YUTORI_N15_EXPANDED_ACTION_TYPES,
 	YUTORI_N15_EXPANDED_TOOL_SET,
-} from "./actions";
-export type { YutoriN1ActionType, YutoriN15CoreActionType, YutoriN15ExpandedActionType, YutoriNativeActionType } from "./actions";
+} from "./actions.js";
+export type { YutoriN1ActionType, YutoriN15CoreActionType, YutoriN15ExpandedActionType, YutoriNativeActionType } from "./actions.js";
 export {
 	YUTORI_CHAT_COMPLETIONS_API,
 	streamSimpleYutori,
 	streamYutori,
 	yutoriNativeToolSetOnPayload,
-} from "./provider";
+} from "./provider.js";
 
 // Provider-native action vocabulary differs between Navigator versions:
 //   n1 (fixed tool set):

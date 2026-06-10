@@ -1,5 +1,5 @@
 import { Type, type Api, type Model, type Static, type TSchema, type Tool } from "@earendil-works/pi-ai";
-import type { CuaModelRef, CuaProvider } from "../models";
+import type { CuaModelRef, CuaProvider } from "../models.js";
 
 export const CUA_ACTION_TYPES = [
 	"click",

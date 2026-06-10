@@ -11,7 +11,7 @@ import {
 	openai,
 	tzafon,
 	yutori,
-} from "../src/index";
+} from "../src/index.js";
 
 const providers = { openai, gemini, tzafon };
 const ANTHROPIC_BATCH_TOOL_NAME = "computer_batch";

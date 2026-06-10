@@ -1,5 +1,5 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
-import { parseCuaModelRef, providerForModel, type CuaModelRef, type CuaProvider } from "./models";
+import { parseCuaModelRef, providerForModel, type CuaModelRef, type CuaProvider } from "./models.js";
 
 /**
  * Environment variables accepted for each CUA provider.

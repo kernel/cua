@@ -5,7 +5,7 @@ import {
 	type CuaAction,
 	type CuaToolExecutorSpec,
 	type CuaActionType,
-} from "../common";
+} from "../common.js";
 
 /**
  * Native Yutori Navigator n1.5 tool-set ids.

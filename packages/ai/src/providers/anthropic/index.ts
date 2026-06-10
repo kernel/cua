@@ -1,16 +1,16 @@
-import type { ComputerToolCoordinateSystem, CuaProviderModule } from "../common";
-import { computerToolExecutors, computerTools } from "./actions";
+import type { ComputerToolCoordinateSystem, CuaProviderModule } from "../common.js";
+import { computerToolExecutors, computerTools } from "./actions.js";
 
 export {
 	computerToolExecutors,
 	computerTools,
 	createActionSchema,
-} from "./actions";
+} from "./actions.js";
 export type {
 	AnthropicAction,
 	AnthropicComputerToolsOptions,
 	AnthropicComputerToolsOptions as ComputerToolsOptions,
-} from "./actions";
+} from "./actions.js";
 
 // Anthropic's quickstart uses pixel coordinates for both its computer and
 // browser tools.

@@ -130,7 +130,7 @@ Run the checks for each package being released:
 ```bash
 npm ci
 npm run build --workspace @onkernel/cua-ai
-npm test --workspace @onkernel/cua-ai -- test/api-keys.test.ts test/models.test.ts test/providers.test.ts test/runtime-spec.test.ts test/tools.test.ts test/yutori-payload.test.ts
+npm test --workspace @onkernel/cua-ai
 npm pack --workspace @onkernel/cua-ai --dry-run
 ```
 

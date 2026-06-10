@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { yutori } from "../src/index";
+import { yutori } from "../src/index.js";
 
 describe("yutoriNativeToolSetOnPayload", () => {
 	it("removes local Yutori action tool definitions from payload.tools", () => {

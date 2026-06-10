@@ -22,7 +22,16 @@ jobs:
       - run: npm ci
       - run: npm run build --workspace @onkernel/cua-ai
       - name: Unit tests
-        run: npm test --workspace @onkernel/cua-ai -- test/models.test.ts test/tools.test.ts
+        run: npm test --workspace @onkernel/cua-ai
+      - name: Pack tarball
+        run: npm pack --workspace @onkernel/cua-ai --pack-destination "$RUNNER_TEMP"
+      - name: ESM import smoke test
+        run: |
+          mkdir -p "$RUNNER_TEMP/esm-smoke"
+          cd "$RUNNER_TEMP/esm-smoke"
+          npm init -y
+          npm install "$RUNNER_TEMP"/onkernel-cua-ai-*.tgz
+          node --input-type=module -e "import('@onkernel/cua-ai').then((m) => { if (typeof m.getCuaModel !== 'function') process.exit(1); })"
 
   integration:
     runs-on: ubuntu-latest
@@ -45,7 +54,7 @@ jobs:
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
           TZAFON_API_KEY: ${{ secrets.TZAFON_API_KEY }}
           YUTORI_API_KEY: ${{ secrets.YUTORI_API_KEY }}
-        run: npm test --workspace @onkernel/cua-ai -- test/computer-tool.integration.test.ts
+        run: npm run test:integration --workspace @onkernel/cua-ai
 
   agent-e2e:
     runs-on: ubuntu-latest

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { tzafon } from "../src/index";
+import { tzafon } from "../src/index.js";
 
 describe("streamTzafonResponses", () => {
 	it("derives unique ids when one computer_call expands to multiple actions", () => {

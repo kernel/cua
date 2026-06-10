@@ -35,7 +35,8 @@
     "build": "tsc -b",
     "clean": "tsc -b --clean",
     "example:quickstart": "tsx examples/quickstart.ts",
-    "test": "vitest --run"
+    "test": "vitest --run",
+    "test:integration": "vitest --run --config vitest.integration.config.ts"
   },
   "dependencies": {
     "@earendil-works/pi-ai": "^0.74.0",
