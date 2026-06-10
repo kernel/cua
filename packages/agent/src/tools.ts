@@ -1,6 +1,5 @@
 import type Kernel from "@onkernel/sdk";
 import type { ImageContent, TextContent, Tool } from "@earendil-works/pi-ai";
-import type { TSchema } from "typebox";
 import {
 	CUA_NAVIGATION_TOOL_NAME,
 	createCuaNavigationToolDefinition,
@@ -9,9 +8,10 @@ import {
 	type CuaNavigationInput,
 	type CuaScreenshotSpec,
 	type CuaToolExecutorSpec,
+	type TSchema,
 } from "@onkernel/cua-ai";
-import { InternalComputerTranslator, type KernelBrowser } from "./translator/translator";
-import type { AgentTool, AgentToolResult } from "./vendor/pi-agent-core/index";
+import { InternalComputerTranslator, type KernelBrowser } from "./translator/translator.js";
+import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
 
 export interface ComputerToolOptions {
 	browser: KernelBrowser;
@@ -27,14 +27,12 @@ type ToolContent = Array<TextContent | ImageContent>;
 export interface BatchDetails {
 	statusText: string;
 	readResults: Array<{ type: "url"; url: string } | { type: "screenshot"; bytes: number } | { type: "cursor_position"; x: number; y: number }>;
-	error?: string;
 }
 
 export interface NavigationDetails {
 	action: string;
 	statusText: string;
 	url?: string;
-	error?: string;
 }
 
 type BatchTool = AgentTool<TSchema, BatchDetails>;
@@ -68,9 +66,7 @@ function createExecutorTool(executor: ComputerExecutorSpec, translator: Internal
 			description: definition.description,
 			parameters: definition.parameters,
 			async execute(_toolCallId: string, params: unknown): Promise<AgentToolResult<NavigationDetails>> {
-				const result = await executeNavigationTool(translator, asNavigationInput(params));
-				if (result.isError) throw Object.assign(new Error(result.details.statusText), result);
-				return { content: result.content, details: result.details };
+				return executeNavigationTool(translator, asNavigationInput(params));
 			},
 		};
 		return tool;
@@ -82,9 +78,7 @@ function createExecutorTool(executor: ComputerExecutorSpec, translator: Internal
 		parameters: definition.parameters,
 		executionMode: "sequential",
 		async execute(_toolCallId: string, params: unknown): Promise<AgentToolResult<BatchDetails>> {
-			const result = await executeBatchTool(translator, { actions: executor.toActions(params) });
-			if (result.isError) throw Object.assign(new Error(result.details.statusText), result);
-			return { content: result.content, details: result.details };
+			return executeBatchTool(translator, { actions: executor.toActions(params) });
 		},
 	};
 	return tool;
@@ -94,15 +88,9 @@ function isNavigationExecutor(executor: ComputerExecutorSpec): executor is Navig
 	return "kind" in executor && executor.kind === "navigation";
 }
 
-async function executeBatchTool(translator: InternalComputerTranslator, params: CuaBatchInput): Promise<{
-	content: ToolContent;
-	details: BatchDetails;
-	isError: boolean;
-}> {
+async function executeBatchTool(translator: InternalComputerTranslator, params: CuaBatchInput): Promise<AgentToolResult<BatchDetails>> {
 	const content: ToolContent = [];
 	const readResults: BatchDetails["readResults"] = [];
-	let statusText = "Actions executed successfully.";
-	let error: Error | undefined;
 	try {
 		const result = await translator.executeBatch(params.actions as unknown as Array<Record<string, unknown>>);
 		for (const read of result.readResults) {
@@ -123,39 +111,37 @@ async function executeBatchTool(translator: InternalComputerTranslator, params: 
 			content.push({ type: "image", data: screenshot.data.toString("base64"), mimeType: screenshot.mimeType });
 		}
 	} catch (err) {
-		error = err instanceof Error ? err : new Error(String(err));
-		statusText = `Actions failed: ${error.message}`;
-		content.push({ type: "text", text: statusText });
+		throw new Error(`Actions failed: ${errorMessage(err)}`, { cause: err });
 	}
-	return { content, details: { statusText, readResults, ...(error ? { error: error.message } : {}) }, isError: Boolean(error) };
+	return { content, details: { statusText: "Actions executed successfully.", readResults } };
 }
 
-async function executeNavigationTool(translator: InternalComputerTranslator, params: CuaNavigationInput): Promise<{
-	content: ToolContent;
-	details: NavigationDetails;
-	isError: boolean;
-}> {
+async function executeNavigationTool(translator: InternalComputerTranslator, params: CuaNavigationInput): Promise<AgentToolResult<NavigationDetails>> {
 	const action = params.action;
-	const content: ToolContent = [];
-	let statusText = "Action executed successfully.";
-	let url: string | undefined;
-	let error: Error | undefined;
 	try {
+		let statusText = `${action} executed successfully.`;
+		let url: string | undefined;
 		if (action === "url") {
 			url = await translator.currentUrl();
 			statusText = `Current URL: ${url}`;
 		} else {
 			await translator.executeBatch([{ type: action, url: params.url }]);
-			statusText = `${action} executed successfully.`;
 		}
 		const screenshot = await translator.screenshot();
-		content.push({ type: "image", data: screenshot.data.toString("base64"), mimeType: screenshot.mimeType });
+		return {
+			content: [
+				{ type: "text", text: statusText },
+				{ type: "image", data: screenshot.data.toString("base64"), mimeType: screenshot.mimeType },
+			],
+			details: { action, statusText, ...(url ? { url } : {}) },
+		};
 	} catch (err) {
-		error = err instanceof Error ? err : new Error(String(err));
-		statusText = `${action} failed: ${error.message}`;
+		throw new Error(`${action} failed: ${errorMessage(err)}`, { cause: err });
 	}
-	content.unshift({ type: "text", text: statusText });
-	return { content, details: { action, statusText, ...(url ? { url } : {}), ...(error ? { error: error.message } : {}) }, isError: Boolean(error) };
+}
+
+function errorMessage(err: unknown): string {
+	return err instanceof Error ? err.message : String(err);
 }
 
 function asNavigationInput(value: unknown): CuaNavigationInput {

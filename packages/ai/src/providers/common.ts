@@ -442,6 +442,8 @@ export interface CuaScreenshotSpec {
 export interface CuaPayloadContext {
 	/** Tool names that should remain in the outbound provider payload even if the provider strips local CUA executors. */
 	keepToolNames?: readonly string[];
+	/** Capture a fresh browser screenshot, already transformed per the provider's screenshot spec. */
+	getScreenshot?: () => Promise<{ data: Buffer; mimeType: string }>;
 }
 
 export type CuaPayloadHook = (payload: unknown, model: Model<Api>, context?: CuaPayloadContext) => unknown | Promise<unknown>;

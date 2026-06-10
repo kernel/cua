@@ -8,7 +8,7 @@ import {
 	type PromptTemplate,
 	type Skill,
 	type StreamFn,
-} from "./vendor/pi-agent-core/index";
+} from "@earendil-works/pi-agent-core";
 import {
 	type Api,
 	CUA_NAVIGATION_TOOL_NAME,
@@ -20,8 +20,8 @@ import {
 	streamSimple,
 } from "@onkernel/cua-ai";
 import type Kernel from "@onkernel/sdk";
-import { createCuaComputerTools } from "./tools";
-import { InternalComputerTranslator, type KernelBrowser } from "./translator/translator";
+import { createCuaComputerTools } from "./tools.js";
+import { InternalComputerTranslator, type KernelBrowser } from "./translator/translator.js";
 
 /** A CUA model reference string or a concrete pi model object. */
 type CuaRuntimeInput = CuaModelRef | Model<Api>;
@@ -94,15 +94,14 @@ export type CuaAgentHarnessOptions<
 };
 
 /**
- * Holds the CUA-specific pieces that have to change when a model changes.
- *
- * CUA owns the computer-use tools and refreshes them from `@onkernel/cua-ai`
- * whenever the model changes. Caller-owned `extraTools` are appended after
- * those defaults. If callers pass their own prompt, the controller preserves
- * that caller-owned prompt.
+ * Holds the CUA-specific pieces that have to change when a model changes:
+ * the resolved runtime spec, the browser translator built for that spec, and
+ * the tools/prompt/payload hooks derived from it. Caller-owned `extraTools`
+ * are appended after the CUA defaults.
  */
 class CuaRuntimeController {
 	private runtimeSpec: CuaRuntimeSpec;
+	private translator: InternalComputerTranslator;
 
 	constructor(
 		private readonly options: {
@@ -111,23 +110,15 @@ class CuaRuntimeController {
 			model: CuaRuntimeInput;
 			extraTools?: AgentTool[];
 			computerUseExtra?: boolean;
-			systemPrompt?: unknown;
 			onPayload?: SimpleStreamOptions["onPayload"];
 		},
 	) {
 		this.runtimeSpec = resolveCuaRuntimeSpec(options.model);
+		this.translator = this.createTranslator();
 	}
 
 	get model(): Model<Api> {
 		return this.runtimeSpec.model;
-	}
-
-	get ownsTools(): boolean {
-		return true;
-	}
-
-	get ownsSystemPrompt(): boolean {
-		return this.options.systemPrompt === undefined;
 	}
 
 	get systemPrompt(): string {
@@ -136,6 +127,7 @@ class CuaRuntimeController {
 
 	setModel(model: CuaRuntimeInput): void {
 		this.runtimeSpec = resolveCuaRuntimeSpec(model);
+		this.translator = this.createTranslator();
 	}
 
 	tools(): AgentTool[] {
@@ -152,12 +144,16 @@ class CuaRuntimeController {
 		];
 	}
 
-	onPayloadFor(model: CuaRuntimeInput): SimpleStreamOptions["onPayload"] {
-		const runtimeSpec = resolveCuaRuntimeSpec(model);
-		return composeOnPayload(
-			composeOnPayload(this.screenshotOnPayload(runtimeSpec), this.providerOnPayload(runtimeSpec)),
-			this.options.onPayload,
-		);
+	onPayload(): SimpleStreamOptions["onPayload"] {
+		const runtimeSpec = this.runtimeSpec;
+		const providerOnPayload: SimpleStreamOptions["onPayload"] | undefined = runtimeSpec.onPayload
+			? async (payload, model) =>
+					runtimeSpec.onPayload?.(payload, model as Model<Api>, {
+						keepToolNames: this.keepToolNames(),
+						getScreenshot: () => this.translator.screenshot(),
+					})
+			: undefined;
+		return composeOnPayload(providerOnPayload, this.options.onPayload);
 	}
 
 	keepToolNames(): string[] {
@@ -167,50 +163,20 @@ class CuaRuntimeController {
 		];
 	}
 
-	private providerOnPayload(runtimeSpec: CuaRuntimeSpec): SimpleStreamOptions["onPayload"] | undefined {
-		if (!runtimeSpec.onPayload) return undefined;
-		return async (payload, model) =>
-			runtimeSpec.onPayload?.(payload, model as Model<Api>, { keepToolNames: this.keepToolNames() });
+	private createTranslator(): InternalComputerTranslator {
+		return new InternalComputerTranslator({
+			browser: this.options.browser,
+			client: this.options.client,
+			coordinateSystem: this.runtimeSpec.coordinateSystem,
+			screenshot: this.runtimeSpec.screenshot,
+		});
 	}
+}
 
-	private screenshotOnPayload(runtimeSpec: CuaRuntimeSpec): SimpleStreamOptions["onPayload"] | undefined {
-		if (!runtimeSpec.screenshot?.appendToLatestMessage) return undefined;
-		return async (payload) => {
-			if (!payload || typeof payload !== "object") return undefined;
-			const current = payload as { messages?: unknown };
-			if (!Array.isArray(current.messages) || current.messages.length === 0) return undefined;
-			const last = current.messages[current.messages.length - 1];
-			if (!last || typeof last !== "object") return undefined;
-			const lastMessage = last as { content?: unknown; role?: unknown };
-			if (lastMessage.role !== "user" && lastMessage.role !== "tool") return undefined;
-			if (contentHasImage(lastMessage.content)) return undefined;
-
-			const translator = new InternalComputerTranslator({
-				browser: this.options.browser,
-				client: this.options.client,
-				coordinateSystem: runtimeSpec.coordinateSystem,
-				screenshot: runtimeSpec.screenshot,
-			});
-			const screenshot = await translator.screenshot();
-			const content = normalizePayloadContent(lastMessage.content);
-			const nextMessages = current.messages.slice();
-			nextMessages[nextMessages.length - 1] = {
-				...(last as Record<string, unknown>),
-				content: [
-					...content,
-					{ type: "text", text: "\n\n" },
-					{
-						type: "image_url",
-						image_url: {
-							url: `data:${screenshot.mimeType};base64,${screenshot.data.toString("base64")}`,
-							detail: "high",
-						},
-					},
-				],
-			};
-			return { ...(payload as Record<string, unknown>), messages: nextMessages };
-		};
-	}
+/** Harness auth default following the documented CUA env-var convention. */
+async function getCuaEnvApiKeyAndHeaders(model: Model<Api>): Promise<{ apiKey: string } | undefined> {
+	const apiKey = getCuaEnvApiKey(model.provider);
+	return apiKey ? { apiKey } : undefined;
 }
 
 /**
@@ -223,6 +189,7 @@ class CuaRuntimeController {
  */
 export class CuaAgent extends Agent {
 	private readonly runtime: CuaRuntimeController;
+	private readonly ownsSystemPrompt: boolean;
 	private stateProxy?: CuaAgentState;
 
 	constructor(options: CuaAgentOptions) {
@@ -243,13 +210,12 @@ export class CuaAgent extends Agent {
 			model: initialState.model,
 			extraTools,
 			computerUseExtra,
-			systemPrompt: initialState.systemPrompt,
 			onPayload,
 		});
 		const wrappedStreamFn: StreamFn = (model, context, streamOptions) => {
 			const optionsWithCuaRuntime = {
 				...streamOptions,
-				onPayload: runtime.onPayloadFor(model as Model<Api>),
+				onPayload: runtime.onPayload(),
 				keepToolNames: runtime.keepToolNames(),
 			} as SimpleStreamOptions & { keepToolNames?: string[] };
 			return (streamFn ?? streamSimple)(model, context, optionsWithCuaRuntime);
@@ -268,6 +234,7 @@ export class CuaAgent extends Agent {
 		});
 
 		this.runtime = runtime;
+		this.ownsSystemPrompt = initialState.systemPrompt === undefined;
 		/**
 		 * pi calls `prepareNextTurn` between provider requests. Wrapping it lets CUA
 		 * honor any user-provided turn update while also refreshing provider-specific
@@ -291,8 +258,8 @@ export class CuaAgent extends Agent {
 				model: state.model,
 				context: {
 					...context,
-					systemPrompt: this.runtime.ownsSystemPrompt ? state.systemPrompt : context.systemPrompt,
-					tools: this.runtime.ownsTools ? state.tools.slice() : context.tools,
+					systemPrompt: this.ownsSystemPrompt ? state.systemPrompt : context.systemPrompt,
+					tools: state.tools.slice(),
 				},
 			};
 		};
@@ -322,10 +289,8 @@ export class CuaAgent extends Agent {
 		this.runtime.setModel(model);
 		const state = super.state;
 		state.model = this.runtime.model;
-		if (this.runtime.ownsTools) {
-			state.tools = this.runtime.tools();
-		}
-		if (this.runtime.ownsSystemPrompt) {
+		state.tools = this.runtime.tools();
+		if (this.ownsSystemPrompt) {
 			state.systemPrompt = this.runtime.systemPrompt;
 		}
 	}
@@ -365,7 +330,6 @@ export class CuaAgentHarness<
 			model,
 			extraTools,
 			computerUseExtra,
-			systemPrompt,
 			onPayload,
 		});
 		const resolvedTools = runtime.tools();
@@ -375,19 +339,14 @@ export class CuaAgentHarness<
 			model: runtime.model,
 			tools: resolvedTools,
 			systemPrompt: systemPrompt ?? (() => runtime.systemPrompt),
-			getApiKeyAndHeaders:
-				getApiKeyAndHeaders ??
-				(async (requestModel: Model<Api>) => {
-					const apiKey = getCuaEnvApiKey(requestModel.provider);
-					return apiKey ? { apiKey } : undefined;
-				}),
+			getApiKeyAndHeaders: getApiKeyAndHeaders ?? getCuaEnvApiKeyAndHeaders,
 			activeToolNames: activeToolNames ?? resolvedTools.map((tool) => tool.name),
 		});
 
 		this.runtime = runtime;
 		this.requestedActiveToolNames = activeToolNames;
 		this.on("before_provider_payload", async ({ model, payload }: { model: Model<Api>; payload: unknown }) => {
-			const onPayload = this.runtime.onPayloadFor(model as Model<Api>);
+			const onPayload = this.runtime.onPayload();
 			if (!onPayload) return { payload };
 			return { payload: (await onPayload(payload, model)) ?? payload };
 		});
@@ -402,10 +361,8 @@ export class CuaAgentHarness<
 	 */
 	override async setModel(model: CuaRuntimeInput): Promise<void> {
 		this.runtime.setModel(model);
-		if (this.runtime.ownsTools) {
-			const tools = this.runtime.tools();
-			await super.setTools(tools, this.requestedActiveToolNames ?? tools.map((tool) => tool.name));
-		}
+		const tools = this.runtime.tools();
+		await super.setTools(tools, this.requestedActiveToolNames ?? tools.map((tool) => tool.name));
 		await super.setModel(this.runtime.model);
 	}
 
@@ -422,18 +379,4 @@ function composeOnPayload(first: AgentOptions["onPayload"], second: AgentOptions
 		const afterFirst = await first(payload, modelRef);
 		return second(afterFirst ?? payload, modelRef);
 	};
-}
-
-function normalizePayloadContent(content: unknown): Array<Record<string, unknown>> {
-	if (typeof content === "string") return [{ type: "text", text: content }];
-	if (Array.isArray(content)) {
-		return content.filter((part): part is Record<string, unknown> => Boolean(part) && typeof part === "object");
-	}
-	return [];
-}
-
-function contentHasImage(content: unknown): boolean {
-	return Array.isArray(content) && content.some((part) => {
-		return Boolean(part) && typeof part === "object" && (part as { type?: unknown }).type === "image_url";
-	});
 }

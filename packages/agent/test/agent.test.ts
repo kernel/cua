@@ -279,9 +279,8 @@ describe("CuaAgentHarness", () => {
 			getApiKeyAndHeaders: async () => ({ apiKey: "test-key" }),
 		});
 		expect(harness).toBeInstanceOf(AgentHarness);
-		expect(harness.agent).toBeInstanceOf(Agent);
-		expect(harness.agent.state.model.id).toBe("gpt-5.5");
-		expect(harness.agent.state.tools.length).toBeGreaterThan(0);
+		expect(harness.getModel().id).toBe("gpt-5.5");
+		expect(harness.getTools().length).toBeGreaterThan(0);
 	});
 
 	it("refreshes CUA runtime state through setModel", async () => {
@@ -295,8 +294,8 @@ describe("CuaAgentHarness", () => {
 
 		await harness.setModel("google:gemini-3-pro-preview");
 
-		expect(harness.agent.state.model.id).toBe(runtime.model.id);
-		expect(harness.agent.state.tools).toHaveLength(runtime.toolExecutors.length);
+		expect(harness.getModel().id).toBe(runtime.model.id);
+		expect(harness.getTools()).toHaveLength(runtime.toolExecutors.length);
 	});
 
 	it("appends extraTools in harness construction", async () => {
@@ -310,7 +309,7 @@ describe("CuaAgentHarness", () => {
 			extraTools: [tool],
 		});
 
-		expect(harness.agent.state.tools.map((item) => item.name)).toEqual([
+		expect(harness.getTools().map((item) => item.name)).toEqual([
 			...runtime.toolExecutors.map((item) => item.definition.name),
 			"custom",
 		]);
@@ -327,6 +326,29 @@ describe("CuaAgentHarness", () => {
 		await harness.setActiveTools([]);
 		await harness.setModel("google:gemini-3-pro-preview");
 
-		expect(harness.agent.state.tools).toEqual([]);
+		expect(harness.getActiveTools()).toEqual([]);
+	});
+
+	it("re-applies the requested active tool subset and persists it when setModel refreshes tools", async () => {
+		const { env, session } = await createHarnessServices();
+		const harness = new CuaAgentHarness({
+			env,
+			session,
+			browser,
+			client,
+			model: "openai:gpt-5.5",
+		});
+
+		await harness.setActiveTools(["click", "screenshot"]);
+		await harness.setModel("google:gemini-3-pro-preview");
+
+		expect(harness.getTools()).toHaveLength(
+			resolveCuaRuntimeSpec("google:gemini-3-pro-preview").toolExecutors.length,
+		);
+		expect(harness.getActiveTools().map((tool) => tool.name)).toEqual(["click", "screenshot"]);
+
+		const branch = await session.getBranch();
+		const activeToolEntries = branch.filter((entry) => entry.type === "active_tools_change");
+		expect(activeToolEntries.at(-1)?.activeToolNames).toEqual(["click", "screenshot"]);
 	});
 });

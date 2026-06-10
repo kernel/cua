@@ -59,6 +59,64 @@ export function yutoriNativeToolSetOnPayload(payload: unknown, model?: Model<Api
 	};
 }
 
+/**
+ * CUA payload middleware for yutori: map local executor tools onto the native
+ * tool set, then append a fresh screenshot to the latest user/tool message per
+ * yutori's screenshot policy.
+ */
+export async function yutoriCuaOnPayload(payload: unknown, model?: Model<Api>, context?: CuaPayloadContext): Promise<unknown | undefined> {
+	const next = yutoriNativeToolSetOnPayload(payload, model, context) ?? payload;
+	return (await appendScreenshotToLatestMessage(next, context?.getScreenshot)) ?? next;
+}
+
+async function appendScreenshotToLatestMessage(
+	payload: unknown,
+	getScreenshot: CuaPayloadContext["getScreenshot"],
+): Promise<unknown | undefined> {
+	if (!getScreenshot) return undefined;
+	if (!payload || typeof payload !== "object") return undefined;
+	const current = payload as { messages?: unknown };
+	if (!Array.isArray(current.messages) || current.messages.length === 0) return undefined;
+	const last = current.messages[current.messages.length - 1];
+	if (!last || typeof last !== "object") return undefined;
+	const lastMessage = last as { content?: unknown; role?: unknown };
+	if (lastMessage.role !== "user" && lastMessage.role !== "tool") return undefined;
+	if (contentHasImage(lastMessage.content)) return undefined;
+
+	const screenshot = await getScreenshot();
+	const content = normalizePayloadContent(lastMessage.content);
+	const nextMessages = current.messages.slice();
+	nextMessages[nextMessages.length - 1] = {
+		...(last as Record<string, unknown>),
+		content: [
+			...content,
+			{ type: "text", text: "\n\n" },
+			{
+				type: "image_url",
+				image_url: {
+					url: `data:${screenshot.mimeType};base64,${screenshot.data.toString("base64")}`,
+					detail: "high",
+				},
+			},
+		],
+	};
+	return { ...(payload as Record<string, unknown>), messages: nextMessages };
+}
+
+function normalizePayloadContent(content: unknown): Array<Record<string, unknown>> {
+	if (typeof content === "string") return [{ type: "text", text: content }];
+	if (Array.isArray(content)) {
+		return content.filter((part): part is Record<string, unknown> => Boolean(part) && typeof part === "object");
+	}
+	return [];
+}
+
+function contentHasImage(content: unknown): boolean {
+	return Array.isArray(content) && content.some((part) => {
+		return Boolean(part) && typeof part === "object" && (part as { type?: unknown }).type === "image_url";
+	});
+}
+
 async function runYutoriStream(
 	stream: ReturnType<typeof createAssistantMessageEventStream>,
 	model: Model<Api>,
