@@ -10,7 +10,7 @@ import {
 	type CuaToolExecutorSpec,
 	type TSchema,
 } from "@onkernel/cua-ai";
-import { InternalComputerTranslator, type KernelBrowser } from "./translator/translator.js";
+import { InternalComputerTranslator, type KernelBrowser } from "./translator/translator";
 import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
 
 export interface ComputerToolOptions {

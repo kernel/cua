@@ -2,8 +2,8 @@ import type Kernel from "@onkernel/sdk";
 import type { BrowserCreateResponse, BrowserRetrieveResponse } from "@onkernel/sdk/resources/browsers";
 import { normalizeGotoUrl, type ComputerToolCoordinateSystem, type CuaScreenshotSpec } from "@onkernel/cua-ai";
 import sharp from "sharp";
-import { isKernelModifierKey, normalizeKernelKey, normalizeKernelKeyCombo } from "./keys.js";
-import type { BatchExecutionResult, ModelAction } from "./types.js";
+import { isKernelModifierKey, normalizeKernelKey, normalizeKernelKeyCombo } from "./keys";
+import type { BatchExecutionResult, ModelAction } from "./types";
 
 export type KernelBrowser = BrowserCreateResponse | BrowserRetrieveResponse;
 

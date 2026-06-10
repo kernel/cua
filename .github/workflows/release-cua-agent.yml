@@ -59,6 +59,7 @@ jobs:
 
       - run: npm run build --workspace @onkernel/cua-ai
       - run: npm run build --workspace @onkernel/cua-agent
+      - run: npm run typecheck --workspace @onkernel/cua-agent
 
       - name: Unit tests
         run: npm test --workspace @onkernel/cua-agent -- --exclude "**/*.live.test.ts"

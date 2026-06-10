@@ -32,11 +32,12 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc -b",
-    "clean": "tsc -b --clean",
+    "build": "tsdown",
+    "clean": "tsc -b --clean && rm -rf dist dist-tsc",
     "example:agent": "NODE_OPTIONS=--conditions=source tsx examples/agent-openai-smoke.ts",
     "example:harness": "NODE_OPTIONS=--conditions=source tsx examples/harness-openai-smoke.ts",
-    "test": "vitest --run"
+    "test": "vitest --run",
+    "typecheck": "tsc -b"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "0.79.1",
@@ -46,6 +47,7 @@
     "sharp": "^0.34.5"
   },
   "devDependencies": {
+    "tsdown": "^0.22.2",
     "vitest": "^3.2.4"
   }
 }

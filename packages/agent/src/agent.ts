@@ -20,8 +20,8 @@ import {
 	streamSimple,
 } from "@onkernel/cua-ai";
 import type Kernel from "@onkernel/sdk";
-import { createCuaComputerTools } from "./tools.js";
-import { InternalComputerTranslator, type KernelBrowser } from "./translator/translator.js";
+import { createCuaComputerTools } from "./tools";
+import { InternalComputerTranslator, type KernelBrowser } from "./translator/translator";
 
 /** A CUA model reference string or a concrete pi model object. */
 type CuaRuntimeInput = CuaModelRef | Model<Api>;
