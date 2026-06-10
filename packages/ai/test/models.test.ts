@@ -7,7 +7,7 @@ import {
 	getCuaModel,
 	listCuaModels,
 	parseCuaModelRef,
-} from "../src/index.js";
+} from "../src/index";
 
 describe("CUA model refs", () => {
 	it("parses and formats provider-qualified refs", () => {

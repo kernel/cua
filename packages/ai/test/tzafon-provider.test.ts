@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Model, ToolCall } from "@earendil-works/pi-ai";
-import { getCuaModel, tzafon } from "../src/index.js";
+import { getCuaModel, tzafon } from "../src/index";
 
 const { responsesCreate } = vi.hoisted(() => ({ responsesCreate: vi.fn() }));
 

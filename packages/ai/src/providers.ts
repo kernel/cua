@@ -1,6 +1,6 @@
 import { registerApiProvider } from "@earendil-works/pi-ai";
-import { streamSimpleTzafonResponses, streamTzafonResponses, TZAFON_RESPONSES_API } from "./providers/tzafon/provider.js";
-import { streamSimpleYutori, streamYutori, YUTORI_CHAT_COMPLETIONS_API } from "./providers/yutori/provider.js";
+import { streamSimpleTzafonResponses, streamTzafonResponses, TZAFON_RESPONSES_API } from "./providers/tzafon/provider";
+import { streamSimpleYutori, streamYutori, YUTORI_CHAT_COMPLETIONS_API } from "./providers/yutori/provider";
 
 // pi-ai eagerly registers openai-responses, anthropic-messages, and
 // google-generative-ai when its index module loads (see

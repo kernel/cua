@@ -18,8 +18,8 @@ import {
 	toCanonicalActions,
 	yutoriToolSetForModel,
 	YUTORI_N15_EXPANDED_ACTION_TYPES,
-} from "./actions.js";
-import { canonicalToolCallArguments, canonicalToolCallName, type CuaPayloadContext } from "../common.js";
+} from "./actions";
+import { canonicalToolCallArguments, canonicalToolCallName, type CuaPayloadContext } from "../common";
 
 export const YUTORI_CHAT_COMPLETIONS_API = "yutori-chat-completions";
 

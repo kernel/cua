@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getApiProvider, registerCuaProviders, resetApiProviders, tzafon, yutori } from "../src/index.js";
+import { getApiProvider, registerCuaProviders, resetApiProviders, tzafon, yutori } from "../src/index";
 
 const TZAFON_RESPONSES_API = tzafon.TZAFON_RESPONSES_API;
 const YUTORI_CHAT_COMPLETIONS_API = yutori.YUTORI_CHAT_COMPLETIONS_API;

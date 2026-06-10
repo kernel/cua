@@ -14,7 +14,7 @@ import {
 	openai,
 	tzafon,
 	yutori,
-} from "../src/index.js";
+} from "../src/index";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const screenshotPath = join(here, "..", "examples", "screenshot.png");

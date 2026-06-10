@@ -6,7 +6,7 @@
 
 - The published package is now importable under plain Node ESM. 0.1.0 shipped
   extensionless relative imports in `dist/`, so `import "@onkernel/cua-ai"`
-  failed outside bundlers; compiled output now uses explicit `.js` specifiers.
+  failed outside bundlers; `dist/` is now bundled with tsdown.
 - The shipped `examples/quickstart.ts` imports `@onkernel/cua-ai` instead of a
   `../src` path that does not exist in the tarball, checks `stopReason` so
   provider errors are no longer silent, resolves its API key via

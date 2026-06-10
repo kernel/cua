@@ -11,7 +11,7 @@ import {
 	type CuaAction,
 	type CuaActionType,
 	type CuaToolExecutorSpec,
-} from "../common.js";
+} from "../common";
 
 /**
  * Canonical CUA action types Anthropic browser computer-use tools support.

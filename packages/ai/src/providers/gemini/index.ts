@@ -1,16 +1,16 @@
-import { computerToolExecutors, computerTools } from "../common.js";
-import type { ComputerToolCoordinateSystem, CuaProviderModule } from "../common.js";
+import { computerToolExecutors, computerTools } from "../common";
+import type { ComputerToolCoordinateSystem, CuaProviderModule } from "../common";
 
 export {
 	CUA_ACTION_TYPES as GEMINI_CUA_ACTION_TYPES,
 	computerToolExecutors,
 	computerTools,
 	createCuaActionSchema as createActionSchema,
-} from "../common.js";
+} from "../common";
 export type {
 	CuaAction as GeminiAction,
 	ComputerToolsOptions,
-} from "../common.js";
+} from "../common";
 
 // Provider-native function names emitted on `functionCall.name` (PREDEFINED_COMPUTER_USE_FUNCTIONS):
 //   open_web_browser, click_at, hover_at, type_text_at, scroll_document,

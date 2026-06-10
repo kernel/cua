@@ -4,7 +4,7 @@ import {
 	getCuaEnvApiKey,
 	getCuaEnvApiKeyForModel,
 	requireCuaEnvApiKey,
-} from "../src/index.js";
+} from "../src/index";
 
 const ENV_KEYS = [
 	"OPENAI_API_KEY",

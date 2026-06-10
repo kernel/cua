@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { tzafon } from "../src/index.js";
+import { tzafon } from "../src/index";
 
 describe("Tzafon native action normalization", () => {
 	it("normalizes click variants", () => {

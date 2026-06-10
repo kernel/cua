@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Model, ToolCall } from "@earendil-works/pi-ai";
-import { getCuaModel, yutori } from "../src/index.js";
+import { getCuaModel, yutori } from "../src/index";
 
 const { completionsCreate } = vi.hoisted(() => ({ completionsCreate: vi.fn() }));
 

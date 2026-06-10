@@ -1,16 +1,16 @@
-import { computerToolExecutors, computerTools, type ComputerToolCoordinateSystem, type CuaProviderModule } from "../common.js";
-import { tzafonComputerUseOnPayload } from "./provider.js";
+import { computerToolExecutors, computerTools, type ComputerToolCoordinateSystem, type CuaProviderModule } from "../common";
+import { tzafonComputerUseOnPayload } from "./provider";
 
 export {
 	CUA_ACTION_TYPES as TZAFON_CUA_ACTION_TYPES,
 	computerToolExecutors,
 	computerTools,
 	createCuaActionSchema as createActionSchema,
-} from "../common.js";
+} from "../common";
 export type {
 	CuaAction as TzafonAction,
 	ComputerToolsOptions,
-} from "../common.js";
+} from "../common";
 export {
 	TZAFON_RESPONSES_API,
 	streamSimpleTzafonResponses,
@@ -18,8 +18,8 @@ export {
 	toCanonicalActions,
 	tzafonComputerUseOnPayload,
 	tzafonToolCallId,
-} from "./provider.js";
-export type { TzafonCanonicalAction, TzafonResponsesOptions } from "./provider.js";
+} from "./provider";
+export type { TzafonCanonicalAction, TzafonResponsesOptions } from "./provider";
 
 // Provider-native action vocabulary. The model card lists supported actions;
 // the Responses API loop dispatches on `action.type` and adds terminal control
