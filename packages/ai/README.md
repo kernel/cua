@@ -114,6 +114,11 @@ validate eagerly and throw regular errors.
 
 ## Continuing the Loop
 
+[`@onkernel/cua-agent`](https://www.npmjs.com/package/@onkernel/cua-agent)
+runs this loop for you — `CuaAgent`/`CuaAgentHarness` classes with browser
+execution against a Kernel browser. Reach for it first; the rest of this
+section is for driving the loop yourself against your own browser stack.
+
 A computer-use session is a loop: the model calls a tool, you execute it
 against a real browser, and you send the result (with a fresh screenshot) back
 so the model can plan the next step. Tool results are pi-ai
@@ -180,26 +185,6 @@ for (const block of first.content) {
 const second = await complete(model, { messages, tools }, { apiKey });
 ```
 
-The provider namespaces' `computerToolExecutors()` return
-`CuaToolExecutorSpec`s whose `toActions(args)` converts a tool call's
-arguments into canonical `CuaAction`s — use them to drive your own executor
-instead of switching on tool names by hand.
-
-Yutori is the one provider where the wire differs: `streamYutori` strips
-caller-supplied tools whose names collide with Yutori's canonical action names
-(`yutori.YUTORI_CUA_ACTION_TYPES`) from the outbound payload and selects
-Yutori's documented native `tool_set` instead,
-then normalizes the native tool calls back to canonical names — so the loop
-above still works unchanged. Tools that must stay on the payload can be listed
-in the `keepToolNames` stream option (`yutori.YutoriOptions`). The same
-`keepToolNames` option exists for Tzafon (`tzafon.TzafonResponsesOptions`),
-whose adapter likewise replaces canonical action tools with Tzafon's native
-`computer_use` tool on the wire.
-
-This package does not execute browser actions. Use
-[`@onkernel/cua-agent`](https://www.npmjs.com/package/@onkernel/cua-agent)
-when you want this loop run for you against a Kernel browser.
-
 ## Core Concepts
 
 `@onkernel/cua-ai` re-exports the full surface of
@@ -209,22 +194,6 @@ when you want this loop run for you against a Kernel browser.
 `streamSimple`, `Type`, `Static`, `TSchema`, and the event/validation helpers.
 Some familiarity with pi-ai is assumed; Kernel adds the computer-use model
 catalog and provider/tool metadata.
-
-**Versioning note**: because of the wildcard re-export, pi-ai's API is part of
-this package's public surface. This release is developed and tested against
-`@earendil-works/pi-ai` `^0.74.0`; pi-ai exports can change within that semver
-range independently of `@onkernel/cua-ai` releases. If you depend on pi-ai
-symbols beyond the core primitives above, consider pinning pi-ai in your own
-project.
-
-**Import side effect**: importing `@onkernel/cua-ai` registers the
-`yutori-chat-completions` and `tzafon-responses` stream providers with pi-ai's
-global API registry. The re-exported pi-ai registry mutators
-(`clearApiProviders`, `resetApiProviders`, `unregisterApiProviders`)
-deregister them — call the exported `registerCuaProviders()` to restore. For
-Yutori/Tzafon models to stream, `complete`/`stream` must come from the same
-pi-ai copy that saw the registration, so make sure your install dedupes to a
-single `@earendil-works/pi-ai`.
 
 ### Model Refs
 
@@ -242,11 +211,6 @@ getCuaModel("yutori:n1.5-latest");
 `getCuaModel(ref)` returns a pi-ai `Model<Api>` you can pass to `complete()`
 or `stream()`. It throws when the ref names a model without a CUA-support
 annotation.
-
-The Google provider id is `google` (matching pi-ai's `Model.provider`), while
-the namespace export is `gemini` — so refs are `google:…` but tools come from
-`gemini.computerTools()`. `"gemini:"` refs are accepted as an alias and
-normalize to `google`.
 
 See [`docs/supported-models.md`](./docs/supported-models.md) for the current
 list of CUA-supporting models per provider.

@@ -44,21 +44,23 @@ All of them expect you to:
 packages/
 ├── ai/               # @onkernel/cua-ai           - CUA model catalog + tool schemas + provider adapters (on npm)
 ├── agent/            # @onkernel/cua-agent        - CuaAgent/CuaAgentHarness Kernel-browser execution loop (on npm)
-├── cua-translator/   # @onkernel/cua-translator   - shared SDK types + translator + browser-session
-├── cua-openai/       # @onkernel/cua-openai       - gpt-* (batch_computer_actions + computer_use_extra)
-├── cua-anthropic/    # @onkernel/cua-anthropic    - claude-* (computer_20251124 + batch_computer_actions + onPayload)
-├── cua-gemini/       # @onkernel/cua-gemini       - gemini-* (predefined functions + batch_computer_actions)
-├── cua-yutori/       # @onkernel/cua-yutori       - n1* (Navigator browser actions)
+├── cua-translator/   # @onkernel/cua-translator   - [deprecated] shared SDK types + translator + browser-session
+├── cua-openai/       # @onkernel/cua-openai       - [deprecated] gpt-* (batch_computer_actions + computer_use_extra)
+├── cua-anthropic/    # @onkernel/cua-anthropic    - [deprecated] claude-* (computer_20251124 + batch_computer_actions + onPayload)
+├── cua-gemini/       # @onkernel/cua-gemini       - [deprecated] gemini-* (predefined functions + batch_computer_actions)
+├── cua-yutori/       # @onkernel/cua-yutori       - [deprecated] n1* (Navigator browser actions)
 └── cua-cli/          # @onkernel/cua-cli          - the CLI; depends on the cua-* providers above
 ```
 
-**Building your own agent? Start here:** [`packages/ai`](packages/ai)
-(`@onkernel/cua-ai`) is the model layer — the curated computer-use model
-catalog, canonical tool schemas, and per-provider adapters on top of pi-ai.
-[`packages/agent`](packages/agent) (`@onkernel/cua-agent`) is the execution
-layer — `CuaAgent`/`CuaAgentHarness` run those tool calls against a Kernel
-browser. Both are published to npm. The `cua-*` packages below back the `cua`
-CLI.
+**Building your own agent? Start here:** [`packages/agent`](packages/agent)
+(`@onkernel/cua-agent`) — `CuaAgent`/`CuaAgentHarness` run the full
+computer-use loop against a Kernel browser. It sits on
+[`packages/ai`](packages/ai) (`@onkernel/cua-ai`), the model layer with the
+curated computer-use model catalog, canonical tool schemas, and per-provider
+adapters on top of pi-ai; reach for cua-ai directly only when you bring your
+own execution. Both are published to npm. The `cua-*` packages below are
+deprecated — cua-ai/cua-agent are the canonical source now — and remain only
+to back the `cua` CLI.
 
 ```mermaid
 flowchart LR
@@ -86,11 +88,11 @@ flowchart LR
 | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | [`@onkernel/cua-ai`](packages/ai)                     | Computer-use model catalog (`getCuaModel`/`listCuaModels`), canonical CUA tool schemas, and provider adapters/runtime specs built on pi-ai. On npm. |
 | [`@onkernel/cua-agent`](packages/agent)               | `CuaAgent`/`CuaAgentHarness` classes that execute cua-ai tool calls against a Kernel browser, screenshot loop included. On npm.          |
-| [`@onkernel/cua-translator`](packages/cua-translator) | Provider-agnostic `ComputerTranslator`, key/scroll/drag math, `goto`/`back`/`forward`/`url` builders, browser-session helper.            |
-| [`@onkernel/cua-openai`](packages/cua-openai)         | `batch_computer_actions` + `computer_use_extra` AgentTools and JSON Schemas for OpenAI computer-use models.                              |
-| [`@onkernel/cua-anthropic`](packages/cua-anthropic)   | `computer` (built-in `computer_20251124`) + `batch_computer_actions` AgentTools, beta-header stream wrapper, payload hook.               |
-| [`@onkernel/cua-gemini`](packages/cua-gemini)         | 13 per-action AgentTools matching Gemini's predefined computer-use functions, plus `batch_computer_actions`. Coordinate denormalization. |
-| [`@onkernel/cua-yutori`](packages/cua-yutori)         | AgentTools matching Yutori Navigator browser actions, with outbound payload filtering so Yutori uses its built-in action set.             |
+| [`@onkernel/cua-translator`](packages/cua-translator) | **Deprecated** (use `cua-ai`/`cua-agent`). Provider-agnostic `ComputerTranslator`, key/scroll/drag math, `goto`/`back`/`forward`/`url` builders, browser-session helper.            |
+| [`@onkernel/cua-openai`](packages/cua-openai)         | **Deprecated** (use `cua-ai`/`cua-agent`). `batch_computer_actions` + `computer_use_extra` AgentTools and JSON Schemas for OpenAI computer-use models.                              |
+| [`@onkernel/cua-anthropic`](packages/cua-anthropic)   | **Deprecated** (use `cua-ai`/`cua-agent`). `computer` (built-in `computer_20251124`) + `batch_computer_actions` AgentTools, beta-header stream wrapper, payload hook.               |
+| [`@onkernel/cua-gemini`](packages/cua-gemini)         | **Deprecated** (use `cua-ai`/`cua-agent`). 13 per-action AgentTools matching Gemini's predefined computer-use functions, plus `batch_computer_actions`. Coordinate denormalization. |
+| [`@onkernel/cua-yutori`](packages/cua-yutori)         | **Deprecated** (use `cua-ai`/`cua-agent`). AgentTools matching Yutori Navigator browser actions, with outbound payload filtering so Yutori uses its built-in action set.             |
 | [`@onkernel/cua-cli`](packages/cua-cli)               | The `cua` binary: argv parsing, config, sessions, skills, JSONL output, pi-tui front-end.                                                |
 
 ---
