@@ -42,6 +42,25 @@ describe("tzafonComputerUseOnPayload", () => {
 		]);
 	});
 
+	it("keeps narrowed local action tools and skips native computer_use", () => {
+		const payload = {
+			tools: [
+				{ type: "function", name: "click" },
+				{ type: "function", name: "move" },
+				{ type: "function", name: "custom_tool" },
+			],
+		};
+
+		const next = tzafon.tzafonComputerUseOnPayload(payload, undefined, {
+			actions: ["click"],
+		}) as { tools?: Array<{ type?: string; name?: string }> };
+
+		expect(next.tools).toEqual([
+			{ type: "function", name: "click" },
+			{ type: "function", name: "custom_tool" },
+		]);
+	});
+
 	it("returns undefined for non-object payloads", () => {
 		expect(tzafon.tzafonComputerUseOnPayload(undefined)).toBeUndefined();
 		expect(tzafon.tzafonComputerUseOnPayload("x")).toBeUndefined();

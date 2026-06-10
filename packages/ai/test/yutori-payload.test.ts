@@ -39,6 +39,26 @@ describe("yutoriNativeToolSetOnPayload", () => {
 		expect(next.tools?.map((tool) => tool.function?.name)).toEqual(["batch_computer_actions"]);
 	});
 
+	it("keeps narrowed local action tools and skips the native tool set", () => {
+		const payload = {
+			tools: [
+				{ type: "function", function: { name: "click" } },
+				{ type: "function", function: { name: "move" } },
+				{ type: "function", function: { name: "custom_tool" } },
+			],
+		};
+		const next = yutori.yutoriNativeToolSetOnPayload(payload, { id: "n1.5-latest" } as never, {
+			actions: ["click"],
+		}) as {
+			tool_set?: string;
+			disable_tools?: string[];
+			tools?: Array<{ function?: { name?: string } }>;
+		};
+		expect(next.tool_set).toBeUndefined();
+		expect(next.disable_tools).toBeUndefined();
+		expect(next.tools?.map((tool) => tool.function?.name)).toEqual(["click", "custom_tool"]);
+	});
+
 	it("returns undefined for non-object payloads", () => {
 		expect(yutori.yutoriNativeToolSetOnPayload(undefined)).toBeUndefined();
 		expect(yutori.yutoriNativeToolSetOnPayload("x")).toBeUndefined();

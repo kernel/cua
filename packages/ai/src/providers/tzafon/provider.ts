@@ -117,19 +117,31 @@ export function tzafonComputerUseOnPayload(payload: unknown, _model?: Model<Api>
 	if (!payload || typeof payload !== "object") return undefined;
 	const current = payload as { tools?: unknown };
 	const keepToolNames = new Set(context?.keepToolNames ?? []);
+	const useNativeComputerUse = shouldUseTzafonNativeComputerUse(context);
+	const allowedActions = new Set(context?.actions ?? []);
 	const existingTools = Array.isArray(current.tools) ? current.tools : [];
-	const shouldAddComputerUse = existingTools.some((tool) => {
-		const name = readToolName(tool);
-		return Boolean(name && TZAFON_LOCAL_ACTION_TOOL_NAMES.has(name) && !keepToolNames.has(name));
-	});
+	const shouldAddComputerUse = useNativeComputerUse
+		? existingTools.some((tool) => {
+				const name = readToolName(tool);
+				return Boolean(name && TZAFON_LOCAL_ACTION_TOOL_NAMES.has(name) && !keepToolNames.has(name));
+			})
+		: false;
 	const tools = existingTools.filter((tool) => {
 		const name = readToolName(tool);
-		return !name || keepToolNames.has(name) || !TZAFON_LOCAL_ACTION_TOOL_NAMES.has(name);
+		if (!name || keepToolNames.has(name) || !TZAFON_LOCAL_ACTION_TOOL_NAMES.has(name)) return true;
+		if (!useNativeComputerUse && allowedActions.size > 0) return allowedActions.has(name as (typeof CUA_ACTION_TYPES)[number]);
+		return !useNativeComputerUse;
 	});
 	return {
 		...(payload as Record<string, unknown>),
 		tools: shouldAddComputerUse ? [TZAFON_COMPUTER_USE_TOOL, ...tools] : tools,
 	};
+}
+
+function shouldUseTzafonNativeComputerUse(context?: CuaPayloadContext): boolean {
+	if (!context?.actions) return true;
+	const allowed = new Set(context.actions);
+	return CUA_ACTION_TYPES.every((action) => allowed.has(action));
 }
 
 /** Derive a unique canonical tool-call id for a Tzafon computer action. */

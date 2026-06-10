@@ -32,6 +32,13 @@ export function resolveCuaRuntimeSpec(input: CuaRuntimeSpecInput, options?: Comp
 	const model = typeof input === "string" ? getCuaModel(input) : input;
 	const provider = providerForModel(model);
 	const mod: CuaProviderModule = PROVIDERS[provider];
+	const onPayload = mod.onPayload
+		? (payload: unknown, requestModel: typeof model, context?: Parameters<NonNullable<CuaProviderModule["onPayload"]>>[2]) =>
+				mod.onPayload?.(payload, requestModel, {
+					...context,
+					...(options?.actions ? { actions: options.actions } : {}),
+				})
+		: undefined;
 	return {
 		model,
 		provider,
@@ -40,6 +47,6 @@ export function resolveCuaRuntimeSpec(input: CuaRuntimeSpecInput, options?: Comp
 		defaultSystemPrompt: mod.buildSystemPrompt(),
 		coordinateSystem: mod.coordinateSystem(),
 		screenshot: mod.screenshot,
-		onPayload: mod.onPayload,
+		onPayload,
 	};
 }

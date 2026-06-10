@@ -17,6 +17,7 @@ import {
 	isYutoriLocalActionToolName,
 	toCanonicalActions,
 	yutoriToolSetForModel,
+	YUTORI_CUA_ACTION_TYPES,
 	YUTORI_N15_EXPANDED_ACTION_TYPES,
 } from "./actions";
 import { canonicalToolCallArguments, canonicalToolCallName, type CuaPayloadContext } from "../common";
@@ -45,18 +46,29 @@ export function yutoriNativeToolSetOnPayload(payload: unknown, model?: Model<Api
 	if (!payload || typeof payload !== "object") return undefined;
 	const current = payload as { tools?: unknown };
 	const keepToolNames = new Set(context?.keepToolNames ?? []);
+	const useNativeToolSet = shouldUseYutoriNativeToolSet(context);
+	const allowedActions = new Set<string>(context?.actions ?? []);
 	const tools = Array.isArray(current.tools)
 		? current.tools.filter((tool) => {
 				const name = readToolName(tool);
-				return !name || keepToolNames.has(name) || !isYutoriLocalActionToolName(name);
+				if (!name || keepToolNames.has(name) || !isYutoriLocalActionToolName(name)) return true;
+				if (!useNativeToolSet && allowedActions.size > 0) return allowedActions.has(name);
+				return !useNativeToolSet;
 			})
 		: undefined;
-	const toolSet = model ? yutoriToolSetForModel(model.id) : undefined;
+	const toolSet = useNativeToolSet && model ? yutoriToolSetForModel(model.id) : undefined;
 	return {
 		...(payload as Record<string, unknown>),
+		...(useNativeToolSet ? {} : { tool_set: undefined, disable_tools: undefined }),
 		...(toolSet ? { tool_set: toolSet, disable_tools: [...YUTORI_N15_EXPANDED_ACTION_TYPES] } : {}),
 		...(tools && tools.length > 0 ? { tools } : { tools: undefined }),
 	};
+}
+
+function shouldUseYutoriNativeToolSet(context?: CuaPayloadContext): boolean {
+	if (!context?.actions) return true;
+	const allowed = new Set(context.actions);
+	return YUTORI_CUA_ACTION_TYPES.every((action) => allowed.has(action));
 }
 
 async function runYutoriStream(

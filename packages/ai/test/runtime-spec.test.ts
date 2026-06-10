@@ -53,5 +53,9 @@ describe("resolveCuaRuntimeSpec", () => {
 		const yutoriSpec = resolveCuaRuntimeSpec("yutori:n1.5-latest", { actions: ["click"] });
 		expect(yutoriSpec.toolDefinitions).toEqual([]);
 		expect(yutoriSpec.toolExecutors.map((executor) => executor.definition.name)).toEqual(["click"]);
+
+		const tzafonSpec = resolveCuaRuntimeSpec("tzafon:tzafon.northstar-cua-fast", { actions: ["click"] });
+		expect(tzafonSpec.toolDefinitions.map((tool) => tool.name)).toEqual(["click"]);
+		expect(tzafonSpec.toolExecutors.map((executor) => executor.definition.name)).toEqual(["click"]);
 	});
 });

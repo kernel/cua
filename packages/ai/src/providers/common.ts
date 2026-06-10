@@ -442,6 +442,8 @@ export interface CuaScreenshotSpec {
 export interface CuaPayloadContext {
 	/** Tool names that should remain in the outbound provider payload even if the provider strips local CUA executors. */
 	keepToolNames?: readonly string[];
+	/** Canonical CUA actions enabled for this runtime, if narrowed by options. */
+	actions?: readonly CuaActionType[];
 }
 
 export type CuaPayloadHook = (payload: unknown, model: Model<Api>, context?: CuaPayloadContext) => unknown | Promise<unknown>;
