@@ -10,30 +10,72 @@ for building CUA agents on Kernel.
 npm install @onkernel/cua-ai
 ```
 
+## Prerequisites
+
+You need an API key for each provider you call. The helpers in this package
+check these environment variables, in order:
+
+| Provider    | Environment variables (checked in order)    |
+| ----------- | ------------------------------------------- |
+| `openai`    | `OPENAI_API_KEY`                            |
+| `anthropic` | `ANTHROPIC_OAUTH_TOKEN`, `ANTHROPIC_API_KEY` |
+| `google`    | `GOOGLE_API_KEY`, `GEMINI_API_KEY`          |
+| `tzafon`    | `TZAFON_API_KEY`                            |
+| `yutori`    | `YUTORI_API_KEY`                            |
+
+The exported helpers wrap this table:
+
+- `cuaApiKeyEnvVarsForProvider(provider)` — the env var names for a provider
+  (accepts `"gemini"` as an alias for `"google"`).
+- `getCuaEnvApiKey(provider)` — read the key, or `undefined` when unset.
+- `requireCuaEnvApiKey(provider)` — read the key, or throw naming the
+  variables to set.
+- `getCuaEnvApiKeyForModel(refOrModel)` / `requireCuaEnvApiKeyForModel(refOrModel)`
+  — the same, keyed by a model ref like `"openai:gpt-5.5"` or a concrete
+  `Model<Api>`.
+
+Pass the resolved key as the `apiKey` stream option (as in the Quick Start
+below) so a missing key fails loudly before any request is made. If you omit
+`apiKey`, pi-ai's built-in providers fall back to their own env lookup
+(`OPENAI_API_KEY`; `ANTHROPIC_OAUTH_TOKEN`/`ANTHROPIC_API_KEY`; for `google`
+only `GEMINI_API_KEY`, not `GOOGLE_API_KEY`), and this package's Tzafon/Yutori
+stream adapters read `TZAFON_API_KEY`/`YUTORI_API_KEY`.
+
 ## Quick Start
 
 ```ts
 import { readFile } from "node:fs/promises";
-import { complete, getCuaModel, openai } from "@onkernel/cua-ai";
-
-const screenshot = await readFile("examples/screenshot.png");
+import { complete, getCuaModel, openai, requireCuaEnvApiKeyForModel } from "@onkernel/cua-ai";
 
 const model = getCuaModel("openai:gpt-5.5");
+const apiKey = requireCuaEnvApiKeyForModel("openai:gpt-5.5"); // throws unless OPENAI_API_KEY is set
 
-const response = await complete(model, {
-  systemPrompt: "You are a browser automation agent.",
-  messages: [
-    {
-      role: "user",
-      content: [
-        { type: "text", text: "Click the Login button in this screenshot." },
-        { type: "image", data: screenshot.toString("base64"), mimeType: "image/png" },
-      ],
-      timestamp: Date.now(),
-    },
-  ],
-  tools: openai.computerTools({ actions: ["click"] }),
-});
+// Any screenshot of the page you want to act on, resolved relative to this
+// module so the snippet does not depend on the process working directory.
+const screenshot = await readFile(new URL("./screenshot.png", import.meta.url));
+
+const response = await complete(
+  model,
+  {
+    systemPrompt: "You are a browser automation agent.",
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "Click the sign in / up link in this screenshot." },
+          { type: "image", data: screenshot.toString("base64"), mimeType: "image/png" },
+        ],
+        timestamp: Date.now(),
+      },
+    ],
+    tools: openai.computerTools({ actions: ["click"] }),
+  },
+  { apiKey },
+);
+
+if (response.stopReason === "error" || response.stopReason === "aborted") {
+  throw new Error(response.errorMessage ?? `request ended with stopReason "${response.stopReason}"`);
+}
 
 for (const block of response.content) {
   if (block.type === "toolCall" && block.name === "click") {
@@ -42,14 +84,147 @@ for (const block of response.content) {
 }
 ```
 
+A runnable version ships at [`examples/quickstart.ts`](./examples/quickstart.ts)
+(with a sample screenshot). In this repo, run it from `packages/ai` with
+`npm run example:quickstart`; switch providers with the `CUA_MODEL` env var,
+e.g. `CUA_MODEL=anthropic:claude-opus-4-7`.
+
+## Error Handling
+
+pi-ai's `complete()` and `stream()` **resolve instead of throwing** when a
+request fails. The returned `AssistantMessage` carries the outcome on
+`stopReason`:
+
+- `"stop"`, `"length"`, `"toolUse"` — success; `content` holds the response.
+- `"error"` — the provider call failed (bad API key, no model access, network
+  error, …). `content` is empty and `errorMessage` holds the provider error.
+- `"aborted"` — the request was cancelled via the `signal` stream option.
+
+Always check `stopReason` before reading `content` — otherwise a typo'd API
+key looks like a successful run that produced nothing:
+
+```ts
+if (response.stopReason === "error" || response.stopReason === "aborted") {
+  throw new Error(response.errorMessage ?? `request ended with stopReason "${response.stopReason}"`);
+}
+```
+
+`getCuaModel()`, `requireCuaEnvApiKey*()`, and `computerTools({ actions })`
+validate eagerly and throw regular errors.
+
+## Continuing the Loop
+
+A computer-use session is a loop: the model calls a tool, you execute it
+against a real browser, and you send the result (with a fresh screenshot) back
+so the model can plan the next step. Tool results are pi-ai
+`ToolResultMessage`s:
+
+```ts
+type ToolResultMessage = {
+  role: "toolResult";
+  toolCallId: string; // ToolCall.id from the assistant message
+  toolName: string;   // ToolCall.name
+  content: (TextContent | ImageContent)[];
+  details?: unknown;  // optional executor metadata, not sent to the model
+  isError: boolean;
+  timestamp: number;
+};
+```
+
+A minimal two-turn loop:
+
+```ts
+import { complete, getCuaModel, openai, requireCuaEnvApiKeyForModel, type Message } from "@onkernel/cua-ai";
+
+const model = getCuaModel("openai:gpt-5.5");
+const apiKey = requireCuaEnvApiKeyForModel("openai:gpt-5.5");
+const tools = openai.computerTools({ actions: ["click", "type", "screenshot"] });
+
+const messages: Message[] = [
+  {
+    role: "user",
+    content: [
+      { type: "text", text: "Click the sign in / up link in this screenshot." },
+      { type: "image", data: screenshotBase64, mimeType: "image/png" },
+    ],
+    timestamp: Date.now(),
+  },
+];
+
+// Turn 1: the model responds with tool calls.
+const first = await complete(model, { messages, tools }, { apiKey });
+if (first.stopReason === "error" || first.stopReason === "aborted") {
+  throw new Error(first.errorMessage);
+}
+messages.push(first); // the AssistantMessage joins the transcript as-is
+
+// Execute each tool call against your browser stack, then append a
+// toolResult message carrying a fresh screenshot.
+for (const block of first.content) {
+  if (block.type !== "toolCall") continue;
+  const freshScreenshotBase64 = await runInYourBrowser(block.name, block.arguments);
+  messages.push({
+    role: "toolResult",
+    toolCallId: block.id,
+    toolName: block.name,
+    content: [
+      { type: "text", text: "done" },
+      { type: "image", data: freshScreenshotBase64, mimeType: "image/png" },
+    ],
+    isError: false,
+    timestamp: Date.now(),
+  });
+}
+
+// Turn 2: the model sees the results and plans the next action.
+const second = await complete(model, { messages, tools }, { apiKey });
+```
+
+The provider namespaces' `computerToolExecutors()` return
+`CuaToolExecutorSpec`s whose `toActions(args)` converts a tool call's
+arguments into canonical `CuaAction`s — use them to drive your own executor
+instead of switching on tool names by hand.
+
+Yutori is the one provider where the wire differs: `streamYutori` strips
+caller-supplied tools whose names collide with Yutori's canonical action names
+(`yutori.YUTORI_CUA_ACTION_TYPES`) from the outbound payload and selects
+Yutori's documented native `tool_set` instead,
+then normalizes the native tool calls back to canonical names — so the loop
+above still works unchanged. Tools that must stay on the payload can be listed
+in the `keepToolNames` stream option (`yutori.YutoriOptions`). The same
+`keepToolNames` option exists for Tzafon (`tzafon.TzafonResponsesOptions`),
+whose adapter likewise replaces canonical action tools with Tzafon's native
+`computer_use` tool on the wire.
+
+This package does not execute browser actions. Use
+[`@onkernel/cua-agent`](https://www.npmjs.com/package/@onkernel/cua-agent)
+when you want this loop run for you against a Kernel browser.
+
 ## Core Concepts
 
-`@onkernel/cua-ai` re-exports the core primitives of
-[`@earendil-works/pi-ai`](https://github.com/earendil-works/pi/tree/main/packages/ai):
+`@onkernel/cua-ai` re-exports the full surface of
+[`@earendil-works/pi-ai`](https://github.com/earendil-works/pi/tree/main/packages/ai)
+(`export * from "@earendil-works/pi-ai"`), including the core primitives:
 `Model`, `Context`, `Message`, `Tool`, `complete`, `stream`, `completeSimple`,
-`streamSimple`, `Type`, `Static`, `TSchema`, and the event/validation helpers
-that pi-ai exposes. Some familiarity with pi-ai is assumed; Kernel adds the
-computer-use model catalog and provider/tool metadata.
+`streamSimple`, `Type`, `Static`, `TSchema`, and the event/validation helpers.
+Some familiarity with pi-ai is assumed; Kernel adds the computer-use model
+catalog and provider/tool metadata.
+
+**Versioning note**: because of the wildcard re-export, pi-ai's API is part of
+this package's public surface. This release is developed and tested against
+`@earendil-works/pi-ai` `^0.74.0`; pi-ai exports can change within that semver
+range independently of `@onkernel/cua-ai` releases. If you depend on pi-ai
+symbols beyond the core primitives above, consider pinning pi-ai in your own
+project.
+
+**Import side effect**: importing `@onkernel/cua-ai` registers the
+`yutori-chat-completions` and `tzafon-responses` stream providers with pi-ai's
+global API registry. The re-exported pi-ai registry mutators
+(`clearApiProviders`, `resetApiProviders`, `unregisterApiProviders`)
+deregister them — call the exported `registerCuaProviders()` to restore. For
+Yutori/Tzafon models to stream, `complete`/`stream` must come from the same
+pi-ai copy that saw the registration, so make sure your install dedupes to a
+single `@earendil-works/pi-ai`.
 
 ### Model Refs
 
@@ -59,13 +234,19 @@ computer-use model catalog and provider/tool metadata.
 ```ts
 getCuaModel("openai:gpt-5.5");
 getCuaModel("anthropic:claude-opus-4-7");
-getCuaModel("google:gemini-2.5-computer-use-preview-10-2025");
+getCuaModel("google:gemini-3-flash-preview");
 getCuaModel("tzafon:tzafon.northstar-cua-fast");
 getCuaModel("yutori:n1.5-latest");
 ```
 
 `getCuaModel(ref)` returns a pi-ai `Model<Api>` you can pass to `complete()`
-or `stream()`.
+or `stream()`. It throws when the ref names a model without a CUA-support
+annotation.
+
+The Google provider id is `google` (matching pi-ai's `Model.provider`), while
+the namespace export is `gemini` — so refs are `google:…` but tools come from
+`gemini.computerTools()`. `"gemini:"` refs are accepted as an alias and
+normalize to `google`.
 
 See [`docs/supported-models.md`](./docs/supported-models.md) for the current
 list of CUA-supporting models per provider.
@@ -95,17 +276,41 @@ interface CuaModelInfo {
 }
 ```
 
-### Exports
+## Exports
 
-Top-level exports:
+Everything below is importable from the package root. pi-ai's full surface is
+re-exported alongside (see [Core Concepts](#core-concepts)).
+
+### Models and refs
 
 - `getCuaModel(ref: CuaModelRef): Model<Api>`
 - `listCuaModels(provider?: CuaProvider): CuaModelInfo[]`
+- `parseCuaModelRef(ref: string): { provider: CuaProvider; model: string }` —
+  accepts the `"gemini:"` alias
+- `formatCuaModelRef(provider, model): CuaModelRef`
 - `providerForModel(model: Model<Api>): CuaProvider`
-- `resolveCuaRuntimeSpec(input: CuaModelRef | Model<Api>): CuaRuntimeSpec`
+- `isCuaProvider(value: string): value is CuaProvider`
+- `findCuaAnnotation(provider, modelId): CuaModelAnnotation | undefined`
 - `CUA_PROVIDERS: readonly CuaProvider[]`
-- `CuaBatchSchema`, `CuaActionSchema`, `CuaNavigationSchema` TypeBox schemas
-- `createCuaActionSchema(actions?)`, `createCuaBatchSchema(actions?)`
+- `CUA_MODEL_ANNOTATIONS: Record<CuaProvider, readonly CuaModelAnnotation[]>` —
+  the source-cited support table
+- Types: `CuaProvider`, `CuaModelRef`, `CuaModelInfo`, `CuaModelAnnotation`,
+  `CuaModelMatch`
+
+### API keys
+
+- `cuaApiKeyEnvVarsForProvider(provider): readonly string[]`
+- `getCuaEnvApiKey(provider): string | undefined`
+- `requireCuaEnvApiKey(provider): string`
+- `getCuaEnvApiKeyForModel(refOrModel): string | undefined`
+- `requireCuaEnvApiKeyForModel(refOrModel): string`
+
+### Runtime specs
+
+- `resolveCuaRuntimeSpec(input: CuaModelRef | Model<Api>, options?: ComputerToolsOptions): CuaRuntimeSpec`
+- Types: `CuaRuntimeSpec`, `CuaRuntimeSpecInput`, `CuaProviderModule`,
+  `CuaScreenshotSpec`, `CuaScreenshotTransformSpec`, `CuaPayloadHook`,
+  `CuaPayloadContext`
 
 `resolveCuaRuntimeSpec()` centralizes provider-specific defaults for
 runtime consumers:
@@ -117,6 +322,44 @@ runtime consumers:
 - provider coordinate convention
 - optional provider screenshot input policy
 - optional provider payload middleware (for protocol quirks)
+
+Pass `options` (e.g. `{ actions: ["click"] }`) to narrow the resolved tool
+definitions and executors; it is forwarded to the provider module's
+`toolDefinitions()`/`toolExecutors()`, so providers with a restricted subset
+(Anthropic, Yutori) throw on unsupported actions.
+
+### Canonical actions and tools
+
+- `CUA_ACTION_TYPES: readonly CuaActionType[]` — the 16 canonical action names
+- `computerTools(options?: ComputerToolsOptions): Tool[]` /
+  `createCuaActionToolDefinitions(actions?)` — one `Tool` per canonical action
+  (the full canonical superset; provider namespaces apply provider defaults
+  and validation on top)
+- `computerToolExecutors(options?)` / `createCuaActionToolExecutors(actions?)`
+  — matching `CuaToolExecutorSpec[]` execution adapters
+- `createCuaActionSchema(actions?)`, `CuaActionSchema` — TypeBox union schema
+- `createCuaBatchSchema(actions?)`, `CuaBatchSchema`,
+  `createCuaBatchToolDefinition(actions?, options?)`,
+  `createCuaBatchToolExecutor(actions?, options?)`,
+  `CUA_BATCH_TOOL_NAME` (`"computer_batch"`), `CUA_BATCH_TOOL_DESCRIPTION`
+- `createCuaNavigationToolDefinition()`, `CuaNavigationSchema`,
+  `CUA_NAVIGATION_TOOL_NAME` (`"computer_use_extra"`),
+  `CUA_NAVIGATION_TOOL_DESCRIPTION`
+- `canonicalToolCallName(action)`, `canonicalToolCallArguments(action)` — map
+  a normalized `CuaAction` back to its tool-call name/arguments
+- `normalizeGotoUrl(value)` — prefix bare hostnames with `https://`
+- Types: `CuaAction` (plus the 16 per-action interfaces), `CuaActionType`,
+  `CuaMouseButton`, `CuaDragMouseButton`, `CuaBatchInput`,
+  `CuaNavigationInput`, `CuaToolExecutorSpec`, `ComputerToolsOptions`,
+  `ComputerToolCoordinateSystem`
+
+### Provider registration
+
+- `registerCuaProviders(): void` — re-register the Yutori/Tzafon stream
+  providers with pi-ai's global registry (runs automatically on import;
+  idempotent; call it after any pi-ai registry mutator)
+
+## Provider Tools
 
 Provider namespaces expose `computerTools({ actions? })` for
 building the provider's default CUA `Tool[]` definitions. These are the tools
@@ -135,7 +378,20 @@ const clickOnlyTools = openai.computerTools({ actions: ["click"] });
 ```
 
 When `actions` is provided, it must be a subset of that provider's supported
-canonical action set.
+canonical action set; unsupported actions throw (e.g.
+`anthropic.computerTools({ actions: ["back"] })` throws
+`unsupported Anthropic canonical action(s): back`).
+
+Per-provider canonical action subsets (each namespace exports its list as
+`<PROVIDER>_CUA_ACTION_TYPES`):
+
+| Namespace   | Canonical actions                                                                  |
+| ----------- | ---------------------------------------------------------------------------------- |
+| `openai`    | all 16                                                                              |
+| `anthropic` | 13 — everything except `back`, `forward`, `url`; adds `computer_batch` by default  |
+| `gemini`    | all 16                                                                              |
+| `tzafon`    | all 16 (replaced on the wire by Tzafon's native `computer_use` tool)                |
+| `yutori`    | 13 — everything except `screenshot`, `url`, `cursor_position` (local mirrors only)  |
 
 Runtime specs also include `toolExecutors`: provider-owned adapters that use
 the same tool-call names as the model-facing tools and translate their
@@ -143,8 +399,12 @@ arguments into canonical CUA actions for `@onkernel/cua-agent`. For most
 providers, `toolDefinitions` and `toolExecutors` line up one-for-one. Some
 providers are different on the wire: Yutori exposes browser actions through its
 documented `tool_set` request field, so its runtime spec has no model-facing
-`toolDefinitions` but still provides local `toolExecutors` for the canonical
-actions emitted after Yutori's native tool calls are normalized. Caller-provided
+`toolDefinitions` (`yutori.providerModule.toolDefinitions()` is `[]`) but
+still provides local `toolExecutors` for the canonical actions emitted after
+Yutori's native tool calls are normalized. `yutori.computerTools()` builds
+local mirrors of those canonical tools — they are never sent to the API
+(`streamYutori` strips them from the outbound payload) and exist so the
+normalized tool calls have matching local definitions/executors. Caller-provided
 tools that should remain on the provider payload can be preserved by payload
 middleware via `CuaPayloadContext.keepToolNames`.
 
@@ -197,7 +457,7 @@ type CuaActionClick = {
   type: "click";
   x: number;
   y: number;
-  button?: string;
+  button?: CuaMouseButton; // "left" | "right" | "middle" | "back" | "forward"
   hold_keys?: string[];
 };
 
@@ -206,6 +466,11 @@ type CuaActionGoto = {
   url: string;
 };
 ```
+
+Mouse buttons are closed unions: `CuaMouseButton` for `click`/`mouse_down`/
+`mouse_up` and `CuaDragMouseButton` (`"left" | "right" | "middle"`) for
+`drag`. Executors coerce anything outside the set to `"left"`. `keys` stays
+`string[]` — the agent-side key-alias table passes unrecognized keys through.
 
 `createCuaBatchToolDefinition(actions?, options?)` builds a batch tool schema
 whose input is:
@@ -217,7 +482,9 @@ type CuaBatchInput = {
 ```
 
 Providers can include a batch tool when their model is expected to use one.
-Anthropic does this by default with `computer_batch`; Yutori does not.
+Anthropic does this by default with `computer_batch` (also exported as
+`anthropic.ANTHROPIC_BATCH_TOOL_NAME`, equal to the top-level
+`CUA_BATCH_TOOL_NAME`); Yutori does not.
 `createCuaBatchToolExecutor()` is the matching execution adapter for turning
 that provider-defined batch input into canonical CUA actions.
 
@@ -231,20 +498,44 @@ type CuaNavigationInput = {
 };
 ```
 
-Provider namespaces:
+## Provider Namespaces
 
-Each provider namespace exposes `computerTools`, `computerToolExecutors`,
-`coordinateSystem`, a `build<Provider>SystemPrompt` helper, and a
-`providerModule` object wiring those functions to the uniform
-`CuaProviderModule` contract that `resolveCuaRuntimeSpec` looks up:
+Every provider namespace (`openai`, `anthropic`, `gemini`, `tzafon`,
+`yutori`) follows one convention:
 
-- `openai`: `buildOpenAISystemPrompt`, OpenAI CUA action schemas
-- `anthropic`: `buildAnthropicSystemPrompt`, CUA action schema aliases
-- `gemini`: `buildGeminiSystemPrompt`, CUA action schema aliases
-- `tzafon`: `buildTzafonSystemPrompt`, local `tzafon-responses` stream adapter
-- `yutori`: `buildYutoriSystemPrompt`, native Navigator action sets,
-  native-to-canonical action helpers, local `yutori-chat-completions` stream
-  adapter, and `yutoriNativeToolSetOnPayload`
+- `computerTools(options?)` and `computerToolExecutors(options?)`
+- `createActionSchema(actions?)` — TypeBox schema for the provider's subset
+- `coordinateSystem()`
+- `build<Provider>SystemPrompt({ suffix? })` and
+  `<PROVIDER>_COMPUTER_INSTRUCTIONS` (the prompt text)
+- `<PROVIDER>_CUA_ACTION_TYPES` — the supported canonical action subset
+- `<Provider>Action` type — the canonical action union for that subset
+- `ComputerToolsOptions` type (Anthropic's adds `excludeBatch`, also exported
+  as `AnthropicComputerToolsOptions`)
+- `providerModule` — the uniform `CuaProviderModule` object that
+  `resolveCuaRuntimeSpec` looks up
+
+Provider-specific extras:
+
+- `openai`: `openaiResponsesStoreOnPayload` payload hook, plus the
+  `computer_use_extra` navigation aliases `OPENAI_EXTRA_TOOL_NAME`,
+  `OPENAI_EXTRA_TOOL_DESCRIPTION`, `OpenAIExtraSchema`, `OpenAIExtraInput`
+- `anthropic`: `ANTHROPIC_BATCH_TOOL_NAME` (`"computer_batch"`)
+- `tzafon`: the `tzafon-responses` stream adapter (`TZAFON_RESPONSES_API`,
+  `streamTzafonResponses`, `streamSimpleTzafonResponses`,
+  `TzafonResponsesOptions` with `keepToolNames`), `tzafonComputerUseOnPayload`
+  payload middleware, `tzafonToolCallId`, and the native-to-canonical
+  normalizer `toCanonicalActions` (+ `TzafonCanonicalAction`)
+- `yutori`: the `yutori-chat-completions` stream adapter
+  (`YUTORI_CHAT_COMPLETIONS_API`, `streamYutori`, `streamSimpleYutori`,
+  `YutoriOptions` with `keepToolNames`), `yutoriNativeToolSetOnPayload`
+  payload middleware, the native Navigator action sets
+  (`YUTORI_N1_ACTION_TYPES`, `YUTORI_N15_CORE_ACTION_TYPES`,
+  `YUTORI_N15_EXPANDED_ACTION_TYPES`, `YUTORI_N15_ACTION_TYPES`, the
+  `YUTORI_N15_CORE_TOOL_SET`/`YUTORI_N15_EXPANDED_TOOL_SET` tool-set ids, and
+  the matching `Yutori*ActionType` types), `yutoriToolSetForModel`,
+  `yutoriNativeActionsForModel`, and the native-to-canonical normalizer
+  `toCanonicalActions`
 
 This package does not execute browser actions. Use `@onkernel/cua-agent` when
 you want model tool calls executed against a Kernel browser.

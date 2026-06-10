@@ -42,13 +42,23 @@ All of them expect you to:
 
 ```
 packages/
+├── ai/               # @onkernel/cua-ai           - CUA model catalog + tool schemas + provider adapters (on npm)
+├── agent/            # @onkernel/cua-agent        - CuaAgent/CuaAgentHarness Kernel-browser execution loop (on npm)
 ├── cua-translator/   # @onkernel/cua-translator   - shared SDK types + translator + browser-session
 ├── cua-openai/       # @onkernel/cua-openai       - gpt-* (batch_computer_actions + computer_use_extra)
 ├── cua-anthropic/    # @onkernel/cua-anthropic    - claude-* (computer_20251124 + batch_computer_actions + onPayload)
 ├── cua-gemini/       # @onkernel/cua-gemini       - gemini-* (predefined functions + batch_computer_actions)
 ├── cua-yutori/       # @onkernel/cua-yutori       - n1* (Navigator browser actions)
-└── cua-cli/          # @onkernel/cua-cli          - the CLI; depends on all providers above
+└── cua-cli/          # @onkernel/cua-cli          - the CLI; depends on the cua-* providers above
 ```
+
+**Building your own agent? Start here:** [`packages/ai`](packages/ai)
+(`@onkernel/cua-ai`) is the model layer — the curated computer-use model
+catalog, canonical tool schemas, and per-provider adapters on top of pi-ai.
+[`packages/agent`](packages/agent) (`@onkernel/cua-agent`) is the execution
+layer — `CuaAgent`/`CuaAgentHarness` run those tool calls against a Kernel
+browser. Both are published to npm. The `cua-*` packages below back the `cua`
+CLI.
 
 ```mermaid
 flowchart LR
@@ -74,6 +84,8 @@ flowchart LR
 
 | Package                                               | What it ships                                                                                                                            |
 | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| [`@onkernel/cua-ai`](packages/ai)                     | Computer-use model catalog (`getCuaModel`/`listCuaModels`), canonical CUA tool schemas, and provider adapters/runtime specs built on pi-ai. On npm. |
+| [`@onkernel/cua-agent`](packages/agent)               | `CuaAgent`/`CuaAgentHarness` classes that execute cua-ai tool calls against a Kernel browser, screenshot loop included. On npm.          |
 | [`@onkernel/cua-translator`](packages/cua-translator) | Provider-agnostic `ComputerTranslator`, key/scroll/drag math, `goto`/`back`/`forward`/`url` builders, browser-session helper.            |
 | [`@onkernel/cua-openai`](packages/cua-openai)         | `batch_computer_actions` + `computer_use_extra` AgentTools and JSON Schemas for OpenAI computer-use models.                              |
 | [`@onkernel/cua-anthropic`](packages/cua-anthropic)   | `computer` (built-in `computer_20251124`) + `batch_computer_actions` AgentTools, beta-header stream wrapper, payload hook.               |
@@ -364,6 +376,8 @@ bin/
 skills/
 └── cua-cli/SKILL.md            # skill aimed at OTHER agents driving cua via shell
 packages/
+├── ai/                         # @onkernel/cua-ai — model layer (see packages/ai/README.md)
+├── agent/                      # @onkernel/cua-agent — Kernel-browser execution layer (see packages/agent/README.md)
 ├── cua-translator/
 │   └── src/
 │       ├── types.ts            # ModelAction / BatchAction / errors
@@ -420,8 +434,9 @@ packages/
 
 ## Roadmap
 
-- Publish each `@onkernel/cua-*` package to npm so `kernel/cli`
-  templates and other consumers can depend on them directly.
+- Publish the remaining per-provider `@onkernel/cua-*` packages to npm
+  (`@onkernel/cua-ai` and `@onkernel/cua-agent` are already published) so
+  `kernel/cli` templates and other consumers can depend on them directly.
 - Auto-respawn dead Kernel sessions when `-s <name>` is used (today we
   refuse with a clear error and ask the user to re-`session start`).
 - `--local` Docker-backed browser as an alternative to Kernel cloud.

@@ -2,9 +2,14 @@
 
 `@onkernel/cua-ai` accepts any pi-ai model whose ID is annotated as
 CUA-supporting in `CUA_MODEL_ANNOTATIONS` (see
-[`src/models.ts`](../src/models.ts)). Annotations are either a `family`
-match (root + dated snapshots) or an `exact` ID match. Each annotation
-cites the provider's CUA docs.
+[`src/models.ts`](https://github.com/kernel/cua/blob/main/packages/ai/src/models.ts)).
+Annotations are either a `family`
+match or an `exact` ID match. A family match covers the family root plus
+suffixes made of hyphen-separated numeric segments — revisions and dated
+snapshots such as `claude-opus-4-7`, `gpt-5.5-2026-04-23`, or
+`claude-3-7-sonnet-20250219`. Named sibling variants like `gpt-5.4-mini`
+are distinct models that may not support computer use, so they need their
+own annotation. Each annotation cites the provider's CUA docs.
 
 The list below is the current snapshot. Run
 `listCuaModels(provider?)` for the live list — it merges pi-ai's registry
@@ -14,7 +19,7 @@ with CUA-only entries that pi-ai does not ship yet.
 
 API: `openai-responses` · coordinates: pixel
 
-Family matches (all dated snapshots accepted):
+Family matches (root + numeric revision/dated-snapshot suffixes):
 
 - `gpt-5.4` ([docs](https://developers.openai.com/api/docs/models/gpt-5.4))
 - `gpt-5.5` ([docs](https://developers.openai.com/api/docs/models/gpt-5.5))
@@ -23,7 +28,7 @@ Family matches (all dated snapshots accepted):
 
 API: `anthropic-messages` · coordinates: pixel
 
-Family matches (all dated snapshots accepted):
+Family matches (root + numeric revision/dated-snapshot suffixes):
 
 - `claude-3-7-sonnet`
 - `claude-opus-4`
@@ -36,11 +41,16 @@ Source: [Anthropic computer use docs](https://docs.anthropic.com/en/docs/build-w
 
 API: `google-generative-ai` · coordinates: normalized 0–999
 
+Model refs use the `google:` prefix; `gemini:` is accepted as an alias.
+
 Exact IDs:
 
 - `gemini-3-flash-preview`
 - `gemini-3-pro-preview`
-- `gemini-2.5-computer-use-preview-10-2025`
+
+`gemini-2.5-computer-use-preview-10-2025` is deliberately not annotated: it
+rejects the standard function declarations this package sends and requires
+Google's native `tools.computer_use` request wrapper instead.
 
 Source: [Gemini computer use docs](https://ai.google.dev/gemini-api/docs/computer-use).
 

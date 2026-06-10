@@ -1,35 +1,34 @@
 import { readFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { complete, getCuaModel, openai } from "../src/index";
+import {
+	complete,
+	getCuaModel,
+	requireCuaEnvApiKeyForModel,
+	resolveCuaRuntimeSpec,
+	type CuaModelRef,
+} from "@onkernel/cua-ai";
 
-const here = dirname(fileURLToPath(import.meta.url));
-const screenshotPath = join(here, "screenshot.png");
-const apiKey = process.env.OPENAI_API_KEY;
-if (!apiKey) throw new Error("Set OPENAI_API_KEY to run this example.");
-
-const modelRef = "openai:gpt-5.5";
+// Switch providers by setting CUA_MODEL (and the matching API key env var):
+//   anthropic:claude-opus-4-7        ANTHROPIC_API_KEY
+//   google:gemini-3-flash-preview    GOOGLE_API_KEY
+//   tzafon:tzafon.northstar-cua-fast TZAFON_API_KEY
+//   yutori:n1.5-latest               YUTORI_API_KEY
+const modelRef = (process.env.CUA_MODEL ?? "openai:gpt-5.5") as CuaModelRef;
 const model = getCuaModel(modelRef);
-const screenshot = await readFile(screenshotPath);
+const apiKey = requireCuaEnvApiKeyForModel(modelRef);
 
-// Other provider examples. Add the provider namespace to the top-level import
-// before switching these values.
-// const apiKey = process.env.ANTHROPIC_API_KEY;
-// const modelRef = "anthropic:claude-opus-4-7";
-// const model = getCuaModel(modelRef);
-// const tools = anthropic.computerTools({ actions: ["click"] });
-//
-// const apiKey = process.env.GOOGLE_API_KEY;
-// const modelRef = "google:gemini-2.5-computer-use-preview-10-2025";
-// const model = getCuaModel(modelRef);
-// const tools = gemini.computerTools({ actions: ["click"] });
+// resolveCuaRuntimeSpec returns the provider's default tool definitions
+// (narrowed here to click-only). For a single provider you can use its
+// namespace directly, e.g. openai.computerTools({ actions: ["click"] }).
+const spec = resolveCuaRuntimeSpec(modelRef, { actions: ["click"] });
+
+const screenshot = await readFile(new URL("./screenshot.png", import.meta.url));
 
 const response = await complete(
 	model,
 	{
 		systemPrompt: [
 			"You are controlling a browser from a screenshot.",
-			"Call the computer tool with the pixel coordinates of the target. Do not describe the click in prose unless you cannot identify the target.",
+			"Call the computer tool with the coordinates of the target. Do not describe the click in prose unless you cannot identify the target.",
 		].join("\n"),
 		messages: [
 			{
@@ -41,13 +40,19 @@ const response = await complete(
 				timestamp: Date.now(),
 			},
 		],
-		tools: openai.computerTools({ actions: ["click"] }),
+		tools: spec.toolDefinitions,
 	},
 	{
 		apiKey,
 		maxTokens: 1024,
 	},
 );
+
+// complete() resolves instead of throwing on provider errors; always check
+// stopReason before reading content.
+if (response.stopReason === "error" || response.stopReason === "aborted") {
+	throw new Error(response.errorMessage ?? `request ended with stopReason "${response.stopReason}"`);
+}
 
 console.log(`model: ${modelRef}`);
 for (const block of response.content) {
