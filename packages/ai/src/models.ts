@@ -5,42 +5,58 @@ import {
 	getModels,
 } from "@earendil-works/pi-ai";
 
+/** Providers with curated computer-use model support. */
 export type CuaProvider = "openai" | "anthropic" | "google" | "tzafon" | "yutori";
+
+/** Provider-qualified model reference, e.g. `"openai:gpt-5.5"` or `"google:gemini-3-flash-preview"`. */
 export type CuaModelRef = `${CuaProvider}:${string}`;
 
+/** One entry returned by {@link listCuaModels}. */
 export interface CuaModelInfo {
+	/** Provider-qualified ref accepted by {@link getCuaModel}. */
 	ref: CuaModelRef;
 	provider: CuaProvider;
+	/** Provider-native model id (the part after the colon). */
 	model: string;
+	/** Human-readable model name. */
 	name: string;
 }
 
+/** All providers this package curates computer-use models for. */
 export const CUA_PROVIDERS: readonly CuaProvider[] = ["openai", "anthropic", "google", "tzafon", "yutori"];
 
-// CUA support annotations.
-//
-// pi-ai's model registry is generated from models.dev (see
-// node_modules/@earendil-works/pi-ai/scripts/generate-models.ts) and lists every
-// model a provider offers. Only some of those models support computer-use, so
-// this table layers per-provider CUA-support annotations on top of the
-// registry. Each entry cites the official source documenting CUA support.
-//
-// Match kinds:
-//   - exact:  id === match.id
-//   - family: id === match.family || id.startsWith(match.family + "-")
-//
-// To verify support and add new entries, follow the `update-models` skill at
-// .agents/skills/update-models/SKILL.md.
-
+/**
+ * How a {@link CuaModelAnnotation} matches model ids.
+ *
+ * - `exact`: `id === match.id`
+ * - `family`: `id === match.family`, or `match.family` plus hyphen-separated
+ *   numeric segments (revisions and dated snapshots, e.g. "claude-opus-4-7",
+ *   "gpt-5.5-2026-04-23"). Named variants like "gpt-5.4-mini" are distinct
+ *   models and need their own entry.
+ */
 export type CuaModelMatch =
 	| { readonly kind: "exact"; readonly id: string }
 	| { readonly kind: "family"; readonly family: string };
 
+/** One CUA-support annotation: a model-id match plus the official source documenting support. */
 export interface CuaModelAnnotation {
 	readonly match: CuaModelMatch;
+	/** URL of the provider documentation establishing computer-use support. */
 	readonly source: string;
 }
 
+/**
+ * Per-provider computer-use support annotations.
+ *
+ * pi-ai's model registry is generated from models.dev (see
+ * node_modules/@earendil-works/pi-ai/scripts/generate-models.ts) and lists every
+ * model a provider offers. Only some of those models support computer-use, so
+ * this table layers per-provider CUA-support annotations on top of the
+ * registry. Each entry cites the official source documenting CUA support.
+ *
+ * To verify support and add new entries, follow the `update-models` skill at
+ * .agents/skills/update-models/SKILL.md.
+ */
 export const CUA_MODEL_ANNOTATIONS: Record<CuaProvider, readonly CuaModelAnnotation[]> = {
 	openai: [
 		{ match: { kind: "family", family: "gpt-5.4" }, source: "https://developers.openai.com/api/docs/models/gpt-5.4" },
@@ -52,10 +68,12 @@ export const CUA_MODEL_ANNOTATIONS: Record<CuaProvider, readonly CuaModelAnnotat
 		{ match: { kind: "family", family: "claude-sonnet-4" }, source: "https://docs.anthropic.com/en/docs/build-with-claude/computer-use" },
 		{ match: { kind: "family", family: "claude-haiku-4" }, source: "https://docs.anthropic.com/en/docs/build-with-claude/computer-use" },
 	],
+	// gemini-2.5-computer-use-preview-10-2025 is deliberately absent: it
+	// rejects the standard function declarations this package sends and
+	// requires Google's native tools.computer_use wrapper instead.
 	google: [
 		{ match: { kind: "exact", id: "gemini-3-flash-preview" }, source: "https://ai.google.dev/gemini-api/docs/computer-use" },
 		{ match: { kind: "exact", id: "gemini-3-pro-preview" }, source: "https://ai.google.dev/gemini-api/docs/computer-use" },
-		{ match: { kind: "exact", id: "gemini-2.5-computer-use-preview-10-2025" }, source: "https://ai.google.dev/gemini-api/docs/computer-use" },
 	],
 	tzafon: [
 		{ match: { kind: "exact", id: "tzafon.northstar-cua-fast" }, source: "https://huggingface.co/Tzafon/Northstar-CUA-Fast" },
@@ -79,9 +97,7 @@ const CUA_MODEL_OVERRIDES: Record<CuaProvider, readonly Model<Api>[]> = {
 		cuaModel("openai", "gpt-5.5-2026-04-23", "GPT-5.5 (2026-04-23)"),
 	],
 	anthropic: [],
-	google: [
-		cuaModel("google", "gemini-2.5-computer-use-preview-10-2025", "Gemini 2.5 Computer Use Preview"),
-	],
+	google: [],
 	tzafon: [
 		cuaModel("tzafon", "tzafon.northstar-cua-fast", "Tzafon Northstar CUA Fast"),
 	],
@@ -93,23 +109,37 @@ const CUA_MODEL_OVERRIDES: Record<CuaProvider, readonly Model<Api>[]> = {
 	],
 };
 
+/**
+ * Split a provider-qualified ref like `"openai:gpt-5.5"` into its parts.
+ *
+ * `"gemini:"` is accepted as an alias for the canonical `"google:"` prefix
+ * and normalizes to provider `"google"`. Throws when the ref is unqualified
+ * or names an unsupported provider.
+ */
 export function parseCuaModelRef(ref: string): { provider: CuaProvider; model: string } {
 	const idx = ref.indexOf(":");
 	if (idx <= 0 || idx === ref.length - 1) {
 		throw new Error(`CUA model ref must be provider-qualified as "<provider>:<model>"; got "${ref}"`);
 	}
-	const provider = ref.slice(0, idx);
+	const prefix = ref.slice(0, idx);
+	const provider = prefix === "gemini" ? "google" : prefix;
 	const model = ref.slice(idx + 1);
 	if (!isCuaProvider(provider)) {
-		throw new Error(`unsupported CUA provider "${provider}"`);
+		throw new Error(`unsupported CUA provider "${prefix}" (expected one of: ${CUA_PROVIDERS.join(", ")})`);
 	}
 	return { provider, model };
 }
 
+/** Join a provider and model id into a {@link CuaModelRef}. */
 export function formatCuaModelRef(provider: CuaProvider, model: string): CuaModelRef {
 	return `${provider}:${model}` as CuaModelRef;
 }
 
+/**
+ * List the computer-use-capable models this package curates, optionally
+ * filtered to one provider. Merges pi-ai's registry with local overrides and
+ * keeps only models annotated in {@link CUA_MODEL_ANNOTATIONS}.
+ */
 export function listCuaModels(provider?: CuaProvider): CuaModelInfo[] {
 	const providers = provider ? [provider] : [...CUA_PROVIDERS];
 	const byRef = new Map<CuaModelRef, CuaModelInfo>();
@@ -135,6 +165,13 @@ export function listCuaModels(provider?: CuaProvider): CuaModelInfo[] {
 	return [...byRef.values()].sort(compareCuaModels);
 }
 
+/**
+ * Resolve a {@link CuaModelRef} to a concrete pi-ai model.
+ *
+ * Throws when the ref is unqualified, names an unsupported provider, or names
+ * a model without a CUA-support annotation. `"gemini:"` refs are accepted as
+ * an alias for `"google:"` (see {@link parseCuaModelRef}).
+ */
 export function getCuaModel(ref: CuaModelRef): Model<Api> {
 	const { provider, model: modelId } = parseCuaModelRef(ref);
 	if (!supportsCuaProvider(provider, modelId)) {
@@ -147,13 +184,15 @@ export function getCuaModel(ref: CuaModelRef): Model<Api> {
 	throw new Error(`CUA model "${ref}" is supported but not registered. Add it to pi-ai (models.dev) or CUA_MODEL_OVERRIDES.`);
 }
 
+/** Return the {@link CuaProvider} for a concrete model, or throw when it is not a CUA provider. */
 export function providerForModel(model: Model<Api>): CuaProvider {
 	if (!isCuaProvider(model.provider)) {
-		throw new Error(`unsupported CUA model provider "${model.provider}"`);
+		throw new Error(`unsupported CUA model provider "${model.provider}" (expected one of: ${CUA_PROVIDERS.join(", ")})`);
 	}
 	return model.provider;
 }
 
+/** Narrow an arbitrary string to {@link CuaProvider}. */
 export function isCuaProvider(value: string): value is CuaProvider {
 	return (CUA_PROVIDERS as readonly string[]).includes(value);
 }
@@ -162,17 +201,31 @@ function supportsCuaProvider(provider: CuaProvider, modelId: string): boolean {
 	return findCuaAnnotation(provider, modelId) !== undefined;
 }
 
+/** Find the CUA-support annotation covering a model id, if any. */
 export function findCuaAnnotation(provider: CuaProvider, modelId: string): CuaModelAnnotation | undefined {
 	const id = modelId.toLowerCase();
 	for (const annotation of CUA_MODEL_ANNOTATIONS[provider]) {
 		if (annotation.match.kind === "exact") {
 			if (id === annotation.match.id.toLowerCase()) return annotation;
-		} else {
-			const family = annotation.match.family.toLowerCase();
-			if (id === family || id.startsWith(`${family}-`)) return annotation;
+		} else if (isCuaFamilyMatch(id, annotation.match.family.toLowerCase())) {
+			return annotation;
 		}
 	}
 	return undefined;
+}
+
+// A family annotation covers its root id plus suffixes made of
+// hyphen-separated numeric segments: revisions like "claude-opus-4-7" and
+// dated snapshots like "gpt-5.5-2026-04-23" or "claude-3-7-sonnet-20250219".
+// Named sibling variants ("gpt-5.4-mini") may not support computer use and
+// must be annotated explicitly.
+function isCuaFamilyMatch(id: string, family: string): boolean {
+	if (id === family) return true;
+	if (!id.startsWith(`${family}-`)) return false;
+	return id
+		.slice(family.length + 1)
+		.split("-")
+		.every((segment) => /^\d+$/.test(segment));
 }
 
 function cuaModel(provider: CuaProvider, id: string, name: string): Model<Api> {

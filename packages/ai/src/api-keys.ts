@@ -16,6 +16,11 @@ const CUA_PROVIDER_API_KEY_ENV_VARS: Record<CuaProvider, readonly string[]> = {
 	yutori: ["YUTORI_API_KEY"],
 };
 
+/**
+ * List the environment variables checked for a provider's API key, in
+ * precedence order. Accepts `"gemini"` as an alias for `"google"`; returns an
+ * empty list for unknown providers.
+ */
 export function cuaApiKeyEnvVarsForProvider(provider: string): readonly string[] {
 	if (provider === "gemini") {
 		return CUA_PROVIDER_API_KEY_ENV_VARS.google;
@@ -23,6 +28,7 @@ export function cuaApiKeyEnvVarsForProvider(provider: string): readonly string[]
 	return CUA_PROVIDER_API_KEY_ENV_VARS[provider as keyof typeof CUA_PROVIDER_API_KEY_ENV_VARS] ?? [];
 }
 
+/** Read a provider's API key from the environment, or return undefined when unset. */
 export function getCuaEnvApiKey(provider: string): string | undefined {
 	for (const envVar of cuaApiKeyEnvVarsForProvider(provider)) {
 		const value = process.env[envVar];
@@ -31,6 +37,7 @@ export function getCuaEnvApiKey(provider: string): string | undefined {
 	return undefined;
 }
 
+/** Read a provider's API key from the environment, or throw naming the variables to set. */
 export function requireCuaEnvApiKey(provider: string): string {
 	const apiKey = getCuaEnvApiKey(provider);
 	if (apiKey) return apiKey;
@@ -41,11 +48,13 @@ export function requireCuaEnvApiKey(provider: string): string {
 	throw new Error(`Missing API key for "${provider}". Set one of: ${envVars.join(", ")}`);
 }
 
+/** {@link getCuaEnvApiKey} keyed by a model ref or concrete model instead of a provider name. */
 export function getCuaEnvApiKeyForModel(input: CuaModelRef | Model<Api>): string | undefined {
 	const provider = typeof input === "string" ? parseCuaModelRef(input).provider : providerForModel(input);
 	return getCuaEnvApiKey(provider);
 }
 
+/** {@link requireCuaEnvApiKey} keyed by a model ref or concrete model instead of a provider name. */
 export function requireCuaEnvApiKeyForModel(input: CuaModelRef | Model<Api>): string {
 	const provider = typeof input === "string" ? parseCuaModelRef(input).provider : providerForModel(input);
 	return requireCuaEnvApiKey(provider);
