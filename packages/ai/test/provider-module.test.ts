@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { anthropic, CUA_PROVIDERS, type CuaProvider, gemini, openai, tzafon, yutori } from "../src/index";
+import { anthropic, CUA_ACTION_TYPES, CUA_PROVIDERS, type CuaProvider, gemini, openai, tzafon, yutori } from "../src/index";
 import type { CuaProviderModule } from "../src/providers/common";
 
 const MODULES: Record<CuaProvider, { providerModule: CuaProviderModule }> = {
@@ -8,6 +8,14 @@ const MODULES: Record<CuaProvider, { providerModule: CuaProviderModule }> = {
 	google: gemini,
 	tzafon,
 	yutori,
+};
+
+const NAMESPACES: Record<CuaProvider, { namespace: Record<string, unknown>; prefix: string }> = {
+	openai: { namespace: openai, prefix: "OPENAI" },
+	anthropic: { namespace: anthropic, prefix: "ANTHROPIC" },
+	google: { namespace: gemini, prefix: "GEMINI" },
+	tzafon: { namespace: tzafon, prefix: "TZAFON" },
+	yutori: { namespace: yutori, prefix: "YUTORI" },
 };
 
 describe("provider modules satisfy the uniform contract", () => {
@@ -43,4 +51,28 @@ describe("provider modules satisfy the uniform contract", () => {
 	it("yutori sends no model-facing tool definitions", () => {
 		expect(yutori.providerModule.toolDefinitions()).toEqual([]);
 	});
+});
+
+describe("provider namespaces export a uniform surface", () => {
+	for (const provider of CUA_PROVIDERS) {
+		it(`${provider} follows the namespace export conventions`, () => {
+			const { namespace, prefix } = NAMESPACES[provider];
+
+			const actionTypes = namespace[`${prefix}_CUA_ACTION_TYPES`];
+			expect(Array.isArray(actionTypes), `${prefix}_CUA_ACTION_TYPES must be exported`).toBe(true);
+			expect((actionTypes as unknown[]).length).toBeGreaterThan(0);
+			for (const action of actionTypes as string[]) {
+				expect(CUA_ACTION_TYPES).toContain(action);
+			}
+
+			expect(namespace[`${prefix}_COMPUTER_INSTRUCTIONS`], `${prefix}_COMPUTER_INSTRUCTIONS must be exported`).toBeTypeOf(
+				"string",
+			);
+			expect(namespace.computerTools).toBeTypeOf("function");
+			expect(namespace.computerToolExecutors).toBeTypeOf("function");
+			expect(namespace.createActionSchema).toBeTypeOf("function");
+			expect(namespace.coordinateSystem).toBeTypeOf("function");
+			expect(namespace.providerModule).toBeTypeOf("object");
+		});
+	}
 });

@@ -1,6 +1,6 @@
 {
   "name": "@onkernel/cua-ai",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Kernel-curated computer-use model access built on pi-ai",
   "license": "MIT",
   "type": "module",
@@ -24,6 +24,7 @@
   },
   "files": [
     "dist",
+    "docs",
     "examples",
     "README.md",
     "CHANGELOG.md"
@@ -32,10 +33,12 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc -b",
-    "clean": "tsc -b --clean",
-    "example:quickstart": "tsx examples/quickstart.ts",
-    "test": "vitest --run"
+    "build": "tsdown",
+    "typecheck": "tsc -b",
+    "clean": "tsc -b --clean && rm -rf dist dist-tsc",
+    "example:quickstart": "NODE_OPTIONS=--conditions=source tsx examples/quickstart.ts",
+    "test": "vitest --run",
+    "test:integration": "vitest --run --config vitest.integration.config.ts"
   },
   "dependencies": {
     "@earendil-works/pi-ai": "^0.74.0",
@@ -43,6 +46,7 @@
     "openai": "^6.26.0"
   },
   "devDependencies": {
+    "tsdown": "^0.22.2",
     "vitest": "^3.2.4"
   }
 }

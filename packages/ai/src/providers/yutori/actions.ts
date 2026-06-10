@@ -1,7 +1,10 @@
+import type { Tool, TSchema } from "@earendil-works/pi-ai";
 import {
+	createCuaActionSchema,
 	createCuaActionToolDefinitions,
 	createCuaActionToolExecutors,
 	normalizeGotoUrl,
+	type ComputerToolsOptions,
 	type CuaAction,
 	type CuaToolExecutorSpec,
 	type CuaActionType,
@@ -83,7 +86,12 @@ export const YUTORI_N15_ACTION_TYPES = [
 	...YUTORI_N15_EXPANDED_ACTION_TYPES,
 ] as const;
 
-export const YUTORI_CANONICAL_ACTION_TYPES = [
+/**
+ * Canonical CUA action types Yutori's native actions normalize into. These are
+ * the tool-call names {@link streamYutori} emits and the local executors
+ * CuaAgent installs for Yutori models.
+ */
+export const YUTORI_CUA_ACTION_TYPES = [
 	"click",
 	"double_click",
 	"mouse_down",
@@ -99,6 +107,11 @@ export const YUTORI_CANONICAL_ACTION_TYPES = [
 	"forward",
 ] as const satisfies readonly CuaActionType[];
 
+type YutoriCanonicalActionType = (typeof YUTORI_CUA_ACTION_TYPES)[number];
+
+/** Canonical CUA action shape emitted for Yutori models. */
+export type YutoriAction = Extract<CuaAction, { type: YutoriCanonicalActionType }>;
+
 export type YutoriN1ActionType = (typeof YUTORI_N1_ACTION_TYPES)[number];
 export type YutoriN15CoreActionType = (typeof YUTORI_N15_CORE_ACTION_TYPES)[number];
 export type YutoriN15ExpandedActionType = (typeof YUTORI_N15_EXPANDED_ACTION_TYPES)[number];
@@ -110,19 +123,44 @@ const DEFAULT_WAIT_MS = 2000;
 const NAVIGATION_WAIT_MS = 1500;
 const GOTO_WAIT_MS = 2000;
 
+function resolveYutoriActions(actions: readonly CuaActionType[] | undefined): readonly YutoriCanonicalActionType[] {
+	const resolved = actions ?? YUTORI_CUA_ACTION_TYPES;
+	const supported: YutoriCanonicalActionType[] = [];
+	const unsupported: CuaActionType[] = [];
+	for (const action of resolved) {
+		if (isYutoriCanonicalAction(action)) supported.push(action);
+		else unsupported.push(action);
+	}
+	if (unsupported.length > 0) throw new Error(`unsupported Yutori canonical action(s): ${unsupported.join(", ")}`);
+	return supported;
+}
+
+function isYutoriCanonicalAction(action: CuaActionType): action is YutoriCanonicalActionType {
+	return (YUTORI_CUA_ACTION_TYPES as readonly string[]).includes(action);
+}
+
+/** Build the TypeBox schema for Yutori-supported canonical browser actions. */
+export function createActionSchema(actions?: readonly CuaActionType[]): TSchema {
+	return createCuaActionSchema(resolveYutoriActions(actions));
+}
+
 /**
- * Build Yutori CUA computer-use tools.
+ * Build local mirrors of the canonical action tools Yutori models call.
  *
- * Use this when calling `complete()` or `stream()` directly and you need an
- * array of `Tool` objects for Yutori browser actions.
+ * These definitions are never sent to the API: `streamYutori` strips them from
+ * the outbound payload and selects Yutori's native `tool_set` instead, then
+ * normalizes the model's native tool calls back into these canonical names.
+ * Install them locally so the normalized calls have matching executors —
+ * `providerModule.toolDefinitions()` is intentionally `[]`. Pass `actions` to
+ * mirror only a supported subset, such as `["click"]`.
  */
-export function computerTools(_options?: unknown) {
-	return createCuaActionToolDefinitions(YUTORI_CANONICAL_ACTION_TYPES);
+export function computerTools(options: ComputerToolsOptions = {}): Tool[] {
+	return createCuaActionToolDefinitions(resolveYutoriActions(options.actions));
 }
 
 /** Build the local execution adapters used by CuaAgent and CuaAgentHarness. */
-export function computerToolExecutors(_options?: unknown): CuaToolExecutorSpec[] {
-	return createCuaActionToolExecutors(YUTORI_CANONICAL_ACTION_TYPES);
+export function computerToolExecutors(options: ComputerToolsOptions = {}): CuaToolExecutorSpec[] {
+	return createCuaActionToolExecutors(resolveYutoriActions(options.actions));
 }
 
 export function yutoriToolSetForModel(modelId: string): typeof YUTORI_N15_CORE_TOOL_SET | undefined {
@@ -134,7 +172,7 @@ export function yutoriNativeActionsForModel(modelId: string): readonly YutoriNat
 }
 
 export function isYutoriLocalActionToolName(name: string): boolean {
-	return (YUTORI_CANONICAL_ACTION_TYPES as readonly string[]).includes(name);
+	return (YUTORI_CUA_ACTION_TYPES as readonly string[]).includes(name);
 }
 
 export function toCanonicalActions(name: string, args: Record<string, unknown>): CuaAction[] | undefined {

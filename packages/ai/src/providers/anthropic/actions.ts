@@ -1,6 +1,7 @@
 import type { Tool, TSchema } from "@earendil-works/pi-ai";
 import {
 	CUA_BATCH_TOOL_DESCRIPTION,
+	CUA_BATCH_TOOL_NAME,
 	createCuaActionSchema,
 	createCuaActionToolExecutors,
 	createCuaActionToolDefinitions,
@@ -12,12 +13,16 @@ import {
 	type CuaToolExecutorSpec,
 } from "../common";
 
-// Source of truth: Anthropic's computer-use best-practices quickstart
-// computer/browser tool action enums. These are the browser actions Anthropic
-// currently accepts under CUA's canonical individual tool names.
-// https://github.com/anthropics/claude-quickstarts/blob/main/computer-use-best-practices/computer_use/tools/computer.py
-// https://github.com/anthropics/claude-quickstarts/blob/main/computer-use-best-practices/computer_use/tools/browser.py
-const ANTHROPIC_CANONICAL_ACTION_TYPES = [
+/**
+ * Canonical CUA action types Anthropic browser computer-use tools support.
+ *
+ * Source of truth: Anthropic's computer-use best-practices quickstart
+ * computer/browser tool action enums. These are the browser actions Anthropic
+ * currently accepts under CUA's canonical individual tool names.
+ * https://github.com/anthropics/claude-quickstarts/blob/main/computer-use-best-practices/computer_use/tools/computer.py
+ * https://github.com/anthropics/claude-quickstarts/blob/main/computer-use-best-practices/computer_use/tools/browser.py
+ */
+export const ANTHROPIC_CUA_ACTION_TYPES = [
 	"click",
 	"double_click",
 	"mouse_down",
@@ -33,10 +38,13 @@ const ANTHROPIC_CANONICAL_ACTION_TYPES = [
 	"cursor_position",
 ] as const satisfies readonly CuaActionType[];
 
-type AnthropicCanonicalActionType = (typeof ANTHROPIC_CANONICAL_ACTION_TYPES)[number];
+type AnthropicCanonicalActionType = (typeof ANTHROPIC_CUA_ACTION_TYPES)[number];
 
-const ANTHROPIC_CANONICAL_ACTION_TYPE_SET: ReadonlySet<string> = new Set(ANTHROPIC_CANONICAL_ACTION_TYPES);
-const ANTHROPIC_BATCH_TOOL_NAME = "computer_batch";
+const ANTHROPIC_CANONICAL_ACTION_TYPE_SET: ReadonlySet<string> = new Set(ANTHROPIC_CUA_ACTION_TYPES);
+
+/** Name of the batch tool included by default in Anthropic computer-use tools. */
+export const ANTHROPIC_BATCH_TOOL_NAME = CUA_BATCH_TOOL_NAME;
+
 const ANTHROPIC_BATCH_TOOL_DESCRIPTION = [
 	CUA_BATCH_TOOL_DESCRIPTION,
 	"Coordinates in a batch refer to the screenshot taken before the batch call.",
@@ -52,7 +60,7 @@ export interface AnthropicComputerToolsOptions extends ComputerToolsOptions {
 export type AnthropicAction = Extract<CuaAction, { type: AnthropicCanonicalActionType }>;
 
 function resolveAnthropicActions(actions: readonly CuaActionType[] | undefined): readonly AnthropicCanonicalActionType[] {
-	const resolved = actions ?? ANTHROPIC_CANONICAL_ACTION_TYPES;
+	const resolved = actions ?? ANTHROPIC_CUA_ACTION_TYPES;
 	const supported: AnthropicCanonicalActionType[] = [];
 	const unsupported: CuaActionType[] = [];
 	for (const action of resolved) {

@@ -23,8 +23,9 @@ import { canonicalToolCallArguments, canonicalToolCallName, type CuaPayloadConte
 
 export const YUTORI_CHAT_COMPLETIONS_API = "yutori-chat-completions";
 
+/** Stream options accepted by {@link streamYutori}. */
 export interface YutoriOptions extends StreamOptions {
-	temperature?: number;
+	/** Tool names to keep in the outbound payload even though they collide with local CUA action tool names. */
 	keepToolNames?: readonly string[];
 }
 
@@ -238,9 +239,16 @@ function toOpenAIContentPart(part: TextContent | ImageContent): Record<string, u
 	return { type: "image_url", image_url: { url: `data:${part.mimeType};base64,${part.data}` } };
 }
 
+// Degrade malformed tool-call arguments to {} so one bad call cannot turn the
+// whole response into a stopReason "error" turn (mirrors the Tzafon provider).
 function parseArguments(value: string | undefined): Record<string, unknown> {
 	if (!value?.trim()) return {};
-	return JSON.parse(value) as Record<string, unknown>;
+	try {
+		const parsed = JSON.parse(value) as unknown;
+		return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+	} catch {
+		return {};
+	}
 }
 
 function usageFromYutori(usage: unknown): AssistantMessage["usage"] {

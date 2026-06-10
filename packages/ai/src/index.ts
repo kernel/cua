@@ -2,6 +2,7 @@ import { registerCuaProviders } from "./providers";
 
 export * from "@earendil-works/pi-ai";
 
+export { registerCuaProviders } from "./providers";
 export * from "./models";
 export * from "./api-keys";
 export * from "./runtime-spec";

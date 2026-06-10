@@ -41,4 +41,17 @@ describe("resolveCuaRuntimeSpec", () => {
 		expect(tzafonSpec.onPayload).toBeTypeOf("function");
 		expect(anthropicSpec.onPayload).toBeUndefined();
 	});
+
+	it("threads tool options through to the provider module", () => {
+		const openaiSpec = resolveCuaRuntimeSpec("openai:gpt-5.5", { actions: ["click"] });
+		expect(openaiSpec.toolDefinitions.map((tool) => tool.name)).toEqual(["click"]);
+		expect(openaiSpec.toolExecutors.map((executor) => executor.definition.name)).toEqual(["click"]);
+
+		const anthropicSpec = resolveCuaRuntimeSpec("anthropic:claude-opus-4-7", { actions: ["click"] });
+		expect(anthropicSpec.toolDefinitions.map((tool) => tool.name)).toEqual(["click", "computer_batch"]);
+
+		const yutoriSpec = resolveCuaRuntimeSpec("yutori:n1.5-latest", { actions: ["click"] });
+		expect(yutoriSpec.toolDefinitions).toEqual([]);
+		expect(yutoriSpec.toolExecutors.map((executor) => executor.definition.name)).toEqual(["click"]);
+	});
 });

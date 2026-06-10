@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { getCuaModel, listCuaModels } from "../src/index.js";
 import {
 	CUA_MODEL_ANNOTATIONS,
 	CUA_PROVIDERS,
 	findCuaAnnotation,
 	formatCuaModelRef,
+	getCuaModel,
+	listCuaModels,
 	parseCuaModelRef,
 } from "../src/index";
 
@@ -18,6 +19,22 @@ describe("CUA model refs", () => {
 		expect(() => getCuaModel("gpt-5.5" as never)).toThrow(/provider-qualified/);
 		expect(() => getCuaModel("bogus:model" as never)).toThrow(/unsupported CUA provider/);
 		expect(() => getCuaModel("openai:gpt-3.5" as never)).toThrow(/unsupported CUA model/);
+	});
+
+	it("names the valid providers in the unsupported-provider error", () => {
+		expect(() => parseCuaModelRef("bogus:model")).toThrow(
+			'unsupported CUA provider "bogus" (expected one of: openai, anthropic, google, tzafon, yutori)',
+		);
+	});
+
+	it("accepts gemini: as an alias for google:", () => {
+		expect(parseCuaModelRef("gemini:gemini-3-flash-preview")).toEqual({
+			provider: "google",
+			model: "gemini-3-flash-preview",
+		});
+		const model = getCuaModel("gemini:gemini-3-flash-preview" as never);
+		expect(model.provider).toBe("google");
+		expect(model.id).toBe("gemini-3-flash-preview");
 	});
 
 	it("lists curated model refs without a default", () => {
@@ -41,7 +58,7 @@ describe("CUA model refs", () => {
 
 	it("rejects supported model IDs that are not in pi-ai or overrides", () => {
 		// Matches the openai allowlist but has no pi-ai or override entry.
-		expect(() => getCuaModel("openai:gpt-5.4-fake-snapshot")).toThrow(
+		expect(() => getCuaModel("openai:gpt-5.4-2099-01-01")).toThrow(
 			/not registered/,
 		);
 	});
@@ -62,10 +79,11 @@ describe("CUA support annotations", () => {
 		}
 	});
 
-	it("matches family roots and dated snapshots", () => {
+	it("matches family roots, dated snapshots, and numeric revisions", () => {
 		expect(findCuaAnnotation("openai", "gpt-5.5")?.match).toEqual({ kind: "family", family: "gpt-5.5" });
 		expect(findCuaAnnotation("openai", "gpt-5.5-2026-04-23")?.match).toEqual({ kind: "family", family: "gpt-5.5" });
 		expect(findCuaAnnotation("anthropic", "claude-opus-4-7")).toBeDefined();
+		expect(findCuaAnnotation("anthropic", "claude-3-7-sonnet-20250219")).toBeDefined();
 	});
 
 	it("does not match adjacent families", () => {
@@ -74,10 +92,30 @@ describe("CUA support annotations", () => {
 		expect(findCuaAnnotation("anthropic", "claude-3-5-sonnet")).toBeUndefined();
 	});
 
+	it("does not match named sibling variants of a family", () => {
+		expect(findCuaAnnotation("openai", "gpt-5.4-mini")).toBeUndefined();
+		expect(findCuaAnnotation("openai", "gpt-5.4-nano")).toBeUndefined();
+		expect(findCuaAnnotation("openai", "gpt-5.4-pro")).toBeUndefined();
+		expect(findCuaAnnotation("openai", "gpt-5.5-pro")).toBeUndefined();
+		const openaiModels = listCuaModels("openai").map((model) => model.model);
+		expect(openaiModels).not.toContain("gpt-5.4-mini");
+		expect(openaiModels).not.toContain("gpt-5.4-nano");
+		expect(openaiModels).not.toContain("gpt-5.4-pro");
+		expect(openaiModels).toContain("gpt-5.5");
+	});
+
 	it("matches exact-id annotations", () => {
 		expect(findCuaAnnotation("google", "gemini-3-flash-preview")).toBeDefined();
 		expect(findCuaAnnotation("google", "gemini-3-pro-preview")).toBeDefined();
 		expect(findCuaAnnotation("yutori", "n1.5-latest")).toBeDefined();
 		expect(findCuaAnnotation("tzafon", "tzafon.northstar-cua-fast")).toBeDefined();
+	});
+
+	it("no longer advertises the Gemini 2.5 computer-use preview", () => {
+		// The model rejects the function-declaration tools this package sends;
+		// it needs Google's native tools.computer_use wrapper.
+		expect(findCuaAnnotation("google", "gemini-2.5-computer-use-preview-10-2025")).toBeUndefined();
+		expect(listCuaModels("google").map((model) => model.model)).not.toContain("gemini-2.5-computer-use-preview-10-2025");
+		expect(() => getCuaModel("google:gemini-2.5-computer-use-preview-10-2025")).toThrow(/unsupported CUA model/);
 	});
 });

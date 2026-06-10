@@ -24,15 +24,17 @@ const TZAFON_COMPUTER_USE_TOOL = {
 } as const;
 const TZAFON_LOCAL_ACTION_TOOL_NAMES = new Set<string>(CUA_ACTION_TYPES);
 
+/** Stream options accepted by {@link streamTzafonResponses}. */
 export interface TzafonResponsesOptions extends StreamOptions {
-	maxOutputTokens?: number;
+	/** Tool names to keep in the outbound payload even though they collide with local CUA action tool names. */
+	keepToolNames?: readonly string[];
 }
 
-export const streamSimpleTzafonResponses: StreamFunction<string, SimpleStreamOptions> = (model, context, options) => {
+export const streamSimpleTzafonResponses: StreamFunction<typeof TZAFON_RESPONSES_API, SimpleStreamOptions> = (model, context, options) => {
 	return streamTzafonResponses(model, context, options);
 };
 
-export const streamTzafonResponses: StreamFunction<string, TzafonResponsesOptions> = (model, context, options) => {
+export const streamTzafonResponses: StreamFunction<typeof TZAFON_RESPONSES_API, TzafonResponsesOptions> = (model, context, options) => {
 	const stream = createAssistantMessageEventStream();
 	const output = initialAssistantMessage(model);
 
@@ -47,10 +49,10 @@ export const streamTzafonResponses: StreamFunction<string, TzafonResponsesOption
 				tools: convertTools(context.tools ?? []),
 				instructions: context.systemPrompt,
 				temperature: options?.temperature ?? 0,
-				max_output_tokens: options?.maxOutputTokens ?? options?.maxTokens ?? model.maxTokens,
+				max_output_tokens: options?.maxTokens ?? model.maxTokens,
 			};
 			const tzafonPayload = tzafonComputerUseOnPayload(payload, model as Model<Api>, {
-				keepToolNames: keepToolNamesFromContext(context),
+				keepToolNames: [...keepToolNamesFromContext(context), ...(options?.keepToolNames ?? [])],
 			});
 			const nextPayload = await options?.onPayload?.(tzafonPayload ?? payload, model as Model<Api>);
 			if (options?.signal?.aborted) throw new Error("Request was aborted");
@@ -175,9 +177,11 @@ function emitToolCall(
 	stream.push({ type: "toolcall_end", contentIndex, toolCall, partial: output });
 }
 
-type TzafonCanonicalAction = CuaAction | { type: "answer"; text: string };
+/** A canonical CUA action, or the terminal `answer` text Tzafon emits when it is done. */
+export type TzafonCanonicalAction = CuaAction | { type: "answer"; text: string };
 
-function toCanonicalActions(action: unknown): TzafonCanonicalAction[] {
+/** Normalize one Tzafon `computer_call.action` payload into canonical CUA actions. */
+export function toCanonicalActions(action: unknown): TzafonCanonicalAction[] {
 	if (!action || typeof action !== "object") return [];
 	const current = action as Record<string, unknown>;
 	const type = getString(current, "type");
