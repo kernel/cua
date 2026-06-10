@@ -59,15 +59,37 @@ jobs:
 
       - run: npm run build --workspace @onkernel/cua-ai
       - run: npm run build --workspace @onkernel/cua-agent
+      - run: npm run typecheck --workspace @onkernel/cua-agent
 
       - name: Unit tests
-        run: npm test --workspace @onkernel/cua-agent -- test/agent.test.ts test/tool-exhaustiveness.test.ts
+        run: npm test --workspace @onkernel/cua-agent -- --exclude "**/*.live.test.ts"
 
       - name: Verify dependency package is published
         run: npm view @onkernel/cua-ai@$(node -p 'require("./packages/agent/package.json").dependencies["@onkernel/cua-ai"]') version
 
-      - name: Pack dry run
-        run: npm pack --workspace @onkernel/cua-agent --dry-run
+      - name: Pack tarballs
+        run: |
+          mkdir -p /tmp/pack
+          npm pack --workspace @onkernel/cua-ai --pack-destination /tmp/pack
+          npm pack --workspace @onkernel/cua-agent --pack-destination /tmp/pack
+
+      - name: ESM import smoke test
+        run: |
+          SMOKE_DIR=$(mktemp -d)
+          cd "$SMOKE_DIR"
+          npm init -y > /dev/null
+          npm install /tmp/pack/*.tgz
+          cat > smoke.mjs <<'EOF'
+          import { CuaAgent, CuaAgentHarness, createCuaComputerTools, NodeExecutionEnv } from "@onkernel/cua-agent";
+
+          for (const [name, value] of Object.entries({ CuaAgent, CuaAgentHarness, createCuaComputerTools, NodeExecutionEnv })) {
+            if (typeof value !== "function") {
+              throw new Error(`expected ${name} to be a function, got ${typeof value}`);
+            }
+          }
+          console.log("ESM import smoke OK");
+          EOF
+          node smoke.mjs
 
       - name: Publish to npm
         run: npm publish --workspace @onkernel/cua-agent --access public

@@ -1,6 +1,6 @@
 import type { ComputerToolCoordinateSystem, CuaProviderModule } from "../common";
 import { computerToolExecutors } from "./actions";
-import { yutoriNativeToolSetOnPayload } from "./provider";
+import { yutoriCuaOnPayload } from "./provider";
 
 export {
 	computerToolExecutors,
@@ -29,6 +29,7 @@ export {
 	YUTORI_CHAT_COMPLETIONS_API,
 	streamSimpleYutori,
 	streamYutori,
+	yutoriCuaOnPayload,
 	yutoriNativeToolSetOnPayload,
 } from "./provider";
 export type { YutoriOptions } from "./provider";
@@ -66,7 +67,7 @@ export const providerModule = {
 	toolExecutors: computerToolExecutors,
 	coordinateSystem,
 	buildSystemPrompt: buildYutoriSystemPrompt,
-	onPayload: yutoriNativeToolSetOnPayload,
+	onPayload: yutoriCuaOnPayload,
 	screenshot: {
 		appendToLatestMessage: true,
 		transform: { width: 1280, height: 800, format: "webp", quality: 90 },

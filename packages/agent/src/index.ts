@@ -1,4 +1,5 @@
-export * from "./vendor/pi-agent-core/index";
+export * from "@earendil-works/pi-agent-core";
+export { NodeExecutionEnv } from "@earendil-works/pi-agent-core/node";
 
 export type { KernelBrowser } from "./translator/translator";
 export { createCuaComputerTools } from "./tools";

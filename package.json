@@ -24,7 +24,7 @@
     "clean": "tsc -b --clean && npm run clean:native --workspace @onkernel/ptywright --if-present"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.19.0"
   },
   "devDependencies": {
     "@types/node": "22.18.4",

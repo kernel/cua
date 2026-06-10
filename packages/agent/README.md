@@ -1,7 +1,9 @@
 # `@onkernel/cua-agent`
 
-Kernel browser computer-use classes built on vendored pi `Agent` and
-`AgentHarness` source.
+Kernel browser computer-use classes built on the `Agent` and `AgentHarness`
+classes from [`@earendil-works/pi-agent-core`](https://www.npmjs.com/package/@earendil-works/pi-agent-core).
+The full pi-agent-core surface is re-exported from this package, including
+`NodeExecutionEnv` from its `/node` subpath.
 
 This package keeps pi agent semantics intact and adds browser execution
 plumbing for canonical CUA tools.
@@ -142,4 +144,5 @@ const tools = [
 ```
 
 For full event semantics, steering, follow-up queues, and tool execution
-details, see the pi agent core source vendored in this package.
+details, see the [`@earendil-works/pi-agent-core`](https://www.npmjs.com/package/@earendil-works/pi-agent-core)
+package.
