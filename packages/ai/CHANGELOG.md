@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1 - 2026-06-11
+
+- Add computer-use support for the `claude-fable-5` Anthropic model.
+
 ## 0.2.0 - 2026-06-10
 
 ### Fixed

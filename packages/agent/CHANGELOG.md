@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1 - 2026-06-11
+
+- Update the `@onkernel/cua-ai` dependency to 0.2.1.
+
 ## 0.3.0 - 2026-06-10
 
 - Replaces the vendored pi-agent-core snapshot with the released `@earendil-works/pi-agent-core@0.79.1` dependency. The full pi surface is still re-exported, but it now tracks the published package instead of a frozen fork.
