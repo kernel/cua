@@ -60,6 +60,7 @@ export interface CuaModelAnnotation {
 export const CUA_MODEL_ANNOTATIONS: Record<CuaProvider, readonly CuaModelAnnotation[]> = {
 	openai: [
 		{ match: { kind: "family", family: "gpt-5.4" }, source: "https://developers.openai.com/api/docs/models/gpt-5.4" },
+		{ match: { kind: "family", family: "gpt-5.4-mini" }, source: "https://developers.openai.com/api/docs/models/gpt-5.4-mini" },
 		{ match: { kind: "family", family: "gpt-5.5" }, source: "https://developers.openai.com/api/docs/models/gpt-5.5" },
 	],
 	anthropic: [
@@ -74,10 +75,14 @@ export const CUA_MODEL_ANNOTATIONS: Record<CuaProvider, readonly CuaModelAnnotat
 	// requires Google's native tools.computer_use wrapper instead.
 	google: [
 		{ match: { kind: "exact", id: "gemini-3-flash-preview" }, source: "https://ai.google.dev/gemini-api/docs/computer-use" },
-		{ match: { kind: "exact", id: "gemini-3-pro-preview" }, source: "https://ai.google.dev/gemini-api/docs/computer-use" },
+		{ match: { kind: "exact", id: "gemini-3.1-flash-lite" }, source: "https://ai.google.dev/gemini-api/docs/computer-use" },
+		// gemini-3-pro-preview is intentionally absent: Google retired it and
+		// the API now returns 404 "model no longer available".
 	],
 	tzafon: [
 		{ match: { kind: "exact", id: "tzafon.northstar-cua-fast" }, source: "https://huggingface.co/Tzafon/Northstar-CUA-Fast" },
+		{ match: { kind: "exact", id: "tzafon.northstar-cua-fast-1.6" }, source: "https://huggingface.co/Tzafon/Northstar-CUA-Fast" },
+		{ match: { kind: "exact", id: "tzafon.northstar-cua-fast-1.7-experiment" }, source: "https://huggingface.co/Tzafon/Northstar-CUA-Fast" },
 	],
 	yutori: [
 		{ match: { kind: "exact", id: "n1-latest" }, source: "https://docs.yutori.com/reference/navigator" },
@@ -101,6 +106,8 @@ const CUA_MODEL_OVERRIDES: Record<CuaProvider, readonly Model<Api>[]> = {
 	google: [],
 	tzafon: [
 		cuaModel("tzafon", "tzafon.northstar-cua-fast", "Tzafon Northstar CUA Fast"),
+		cuaModel("tzafon", "tzafon.northstar-cua-fast-1.6", "Tzafon Northstar CUA Fast 1.6"),
+		cuaModel("tzafon", "tzafon.northstar-cua-fast-1.7-experiment", "Tzafon Northstar CUA Fast 1.7 (experiment)"),
 	],
 	yutori: [
 		cuaModel("yutori", "n1.5-latest", "Yutori Navigator n1.5"),

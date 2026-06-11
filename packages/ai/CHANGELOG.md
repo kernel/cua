@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.2 - 2026-06-11
+
+- Add computer-use support for `gpt-5.4-mini`, `gemini-3.1-flash-lite`, `tzafon.northstar-cua-fast-1.6`, and `tzafon.northstar-cua-fast-1.7-experiment`.
+- Drop `gemini-3-pro-preview`, which Google has retired (the API now returns 404 for it).
+
 ## 0.2.1 - 2026-06-11
 
 - Add computer-use support for the `claude-fable-5` Anthropic model.
