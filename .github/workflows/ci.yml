@@ -33,6 +33,20 @@ jobs:
           npm install "$RUNNER_TEMP"/onkernel-cua-ai-*.tgz
           node --input-type=module -e "import('@onkernel/cua-ai').then((m) => { if (typeof m.getCuaModel !== 'function') process.exit(1); })"
 
+  agent-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build --workspace @onkernel/cua-ai
+      - name: Agent unit tests
+        run: npm test --workspace @onkernel/cua-agent -- --exclude "**/*.live.test.ts"
+
   integration:
     runs-on: ubuntu-latest
     timeout-minutes: 15
