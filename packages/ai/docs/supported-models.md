@@ -50,9 +50,6 @@ Exact IDs:
 - `gemini-3-flash-preview`
 - `gemini-3.1-flash-lite`
 
-`gemini-3-pro-preview` is no longer listed: Google retired it and the API now
-returns 404 "model no longer available".
-
 `gemini-2.5-computer-use-preview-10-2025` is deliberately not annotated: it
 rejects the standard function declarations this package sends and requires
 Google's native `tools.computer_use` request wrapper instead.
