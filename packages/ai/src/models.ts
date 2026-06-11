@@ -67,6 +67,7 @@ export const CUA_MODEL_ANNOTATIONS: Record<CuaProvider, readonly CuaModelAnnotat
 		{ match: { kind: "family", family: "claude-opus-4" }, source: "https://docs.anthropic.com/en/docs/build-with-claude/computer-use" },
 		{ match: { kind: "family", family: "claude-sonnet-4" }, source: "https://docs.anthropic.com/en/docs/build-with-claude/computer-use" },
 		{ match: { kind: "family", family: "claude-haiku-4" }, source: "https://docs.anthropic.com/en/docs/build-with-claude/computer-use" },
+		{ match: { kind: "family", family: "claude-fable-5" }, source: "https://docs.anthropic.com/en/docs/build-with-claude/computer-use" },
 	],
 	// gemini-2.5-computer-use-preview-10-2025 is deliberately absent: it
 	// rejects the standard function declarations this package sends and

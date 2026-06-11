@@ -333,10 +333,12 @@ function orderAnthropicPairs(runtimePair: AnthropicToolPair): AnthropicToolPair[
 function anthropicRuntimeToolPair(model: string): AnthropicToolPair {
 	const id = model.toLowerCase();
 	if (
+		id.startsWith("claude-opus-4-8") ||
 		id.startsWith("claude-opus-4-7") ||
 		id.startsWith("claude-opus-4-6") ||
 		id.startsWith("claude-opus-4-5") ||
-		id.startsWith("claude-sonnet-4-6")
+		id.startsWith("claude-sonnet-4-6") ||
+		id.startsWith("claude-fable-5")
 	) {
 		return { tool: "computer_20251124", beta: "computer-use-2025-11-24" };
 	}

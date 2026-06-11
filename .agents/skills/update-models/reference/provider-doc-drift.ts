@@ -39,10 +39,10 @@ const DOCS: Record<Provider, string[]> = {
 };
 
 const LOCAL_FILES: Record<Provider, string> = {
-	openai: "packages/cua-openai/src/official.ts",
-	anthropic: "packages/cua-anthropic/src/official.ts",
-	gemini: "packages/cua-gemini/src/official.ts",
-	yutori: "packages/cua-yutori/src/official.ts",
+	openai: "packages/ai/src/providers/openai/index.ts",
+	anthropic: "packages/ai/src/providers/anthropic/actions.ts",
+	gemini: "packages/ai/src/providers/gemini/index.ts",
+	yutori: "packages/ai/src/providers/yutori/actions.ts",
 };
 
 const ACTION_REGEXES: Record<Provider, RegExp> = {
