@@ -34,6 +34,7 @@ Family matches (root + numeric revision/dated-snapshot suffixes):
 - `claude-opus-4`
 - `claude-sonnet-4`
 - `claude-haiku-4`
+- `claude-fable-5`
 
 Source: [Anthropic computer use docs](https://docs.anthropic.com/en/docs/build-with-claude/computer-use).
 
