@@ -22,6 +22,7 @@ API: `openai-responses` · coordinates: pixel
 Family matches (root + numeric revision/dated-snapshot suffixes):
 
 - `gpt-5.4` ([docs](https://developers.openai.com/api/docs/models/gpt-5.4))
+- `gpt-5.4-mini` ([docs](https://developers.openai.com/api/docs/models/gpt-5.4-mini))
 - `gpt-5.5` ([docs](https://developers.openai.com/api/docs/models/gpt-5.5))
 
 ## `anthropic`
@@ -47,7 +48,7 @@ Model refs use the `google:` prefix; `gemini:` is accepted as an alias.
 Exact IDs:
 
 - `gemini-3-flash-preview`
-- `gemini-3-pro-preview`
+- `gemini-3.1-flash-lite`
 
 `gemini-2.5-computer-use-preview-10-2025` is deliberately not annotated: it
 rejects the standard function declarations this package sends and requires
@@ -62,6 +63,8 @@ API: `tzafon-responses` · coordinates: normalized 0–999
 Exact IDs:
 
 - `tzafon.northstar-cua-fast` ([model card](https://huggingface.co/Tzafon/Northstar-CUA-Fast))
+- `tzafon.northstar-cua-fast-1.6` ([model card](https://huggingface.co/Tzafon/Northstar-CUA-Fast))
+- `tzafon.northstar-cua-fast-1.7-experiment` ([model card](https://huggingface.co/Tzafon/Northstar-CUA-Fast))
 
 ## `yutori`
 

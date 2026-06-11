@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.2 - 2026-06-11
+
+- Update the `@onkernel/cua-ai` dependency to 0.2.2.
+
 ## 0.3.1 - 2026-06-11
 
 - Update the `@onkernel/cua-ai` dependency to 0.2.1.
