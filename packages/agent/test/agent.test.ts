@@ -145,7 +145,7 @@ describe("CuaAgent", () => {
 	});
 
 	it("refreshes CUA runtime state when state.model changes", () => {
-		const runtime = resolveCuaRuntimeSpec("google:gemini-3-pro-preview");
+		const runtime = resolveCuaRuntimeSpec("google:gemini-3-flash-preview");
 		const agent = new CuaAgent({
 			browser,
 			client,
@@ -154,7 +154,7 @@ describe("CuaAgent", () => {
 			},
 		});
 
-		agent.state.model = "google:gemini-3-pro-preview";
+		agent.state.model = "google:gemini-3-flash-preview";
 
 		expect(agent.state.model.id).toBe(runtime.model.id);
 		expect(agent.state.systemPrompt).toBe(runtime.defaultSystemPrompt);
@@ -173,9 +173,9 @@ describe("CuaAgent", () => {
 			},
 		});
 
-		agent.state.model = "google:gemini-3-pro-preview";
+		agent.state.model = "google:gemini-3-flash-preview";
 
-		const runtime = resolveCuaRuntimeSpec("google:gemini-3-pro-preview");
+		const runtime = resolveCuaRuntimeSpec("google:gemini-3-flash-preview");
 		expect(agent.state.tools.map((item) => item.name)).toEqual([...runtime.toolExecutors.map((item) => item.definition.name), "custom"]);
 		expect(agent.state.systemPrompt).toBe("custom prompt");
 	});
@@ -284,7 +284,7 @@ describe("CuaAgentHarness", () => {
 	});
 
 	it("refreshes CUA runtime state through setModel", async () => {
-		const runtime = resolveCuaRuntimeSpec("google:gemini-3-pro-preview");
+		const runtime = resolveCuaRuntimeSpec("google:gemini-3-flash-preview");
 		const harness = new CuaAgentHarness({
 			...(await createHarnessServices()),
 			browser,
@@ -292,7 +292,7 @@ describe("CuaAgentHarness", () => {
 			model: "openai:gpt-5.5",
 		});
 
-		await harness.setModel("google:gemini-3-pro-preview");
+		await harness.setModel("google:gemini-3-flash-preview");
 
 		expect(harness.getModel().id).toBe(runtime.model.id);
 		expect(harness.getTools()).toHaveLength(runtime.toolExecutors.length);
@@ -324,7 +324,7 @@ describe("CuaAgentHarness", () => {
 		});
 
 		await harness.setActiveTools([]);
-		await harness.setModel("google:gemini-3-pro-preview");
+		await harness.setModel("google:gemini-3-flash-preview");
 
 		expect(harness.getActiveTools()).toEqual([]);
 	});
@@ -340,10 +340,10 @@ describe("CuaAgentHarness", () => {
 		});
 
 		await harness.setActiveTools(["click", "screenshot"]);
-		await harness.setModel("google:gemini-3-pro-preview");
+		await harness.setModel("google:gemini-3-flash-preview");
 
 		expect(harness.getTools()).toHaveLength(
-			resolveCuaRuntimeSpec("google:gemini-3-pro-preview").toolExecutors.length,
+			resolveCuaRuntimeSpec("google:gemini-3-flash-preview").toolExecutors.length,
 		);
 		expect(harness.getActiveTools().map((tool) => tool.name)).toEqual(["click", "screenshot"]);
 
