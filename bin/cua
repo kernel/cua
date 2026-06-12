@@ -1,5 +1,0 @@
-#!/bin/sh
-# Wrapper that runs the built cua CLI from this checkout.
-# Symlink this file into ~/.local/bin/cua (or anywhere on $PATH) to use as `cua`.
-DIR="$(cd "$(dirname "$0")/.." && pwd)"
-exec node "$DIR/packages/cli/dist/cli.js" "$@"

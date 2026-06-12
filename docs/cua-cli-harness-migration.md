@@ -1,6 +1,6 @@
 # cua-cli → CuaAgentHarness migration plan
 
-Status: approved, in progress.
+Status: completed.
 
 `@onkernel/cua-cli` predates the public SDK packages. It hand-assembles a
 pi 0.67 (`@mariozechner/*`) `Agent` from the deprecated provider packages
@@ -208,6 +208,5 @@ Strictly ordered; each PR merges before the next starts.
 
 ## Manual follow-ups after the migration
 
-- `npm deprecate` the published deprecated packages.
 - Decide on auto-compaction trigger and proper context-file injection.
 - Release a new `@onkernel/cua-cli` version per `docs/npm-releases.md`.

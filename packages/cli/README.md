@@ -11,9 +11,12 @@ coding tools for workspace access.
 
 ```bash
 npm install
-npm run build
-ln -s "$(pwd)/bin/cua" ~/.local/bin/cua    # put `cua` on your $PATH
-cua --help
+# run directly from source via tsx (no global install required):
+npx tsx packages/cli/src/cli.ts --help
+
+# optional: pin a shell function in your rc so `cua` works from any cwd:
+#   CUA_REPO=/absolute/path/to/cua
+#   cua() { (cd "$CUA_REPO" && npx tsx packages/cli/src/cli.ts "$@"); }
 ```
 
 ## Usage

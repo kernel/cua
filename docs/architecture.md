@@ -3,6 +3,47 @@
 This document explains how `cua` is wired together. It's aimed at
 someone who wants to read the code, contribute, or fork.
 
+## Product principles
+
+These are the evergreen product principles for Kernel's computer-use SDK
+packages. They explain the *why* behind the technical invariants below.
+
+### Package the boring plumbing
+
+Kernel's SDK packages should make the common browser-control work disappear:
+
+- Kernel browser session wiring
+- screenshots and screenshot reinjection
+- coordinate normalization
+- provider-specific computer-tool schemas
+- tool execution against Kernel browser APIs
+- provider registration
+- context and payload quirks
+- sensible default prompts
+
+These details are common to most CUA agents and are easy to get subtly wrong.
+
+### Do not over-own the agent
+
+The SDK should not hide the agent architecture from users. Builders keep
+control over:
+
+- system prompts
+- context and memory strategy
+- custom tools
+- streaming UI
+- orchestration policy
+- transport hooks and payload inspection
+
+The default path stays pleasant, but pi's primitives remain visible and
+replaceable.
+
+### Keep model refs explicit
+
+CUA model refs are provider-qualified — for example `openai:gpt-5.5` or
+`yutori:n1.5-latest`. This keeps examples, logs, persisted config, and
+transcripts unambiguous. The SDK does not export a default CUA model.
+
 ## Design goals and invariants
 
 - `@onkernel/cua-ai` owns provider-specific policy: the curated
