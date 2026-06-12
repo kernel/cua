@@ -43,11 +43,18 @@ type NavigationExecutorSpec = { kind: "navigation"; definition: Tool };
 type ComputerExecutorSpec = CuaToolExecutorSpec | NavigationExecutorSpec;
 
 export function createCuaComputerTools(args: ComputerToolOptions): CuaExecutorTool[] {
-	const translator = new InternalComputerTranslator(args);
+	return buildCuaComputerTools(args, new InternalComputerTranslator(args));
+}
+
+/** Build executor tools against an existing translator (internal; not part of the package surface). */
+export function buildCuaComputerTools(
+	args: Pick<ComputerToolOptions, "toolExecutors" | "computerUseExtra">,
+	translator: InternalComputerTranslator,
+): CuaExecutorTool[] {
 	return withNavigationTool(args).map((executor) => createExecutorTool(executor, translator));
 }
 
-function withNavigationTool(args: ComputerToolOptions): ComputerExecutorSpec[] {
+function withNavigationTool(args: Pick<ComputerToolOptions, "toolExecutors" | "computerUseExtra">): ComputerExecutorSpec[] {
 	const executors: ComputerExecutorSpec[] = [...args.toolExecutors];
 	const existing = new Set(executors.map((executor) => executor.definition.name));
 	if (args.computerUseExtra && !existing.has(CUA_NAVIGATION_TOOL_NAME)) {
@@ -92,7 +99,7 @@ async function executeBatchTool(translator: InternalComputerTranslator, params: 
 	const content: ToolContent = [];
 	const readResults: BatchDetails["readResults"] = [];
 	try {
-		const result = await translator.executeBatch(params.actions as unknown as Array<Record<string, unknown>>);
+		const result = await translator.executeBatch(params.actions);
 		for (const read of result.readResults) {
 			if (read.type === "url") {
 				readResults.push({ type: "url", url: read.url });
@@ -124,8 +131,10 @@ async function executeNavigationTool(translator: InternalComputerTranslator, par
 		if (action === "url") {
 			url = await translator.currentUrl();
 			statusText = `Current URL: ${url}`;
+		} else if (action === "goto") {
+			await translator.executeBatch([{ type: "goto", url: params.url ?? "" }]);
 		} else {
-			await translator.executeBatch([{ type: action, url: params.url }]);
+			await translator.executeBatch([{ type: action }]);
 		}
 		const screenshot = await translator.screenshot();
 		return {

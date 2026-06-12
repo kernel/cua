@@ -1,5 +1,3 @@
-export type ModelAction = Record<string, unknown>;
-
 export type BatchReadResult =
 	| { type: "screenshot"; data: Buffer; mimeType: string }
 	| { type: "url"; url: string }

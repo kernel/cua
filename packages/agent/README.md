@@ -37,11 +37,17 @@ await agent.prompt("Open news.ycombinator.com and summarize the top story.");
 
 ## Quick Start (`CuaAgentHarness`)
 
+`prompt()` returns the turn's final assistant message, and every turn is
+persisted to the session — later prompts see the full transcript. Runtime
+config like the model can change between turns (or even mid-turn, applying at
+the next provider request):
+
 ```ts
 import { CuaAgentHarness, InMemorySessionRepo, NodeExecutionEnv } from "@onkernel/cua-agent";
+import type { AssistantMessage } from "@onkernel/cua-ai";
 
 const sessionRepo = new InMemorySessionRepo();
-const session = await sessionRepo.create({ id: "example" });
+const session = await sessionRepo.create({ id: "research" });
 
 const harness = new CuaAgentHarness({
   browser,
@@ -51,21 +57,25 @@ const harness = new CuaAgentHarness({
   session,
 });
 
-const response = await harness.prompt("Open example.com and tell me the current URL.");
-const branch = await session.getBranch();
-const lastAssistant = [...branch]
-  .reverse()
-  .flatMap((entry) =>
-    entry.type === "message" && entry.message.role === "assistant" ? [entry.message] : [],
-  )[0];
-const assistant = lastAssistant ?? response;
-const assistantText = assistant.content
-  .flatMap((block) => (block.type === "text" ? [block.text] : []))
-  .join("")
-  .trim();
-console.log("assistant stopReason:", assistant.stopReason);
-console.log("assistant text:", assistantText || "(no text)");
+const textOf = (message: AssistantMessage) =>
+  message.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("").trim();
+
+// Turn 1: a session-backed prompt.
+const first = await harness.prompt("Open example.com and describe what you see.");
+console.log(textOf(first));
+
+// Swap providers mid-session; CUA tools and the default prompt refresh to match.
+await harness.setModel("anthropic:claude-opus-4-7");
+
+// Turn 2 continues the same transcript on the new model.
+const second = await harness.prompt("Open the most relevant link from what you found.");
+console.log(textOf(second));
 ```
+
+While a turn is running, `steer()` injects course corrections, `followUp()`
+queues the next instruction, and `subscribe()` streams the underlying agent
+events. `compact()` and session branching are available for long-running
+transcripts — see the pi-agent-core docs for the full harness lifecycle.
 
 Use `CuaAgent` when you want direct pi `Agent` control: raw message state,
 lifecycle events, custom streaming, and explicit prompt/continue/queue control.
@@ -108,9 +118,11 @@ computer-use tools. This is useful when the model needs to call
 application-specific code, such as looking up a record, writing a database row,
 or handing off to another service while it also controls the browser.
 
-`computerUseExtra: true` adds the `computer_use_extra` tool. Use it when you
-want one compact helper for common browser navigation/read operations:
-`goto`, `back`, `forward`, and `url`.
+Not every provider's native computer-use vocabulary includes browser
+navigation — some models can click and type but have no direct way to open a
+URL or go back. `computerUseExtra: true` adds `computer_use_extra`, a
+provider-neutral escape hatch exposing `goto`, `back`, `forward`, and `url`
+so navigation works uniformly regardless of which model is driving.
 
 ### Model Switching
 

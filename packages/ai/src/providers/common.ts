@@ -1,4 +1,4 @@
-import { Type, type Api, type Model, type Static, type TSchema, type Tool } from "@earendil-works/pi-ai";
+import { Type, type Api, type Model, type SimpleStreamOptions, type Static, type TSchema, type Tool } from "@earendil-works/pi-ai";
 import type { CuaModelRef, CuaProvider } from "../models";
 
 export const CUA_ACTION_TYPES = [
@@ -447,6 +447,15 @@ export interface CuaPayloadContext {
 }
 
 export type CuaPayloadHook = (payload: unknown, model: Model<Api>, context?: CuaPayloadContext) => unknown | Promise<unknown>;
+
+/**
+ * pi-ai `SimpleStreamOptions` plus the CUA extension consumed by the
+ * Yutori/Tzafon stream adapters. Pass `keepToolNames` for caller tools that
+ * must survive provider-native tool-set substitution.
+ */
+export interface CuaSimpleStreamOptions extends SimpleStreamOptions {
+	keepToolNames?: readonly string[];
+}
 
 /**
  * Runtime configuration for a supported CUA model.

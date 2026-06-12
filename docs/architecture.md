@@ -45,10 +45,28 @@ someone who wants to read the code, contribute, or fork.
   - executing canonical CUA tool calls against Kernel browsers
   - typed executor coverage and translator integration
 
-In practice this means any new provider quirk should be implemented in
-`@onkernel/cua-ai` and surfaced through provider-neutral runtime specs.
-`@onkernel/cua-agent` should consume that spec without explicit
-provider-specific conditionals.
+The boundary is a single data seam. Every provider difference arrives in
+`@onkernel/cua-agent` as data through `CuaRuntimeSpec` — `toolDefinitions`,
+`toolExecutors`, `defaultSystemPrompt`, `coordinateSystem`, `screenshot`, and
+`onPayload` — resolved per model by `resolveCuaRuntimeSpec()`. In the other
+direction, the agent supplies capabilities back to provider middleware through
+`CuaPayloadContext` (`keepToolNames`, `getScreenshot`): the provider hook
+decides *whether and how* to use a capability (policy), the agent decides
+*how it is performed* against the Kernel browser (mechanism).
+
+The invariant: `packages/agent/src` contains no provider names and no
+provider conditionals. A new provider difference is a new or extended
+`CuaRuntimeSpec`/`CuaPayloadContext` field plus provider code in
+`@onkernel/cua-ai` — never a branch in `@onkernel/cua-agent`. The grep test
+is literal: searching agent `src/` for a provider name should only ever hit
+doc comments.
+
+One deliberate exception to "push it upstream": generic model imprecision.
+Models of every provider are loose about things like key naming
+(`ctrl`/`cmd`/`ArrowLeft`/word-form punctuation), so the agent-side
+translator absorbs that nondeterminism when mapping canonical actions to
+Kernel's X11 key vocabulary. That is corrective plumbing for model output in
+general, not provider policy, and it stays in `@onkernel/cua-agent`.
 
 ## Layers
 

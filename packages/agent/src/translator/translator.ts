@@ -1,9 +1,25 @@
 import type Kernel from "@onkernel/sdk";
 import type { BrowserCreateResponse, BrowserRetrieveResponse } from "@onkernel/sdk/resources/browsers";
-import { normalizeGotoUrl, type ComputerToolCoordinateSystem, type CuaScreenshotSpec } from "@onkernel/cua-ai";
+import {
+	normalizeGotoUrl,
+	type ComputerToolCoordinateSystem,
+	type CuaAction,
+	type CuaActionClick,
+	type CuaActionDoubleClick,
+	type CuaActionDrag,
+	type CuaActionMouseDown,
+	type CuaActionMouseUp,
+	type CuaActionMove,
+	type CuaActionScroll,
+	type CuaActionTypeText,
+	type CuaActionWait,
+	type CuaDragMouseButton,
+	type CuaMouseButton,
+	type CuaScreenshotSpec,
+} from "@onkernel/cua-ai";
 import sharp from "sharp";
 import { isKernelModifierKey, normalizeKernelKey, normalizeKernelKeyCombo } from "./keys";
-import type { BatchExecutionResult, ModelAction } from "./types";
+import type { BatchExecutionResult } from "./types";
 
 export type KernelBrowser = BrowserCreateResponse | BrowserRetrieveResponse;
 
@@ -66,10 +82,10 @@ export class InternalComputerTranslator {
 
 	async currentMousePosition(): Promise<{ x: number; y: number }> {
 		const pos = await this.client.browsers.computer.getMousePosition(this.sessionId);
-		return { x: toInt(pos.x), y: toInt(pos.y) };
+		return { x: Math.trunc(pos.x), y: Math.trunc(pos.y) };
 	}
 
-	async executeBatch(actions: ModelAction[]): Promise<BatchExecutionResult> {
+	async executeBatch(actions: CuaAction[]): Promise<BatchExecutionResult> {
 		const result: BatchExecutionResult = { readResults: [] };
 		const pending: KernelBatchAction[] = [];
 
@@ -78,47 +94,130 @@ export class InternalComputerTranslator {
 			await this.runKernelBatch(pending.splice(0));
 		};
 
-		for (let i = 0; i < actions.length; i++) {
-			const action = actions[i]!;
-			const type = typeof action.type === "string" ? action.type : "";
-			if (type === "screenshot") {
-				await flush();
-				result.readResults.push({ type: "screenshot", ...(await this.screenshot()) });
-				continue;
+		for (const action of actions) {
+			switch (action.type) {
+				case "screenshot":
+					await flush();
+					result.readResults.push({ type: "screenshot", ...(await this.screenshot()) });
+					break;
+				case "url":
+					await flush();
+					result.readResults.push({ type: "url", url: await this.currentUrl() });
+					break;
+				case "cursor_position":
+					await flush();
+					result.readResults.push({ type: "cursor_position", ...(await this.currentMousePosition()) });
+					break;
+				case "goto":
+					pending.push(
+						keypress(["Control", "l"]),
+						{ type: "type_text", type_text: { text: normalizeGotoUrl(action.url) ?? "" } },
+						keypress(["Enter"]),
+					);
+					break;
+				case "back":
+					pending.push(keypress(["Alt", "Left"]));
+					break;
+				case "forward":
+					pending.push(keypress(["Alt", "Right"]));
+					break;
+				default:
+					pending.push(this.toSdkAction(action));
+					break;
 			}
-			if (type === "url") {
-				await flush();
-				result.readResults.push({ type: "url", url: await this.currentUrl() });
-				continue;
-			}
-			if (type === "cursor_position") {
-				await flush();
-				const pos = await this.currentMousePosition();
-				result.readResults.push({ type: "cursor_position", ...pos });
-				continue;
-			}
-			if (type === "goto") {
-				const url = normalizeGotoUrl(action.url) ?? "";
-				pending.push(
-					keypress(["Control", "l"]),
-					{ type: "type_text", type_text: { text: url } },
-					keypress(["Enter"]),
-				);
-				continue;
-			}
-			if (type === "back") {
-				pending.push(keypress(["Alt", "Left"]));
-				continue;
-			}
-			if (type === "forward") {
-				pending.push(keypress(["Alt", "Right"]));
-				continue;
-			}
-			pending.push(toSdkAction(type, action, this.coordinateSystem, this.viewport));
 		}
 
 		await flush();
 		return result;
+	}
+
+	private toSdkAction(
+		action: Exclude<CuaAction, { type: "screenshot" | "url" | "cursor_position" | "goto" | "back" | "forward" }>,
+	): KernelBatchAction {
+		switch (action.type) {
+			case "click":
+				return this.clickAction(action, { button: mouseButton(action.button) });
+			case "double_click":
+				return this.clickAction(action, { num_clicks: 2 });
+			case "mouse_down":
+				return this.clickAction(action, { button: mouseButton(action.button), click_type: "down" });
+			case "mouse_up":
+				return this.clickAction(action, { button: mouseButton(action.button), click_type: "up" });
+			case "type":
+				return typeText(action);
+			case "keypress":
+				return keypress(action.keys, action.duration);
+			case "scroll":
+				return this.scrollAction(action);
+			case "move":
+				return this.moveAction(action);
+			case "drag":
+				return this.dragAction(action);
+			case "wait":
+				return waitAction(action);
+			default:
+				return unreachable(action);
+		}
+	}
+
+	private clickAction(
+		action: CuaActionClick | CuaActionDoubleClick | CuaActionMouseDown | CuaActionMouseUp,
+		extra: { button?: CuaMouseButton; num_clicks?: number; click_type?: "down" | "up" },
+	): KernelBatchAction {
+		const point = this.toViewportPoint(action.x, action.y);
+		return {
+			type: "click_mouse",
+			click_mouse: {
+				x: point.x,
+				y: point.y,
+				...extra,
+				...holdKeys(action.hold_keys),
+			},
+		};
+	}
+
+	private scrollAction(action: CuaActionScroll): KernelBatchAction {
+		const point = this.toViewportPoint(action.x ?? 0, action.y ?? 0);
+		return {
+			type: "scroll",
+			scroll: {
+				x: point.x,
+				y: point.y,
+				delta_x: Math.trunc(action.scroll_x ?? 0),
+				delta_y: Math.trunc(action.scroll_y ?? 0),
+				...holdKeys(action.hold_keys),
+			},
+		};
+	}
+
+	private moveAction(action: CuaActionMove): KernelBatchAction {
+		const point = this.toViewportPoint(action.x, action.y);
+		return { type: "move_mouse", move_mouse: { x: point.x, y: point.y } };
+	}
+
+	private dragAction(action: CuaActionDrag): KernelBatchAction {
+		return {
+			type: "drag_mouse",
+			drag_mouse: {
+				path: action.path.map((point) => {
+					const transformed = this.toViewportPoint(point.x, point.y);
+					return [transformed.x, transformed.y] as [number, number];
+				}),
+				button: dragButton(action.button),
+				...holdKeys(action.hold_keys),
+			},
+		};
+	}
+
+	private toViewportPoint(x: number, y: number): { x: number; y: number } {
+		if (this.coordinateSystem.type === "pixel") return { x: Math.trunc(x), y: Math.trunc(y) };
+		const [min, max] = this.coordinateSystem.range;
+		const scale = max - min;
+		if (scale <= 0) return { x: Math.trunc(x), y: Math.trunc(y) };
+		return {
+			x: clamp(Math.round(((x - min) / scale) * this.viewport.width), 0, this.viewport.width - 1),
+			y: clamp(Math.round(((y - min) / scale) * this.viewport.height), 0, this.viewport.height - 1),
+		};
 	}
 
 	private async runKernelBatch(actions: KernelBatchAction[]): Promise<void> {
@@ -129,202 +228,51 @@ export class InternalComputerTranslator {
 type KernelBatchAction =
 	Parameters<Kernel["browsers"]["computer"]["batch"]>[1]["actions"][number];
 
-type ClickMouseButton = "back" | "forward" | "left" | "right" | "middle";
-type DragMouseButton = "left" | "right" | "middle";
+const CLICK_BUTTONS: ReadonlySet<string> = new Set<CuaMouseButton>(["left", "right", "middle", "back", "forward"]);
+const DRAG_BUTTONS: ReadonlySet<string> = new Set<CuaDragMouseButton>(["left", "right", "middle"]);
 
-function toSdkAction(
-	type: string,
-	action: ModelAction,
-	coordinateSystem: ComputerToolCoordinateSystem,
-	viewport: { width: number; height: number },
-): KernelBatchAction {
-	switch (type) {
-		case "click": {
-			const clickHoldKeys = readHoldKeys(action.hold_keys);
-			const point = toViewportPoint(action, coordinateSystem, viewport);
-			return {
-				type: "click_mouse",
-				click_mouse: {
-					x: point.x,
-					y: point.y,
-					button: clickMouseButtonOr(action.button, "left"),
-					...(clickHoldKeys.length > 0 ? { hold_keys: clickHoldKeys } : {}),
-				},
-			};
-		}
-		case "double_click": {
-			const doubleClickHoldKeys = readHoldKeys(action.hold_keys);
-			const point = toViewportPoint(action, coordinateSystem, viewport);
-			return {
-				type: "click_mouse",
-				click_mouse: {
-					x: point.x,
-					y: point.y,
-					num_clicks: 2,
-					...(doubleClickHoldKeys.length > 0 ? { hold_keys: doubleClickHoldKeys } : {}),
-				},
-			};
-		}
-		case "mouse_down":
-		case "mouse_up": {
-			const mouseHoldKeys = readHoldKeys(action.hold_keys);
-			const point = toViewportPoint(action, coordinateSystem, viewport);
-			return {
-				type: "click_mouse",
-				click_mouse: {
-					x: point.x,
-					y: point.y,
-					button: clickMouseButtonOr(action.button, "left"),
-					click_type: type === "mouse_down" ? "down" : "up",
-					...(mouseHoldKeys.length > 0 ? { hold_keys: mouseHoldKeys } : {}),
-				},
-			};
-		}
-		case "type":
-			return { type: "type_text", type_text: { text: typeof action.text === "string" ? action.text : "" } };
-		case "keypress":
-			return keypress(toStringArray(action.keys), action.duration);
-		case "scroll": {
-			const scrollHoldKeys = readHoldKeys(action.hold_keys);
-			const point = toViewportPoint(action, coordinateSystem, viewport);
-			return {
-				type: "scroll",
-				scroll: {
-					x: point.x,
-					y: point.y,
-					delta_x: toInt(action.scroll_x),
-					delta_y: toInt(action.scroll_y),
-					...(scrollHoldKeys.length > 0 ? { hold_keys: scrollHoldKeys } : {}),
-				},
-			};
-		}
-		case "move": {
-			const moveHoldKeys = readHoldKeys(action.hold_keys);
-			const point = toViewportPoint(action, coordinateSystem, viewport);
-			return {
-				type: "move_mouse",
-				move_mouse: {
-					x: point.x,
-					y: point.y,
-					...(moveHoldKeys.length > 0 ? { hold_keys: moveHoldKeys } : {}),
-				},
-			};
-		}
-		case "drag": {
-			const dragHoldKeys = readHoldKeys(action.hold_keys);
-			return {
-				type: "drag_mouse",
-				drag_mouse: {
-					path: toPath(action.path, coordinateSystem, viewport),
-					button: dragMouseButtonOr(action.button, "left"),
-					...(dragHoldKeys.length > 0 ? { hold_keys: dragHoldKeys } : {}),
-				},
-			};
-		}
-		case "wait":
-			return { type: "sleep", sleep: { duration_ms: typeof action.ms === "number" ? Math.trunc(action.ms) : 1000 } };
-		default:
-			throw new Error(`unknown computer action type: ${type}`);
-	}
+// The wire schemas keep button as an open string for provider compatibility;
+// per the documented CuaMouseButton contract, values outside the set coerce
+// to "left".
+function mouseButton(value: string | undefined): CuaMouseButton {
+	return value !== undefined && CLICK_BUTTONS.has(value) ? (value as CuaMouseButton) : "left";
 }
 
-function toInt(value: unknown): number {
-	if (typeof value === "number" && Number.isFinite(value)) return Math.trunc(value);
-	if (typeof value === "string" && value.trim()) {
-		const n = Number(value);
-		if (Number.isFinite(n)) return Math.trunc(n);
-	}
-	return 0;
+function dragButton(value: string | undefined): CuaDragMouseButton {
+	return value !== undefined && DRAG_BUTTONS.has(value) ? (value as CuaDragMouseButton) : "left";
 }
 
-function stringOr(value: unknown, fallback: string): string {
-	return typeof value === "string" && value.length > 0 ? value : fallback;
+function typeText(action: CuaActionTypeText): KernelBatchAction {
+	return { type: "type_text", type_text: { text: action.text } };
 }
 
-function clickMouseButtonOr(value: unknown, fallback: ClickMouseButton): ClickMouseButton {
-	const candidate = stringOr(value, fallback);
-	if (candidate === "left" || candidate === "right" || candidate === "middle" || candidate === "back" || candidate === "forward") {
-		return candidate;
-	}
-	return fallback;
+function waitAction(action: CuaActionWait): KernelBatchAction {
+	return { type: "sleep", sleep: { duration_ms: Math.trunc(action.ms ?? 1000) } };
 }
 
-function dragMouseButtonOr(value: unknown, fallback: DragMouseButton): DragMouseButton {
-	const candidate = stringOr(value, fallback);
-	if (candidate === "left" || candidate === "right" || candidate === "middle") {
-		return candidate;
-	}
-	return fallback;
+function holdKeys(keys: string[] | undefined): { hold_keys?: string[] } {
+	if (!keys || keys.length === 0) return {};
+	return { hold_keys: keys.map(normalizeKernelKey) };
 }
 
-function toStringArray(value: unknown): string[] {
-	return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
-}
-
-function readHoldKeys(value: unknown): string[] {
-	return toStringArray(value).map(normalizeKernelKey);
-}
-
-function keypress(keys: string[], duration: unknown = undefined): KernelBatchAction {
+function keypress(keys: string[], duration?: number): KernelBatchAction {
 	const translated = keys.flatMap(normalizeKernelKeyCombo);
 	const pressedKeys = translated.filter((key) => !isKernelModifierKey(key));
-	const holdKeys = pressedKeys.length > 0 ? translated.filter(isKernelModifierKey) : translated.slice(0, -1);
+	const heldKeys = pressedKeys.length > 0 ? translated.filter(isKernelModifierKey) : translated.slice(0, -1);
 	return {
 		type: "press_key",
 		press_key: {
 			keys: pressedKeys.length > 0 ? pressedKeys : translated.slice(-1),
-			...(holdKeys.length > 0 ? { hold_keys: holdKeys } : {}),
+			...(heldKeys.length > 0 ? { hold_keys: heldKeys } : {}),
 			...(typeof duration === "number" && Number.isFinite(duration) && duration > 0 ? { duration: Math.trunc(duration) } : {}),
 		},
 	};
 }
 
-function toPath(
-	value: unknown,
-	coordinateSystem: ComputerToolCoordinateSystem = { type: "pixel" },
-	viewport: { width: number; height: number } = { width: 1920, height: 1080 },
-): Array<[number, number]> {
-	if (!Array.isArray(value)) return [];
-	return value.map((point) => toPathPoint(point, coordinateSystem, viewport));
-}
-
-function toPathPoint(value: unknown, coordinateSystem: ComputerToolCoordinateSystem, viewport: { width: number; height: number }): [number, number] {
-	if (Array.isArray(value)) {
-		const point = transformPoint(toInt(value[0]), toInt(value[1]), coordinateSystem, viewport);
-		return [point.x, point.y];
-	}
-	if (value && typeof value === "object") {
-		const point = value as Record<string, unknown>;
-		const transformed = transformPoint(toInt(point.x), toInt(point.y), coordinateSystem, viewport);
-		return [transformed.x, transformed.y];
-	}
-	return [0, 0];
-}
-
-function toViewportPoint(
-	action: Record<string, unknown>,
-	coordinateSystem: ComputerToolCoordinateSystem,
-	viewport: { width: number; height: number },
-): { x: number; y: number } {
-	return transformPoint(toInt(action.x), toInt(action.y), coordinateSystem, viewport);
-}
-
-function transformPoint(
-	x: number,
-	y: number,
-	coordinateSystem: ComputerToolCoordinateSystem,
-	viewport: { width: number; height: number },
-): { x: number; y: number } {
-	if (coordinateSystem.type === "pixel") return { x, y };
-	const [min, max] = coordinateSystem.range;
-	const scale = max - min;
-	if (scale <= 0) return { x, y };
-	return {
-		x: clamp(Math.round(((x - min) / scale) * viewport.width), 0, viewport.width - 1),
-		y: clamp(Math.round(((y - min) / scale) * viewport.height), 0, viewport.height - 1),
-	};
-}
-
 function clamp(value: number, min: number, max: number): number {
 	return Math.max(min, Math.min(max, value));
+}
+
+function unreachable(action: never): never {
+	throw new Error(`unknown computer action type: ${JSON.stringify(action)}`);
 }

@@ -1,5 +1,10 @@
 export const KERNEL_MODIFIER_KEYSYMS = ["Control_L", "Alt_L", "Shift_L", "Super_L"] as const;
 
+// Models are imprecise about key naming regardless of provider: the same
+// model may emit W3C KeyboardEvent names ("ArrowLeft"), shorthand ("ctrl",
+// "cmd"), keypad names ("kp_enter"), or word-form punctuation ("plus").
+// This table is the corrective force that absorbs that nondeterminism into
+// Kernel's X11 keysym vocabulary.
 const KEY_ALIASES: Record<string, string> = {
 	alt: "Alt_L",
 	alt_l: "Alt_L",

@@ -267,6 +267,82 @@ describe("CuaAgent", () => {
 		]);
 		expect(payload.messages[0]!.content.at(-1)?.image_url?.url.startsWith("data:image/webp;base64,")).toBe(true);
 	});
+
+	it("leaves pi turn preparation untouched while the runtime is unchanged", async () => {
+		const agent = new CuaAgent({
+			browser,
+			client,
+			initialState: { model: "openai:gpt-5.5" },
+		});
+
+		await expect(agent.prepareNextTurn?.(undefined)).resolves.toBeUndefined();
+	});
+
+	it("builds a one-shot turn update after a mid-run model assignment", async () => {
+		const runtime = resolveCuaRuntimeSpec("google:gemini-3-flash-preview");
+		const agent = new CuaAgent({
+			browser,
+			client,
+			initialState: { model: "openai:gpt-5.5" },
+		});
+
+		agent.state.model = "google:gemini-3-flash-preview";
+
+		const update = await agent.prepareNextTurn?.(undefined);
+		expect(update?.model?.id).toBe(runtime.model.id);
+		expect(update?.context?.tools).toHaveLength(runtime.toolExecutors.length);
+
+		await expect(agent.prepareNextTurn?.(undefined)).resolves.toBeUndefined();
+	});
+
+	it("executes model tool calls against the Kernel browser and feeds the result back", async () => {
+		let screenshots = 0;
+		const screenshotClient = {
+			browsers: {
+				computer: {
+					captureScreenshot: async () => {
+						screenshots += 1;
+						return new Response(tinyPng);
+					},
+				},
+			},
+		} as unknown as Kernel;
+		const contexts: Array<{ messages: Array<{ role: string; content: Array<{ type: string; mimeType?: string }> }> }> = [];
+		let providerCalls = 0;
+		const streamFn: StreamFn = (model, context, _options) => {
+			contexts.push(context as never);
+			const stream = createAssistantMessageEventStream();
+			const message = createAssistantMessage(model);
+			if (providerCalls++ === 0) {
+				message.content = [{ type: "toolCall", id: "tool-1", name: "screenshot", arguments: {} }];
+				message.stopReason = "toolUse";
+				stream.push({ type: "start", partial: message });
+				stream.push({ type: "done", reason: "toolUse", message });
+				stream.end(message);
+			} else {
+				message.content = [{ type: "text", text: "done" }];
+				stream.push({ type: "start", partial: message });
+				stream.push({ type: "done", reason: "stop", message });
+				stream.end(message);
+			}
+			return stream;
+		};
+
+		const agent = new CuaAgent({
+			browser,
+			client: screenshotClient,
+			streamFn,
+			initialState: { model: "openai:gpt-5.5" },
+		});
+
+		await agent.prompt("inspect the page");
+
+		expect(screenshots).toBe(1);
+		expect(providerCalls).toBe(2);
+		const fedBack = contexts[1]!.messages.find((message) => message.role === "toolResult");
+		expect(fedBack, "second provider request should carry the tool result").toBeDefined();
+		expect(fedBack!.content.some((block) => block.type === "image" && block.mimeType === "image/png")).toBe(true);
+	});
 });
 
 describe("CuaAgentHarness", () => {
