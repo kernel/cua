@@ -13,6 +13,8 @@ import {
 	type Api,
 	CUA_NAVIGATION_TOOL_NAME,
 	type CuaModelRef,
+	type CuaRuntimeSpec,
+	type CuaSimpleStreamOptions,
 	getCuaEnvApiKey,
 	type Model,
 	resolveCuaRuntimeSpec,
@@ -20,13 +22,11 @@ import {
 	streamSimple,
 } from "@onkernel/cua-ai";
 import type Kernel from "@onkernel/sdk";
-import { createCuaComputerTools } from "./tools";
+import { buildCuaComputerTools } from "./tools";
 import { InternalComputerTranslator, type KernelBrowser } from "./translator/translator";
 
 /** A CUA model reference string or a concrete pi model object. */
 type CuaRuntimeInput = CuaModelRef | Model<Api>;
-
-type CuaRuntimeSpec = ReturnType<typeof resolveCuaRuntimeSpec>;
 
 /**
  * Agent state exposed by {@link CuaAgent}.
@@ -132,14 +132,13 @@ class CuaRuntimeController {
 
 	tools(): AgentTool[] {
 		return [
-			...createCuaComputerTools({
-				browser: this.options.browser,
-				client: this.options.client,
-				toolExecutors: this.runtimeSpec.toolExecutors,
-				coordinateSystem: this.runtimeSpec.coordinateSystem,
-				screenshot: this.runtimeSpec.screenshot,
-				computerUseExtra: this.options.computerUseExtra,
-			}),
+			...buildCuaComputerTools(
+				{
+					toolExecutors: this.runtimeSpec.toolExecutors,
+					computerUseExtra: this.options.computerUseExtra,
+				},
+				this.translator,
+			),
 			...(this.options.extraTools ?? []),
 		];
 	}
@@ -190,7 +189,9 @@ async function getCuaEnvApiKeyAndHeaders(model: Model<Api>): Promise<{ apiKey: s
 export class CuaAgent extends Agent {
 	private readonly runtime: CuaRuntimeController;
 	private readonly ownsSystemPrompt: boolean;
+	private runtimeDirty = false;
 	private stateProxy?: CuaAgentState;
+	private stateProxyTarget?: AgentState;
 
 	constructor(options: CuaAgentOptions) {
 		const {
@@ -213,11 +214,11 @@ export class CuaAgent extends Agent {
 			onPayload,
 		});
 		const wrappedStreamFn: StreamFn = (model, context, streamOptions) => {
-			const optionsWithCuaRuntime = {
+			const optionsWithCuaRuntime: CuaSimpleStreamOptions = {
 				...streamOptions,
 				onPayload: runtime.onPayload(),
 				keepToolNames: runtime.keepToolNames(),
-			} as SimpleStreamOptions & { keepToolNames?: string[] };
+			};
 			return (streamFn ?? streamSimple)(model, context, optionsWithCuaRuntime);
 		};
 
@@ -236,15 +237,19 @@ export class CuaAgent extends Agent {
 		this.runtime = runtime;
 		this.ownsSystemPrompt = initialState.systemPrompt === undefined;
 		/**
-		 * pi calls `prepareNextTurn` between provider requests. Wrapping it lets CUA
-		 * honor any user-provided turn update while also refreshing provider-specific
-		 * defaults if that update changes the model.
+		 * pi's loop only re-reads model/tools/prompt between provider requests
+		 * through `prepareNextTurn`. The wrapper stays pass-through (returning
+		 * `undefined`, i.e. stock pi behavior) until either the user hook returns
+		 * an update or a mid-run model assignment marks the CUA runtime dirty —
+		 * only then is a turn update built from current state.
 		 */
 		this.prepareNextTurn = async (signal: AbortSignal | undefined) => {
 			const update = await prepareNextTurn?.(signal);
 			if (update?.model) {
 				this.applyRuntime(update.model as CuaRuntimeInput);
 			}
+			if (!update && !this.runtimeDirty) return undefined;
+			this.runtimeDirty = false;
 
 			const state = super.state;
 			const context = update?.context ?? {
@@ -271,14 +276,16 @@ export class CuaAgent extends Agent {
 	 * and payload hooks for the selected provider.
 	 */
 	override get state(): CuaAgentState {
-		if (!this.stateProxy) {
-			this.stateProxy = new Proxy(super.state, {
-				set: (target, prop, value, receiver) => {
+		const target = super.state;
+		if (!this.stateProxy || this.stateProxyTarget !== target) {
+			this.stateProxyTarget = target;
+			this.stateProxy = new Proxy(target, {
+				set: (proxied, prop, value, receiver) => {
 					if (prop === "model") {
 						this.applyRuntime(value as CuaRuntimeInput);
 						return true;
 					}
-					return Reflect.set(target, prop, value, receiver);
+					return Reflect.set(proxied, prop, value, receiver);
 				},
 			}) as CuaAgentState;
 		}
@@ -287,6 +294,7 @@ export class CuaAgent extends Agent {
 
 	private applyRuntime(model: CuaRuntimeInput): void {
 		this.runtime.setModel(model);
+		this.runtimeDirty = true;
 		const state = super.state;
 		state.model = this.runtime.model;
 		state.tools = this.runtime.tools();

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0 - 2026-06-12
+
+- Add `CuaSimpleStreamOptions`: pi-ai `SimpleStreamOptions` plus the
+  `keepToolNames` extension the Yutori/Tzafon stream adapters consume, so
+  callers can pass it through `streamSimple` without a cast.
+
 ## 0.2.2 - 2026-06-11
 
 - Add computer-use support for `gpt-5.4-mini`, `gemini-3.1-flash-lite`, `tzafon.northstar-cua-fast-1.6`, and `tzafon.northstar-cua-fast-1.7-experiment`.

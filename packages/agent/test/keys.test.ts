@@ -15,7 +15,7 @@ describe("Kernel key normalization", () => {
 		expect(normalizeKernelKey("f12")).toBe("F12");
 	});
 
-	it("covers Yutori's word-form punctuation and sequential key syntax", () => {
+	it("absorbs word-form punctuation and sequential key syntax models emit", () => {
 		expect(normalizeKernelKeyCombo("ctrl+plus")).toEqual(["Control_L", "plus"]);
 		expect(normalizeKernelKeyCombo("command+backquote")).toEqual(["Super_L", "grave"]);
 		expect(normalizeKernelKeyCombo("option+tab")).toEqual(["Alt_L", "Tab"]);
