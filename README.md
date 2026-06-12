@@ -44,7 +44,7 @@ All of them expect you to:
 packages/
 ├── ai/      # @onkernel/cua-ai    - CUA model catalog + tool schemas + provider adapters (on npm)
 ├── agent/   # @onkernel/cua-agent - CuaAgent/CuaAgentHarness Kernel-browser execution loop (on npm)
-└── cua-cli/ # @onkernel/cua-cli   - the `cua` binary; built on cua-agent + cua-ai
+└── cli/     # @onkernel/cua-cli   - the `cua` binary; built on cua-agent + cua-ai
 ```
 
 **Building your own agent? Start here:** [`packages/agent`](packages/agent)
@@ -75,7 +75,7 @@ flowchart LR
 | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | [`@onkernel/cua-ai`](packages/ai)       | Computer-use model catalog (`getCuaModel`/`listCuaModels`), canonical CUA tool schemas, and provider adapters/runtime specs built on pi-ai. On npm. |
 | [`@onkernel/cua-agent`](packages/agent) | `CuaAgent`/`CuaAgentHarness` classes that execute cua-ai tool calls against a Kernel browser, screenshot loop included. On npm.          |
-| [`@onkernel/cua-cli`](packages/cua-cli) | The `cua` binary: argv parsing, sessions, skills, JSONL output, pi-tui front-end.                                                        |
+| [`@onkernel/cua-cli`](packages/cli)     | The `cua` binary: argv parsing, sessions, skills, JSONL output, pi-tui front-end.                                                        |
 
 ---
 
@@ -161,7 +161,7 @@ end-to-end flow.
 
 ## CLI reference
 
-See [`packages/cua-cli/README.md`](packages/cua-cli/README.md) for the
+See [`packages/cli/README.md`](packages/cli/README.md) for the
 full CLI reference, env-var configuration, and model selection.
 
 Highlights:
@@ -325,7 +325,7 @@ skills/
 packages/
 ├── ai/              # @onkernel/cua-ai — model layer (see packages/ai/README.md)
 ├── agent/           # @onkernel/cua-agent — Kernel-browser execution layer (see packages/agent/README.md)
-└── cua-cli/         # @onkernel/cua-cli — the `cua` binary (see packages/cua-cli/README.md)
+└── cli/             # @onkernel/cua-cli — the `cua` binary (see packages/cli/README.md)
 ```
 
 ---

@@ -4,6 +4,6 @@
     { "path": "./packages/ai" },
     { "path": "./packages/agent" },
     { "path": "./packages/ptywright" },
-    { "path": "./packages/cua-cli" }
+    { "path": "./packages/cli" }
   ]
 }

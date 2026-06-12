@@ -8,7 +8,7 @@
     "packages/ai",
     "packages/agent",
     "packages/ptywright",
-    "packages/cua-cli"
+    "packages/cli"
   ],
   "scripts": {
     "build": "npm run build --workspace @onkernel/cua-ai && tsc -b && npm run build --workspace @onkernel/cua-agent && npm run build:native --workspace @onkernel/ptywright --if-present",

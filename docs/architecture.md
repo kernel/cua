@@ -211,7 +211,7 @@ user prompt
                     └─► assistant text + harness events → TUI / stdout / JSONL
 ```
 
-The CLI's `buildCuaHarness` in `packages/cua-cli/src/harness.ts`:
+The CLI's `buildCuaHarness` in `packages/cli/src/harness.ts`:
 
 1. Resolves the model via `getCuaModel(ref)` / `listCuaModels()` from
    `@onkernel/cua-ai`.
@@ -232,9 +232,9 @@ The CLI's `buildCuaHarness` in `packages/cua-cli/src/harness.ts`:
 
 ```mermaid
 flowchart LR
-  cli["cua-cli/src/cli.ts"]
-  cli --> harness["cua-cli/src/harness.ts (buildCuaHarness)"]
-  harness --> browserMod["cua-cli/src/harness-browser.ts"]
+  cli["cli/src/cli.ts"]
+  cli --> harness["cli/src/harness.ts (buildCuaHarness)"]
+  harness --> browserMod["cli/src/harness-browser.ts"]
   browserMod --> sdk[("@onkernel/sdk")]
   harness --> agentPkg["cua-agent: CuaAgentHarness"]
   agentPkg --> piHarness["pi-agent-core AgentHarness"]
@@ -249,8 +249,8 @@ flowchart LR
   harness --> coding["bash/read/edit/write/... (pi-coding-agent)"]
   harness --> sessions["JsonlSessionRepo (re-exported from cua-agent)"]
   harness --> skillsMod["loadSkills (re-exported from cua-agent)"]
-  cli --> tui["cua-cli/src/tui/main.ts (pi-tui)"]
-  cli --> jsonl["cua-cli/src/output/harness-jsonl.ts"]
+  cli --> tui["cli/src/tui/main.ts (pi-tui)"]
+  cli --> jsonl["cli/src/output/harness-jsonl.ts"]
   pty["ptywright (dev/test only)"] --> tui
 ```
 
