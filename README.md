@@ -110,10 +110,7 @@ mkdir -p ~/.local/bin
 ln -s "$(pwd)/bin/cua" ~/.local/bin/cua
 # make sure ~/.local/bin is on $PATH (most distros already do)
 
-# either set up a config file...
-cua config init                              # interactive: profile name + API keys
-
-# ...or rely on env vars
+# set API keys via env vars
 export OPENAI_API_KEY=sk-...                 # for gpt-5.5
 export ANTHROPIC_API_KEY=sk-ant-...          # for claude-opus-4-7
 export GOOGLE_API_KEY=...                    # for gemini-3-flash-preview
