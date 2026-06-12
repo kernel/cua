@@ -85,12 +85,16 @@ flowchart LR
 git clone https://github.com/kernel/cua
 cd cua
 npm install
-npm run build
 
-# put `cua` on PATH (creates ~/.local/bin/cua → bin/cua):
-mkdir -p ~/.local/bin
-ln -s "$(pwd)/bin/cua" ~/.local/bin/cua
-# make sure ~/.local/bin is on $PATH (most distros already do)
+# run the CLI directly from source (no global install required):
+npx tsx packages/cli/src/cli.ts --help
+
+# if you want `cua` on $PATH from any directory, add a shell function to
+# your rc that pins the repo location while preserving the caller's cwd
+# (so `--out`, transcript bucketing, and `.agents/skills` discovery use
+# the directory you invoked from), e.g. in ~/.bashrc:
+#   CUA_REPO=/absolute/path/to/cua
+#   cua() { "$CUA_REPO/node_modules/.bin/tsx" "$CUA_REPO/packages/cli/src/cli.ts" "$@"; }
 
 # set API keys via env vars
 export OPENAI_API_KEY=sk-...                 # for gpt-5.5
@@ -318,8 +322,6 @@ ln -s "$(pwd)/skills/cua-cli" ~/.agents/skills/cua-cli
 ## Project layout
 
 ```
-bin/
-└── cua              # POSIX wrapper script (symlink into your $PATH)
 skills/
 └── cua-cli/SKILL.md # skill aimed at OTHER agents driving cua via shell
 packages/
