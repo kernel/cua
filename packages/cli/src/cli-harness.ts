@@ -13,15 +13,15 @@ import {
 } from "@onkernel/cua-ai";
 import { parseArgs } from "node:util";
 import { stderr, stdout } from "node:process";
-import type { CuaBrowserHandle } from "./harness-browser.js";
+import type { CuaBrowserHandle } from "./harness-browser";
 import {
 	type ActionRequest,
 	type ActionType,
-} from "./action/prompts.js";
-import { runAction, emitCompact } from "./action/harness-runner.js";
-import { buildCuaHarness } from "./harness.js";
-import { provisionBrowser } from "./harness-browser.js";
-import { DEFAULT_CUA_MODEL_REF, listSupportedModels, resolveCuaModelRef } from "./harness-models.js";
+} from "./action/prompts";
+import { runAction, emitCompact } from "./action/harness-runner";
+import { buildCuaHarness } from "./harness";
+import { provisionBrowser } from "./harness-browser";
+import { DEFAULT_CUA_MODEL_REF, listSupportedModels, resolveCuaModelRef } from "./harness-models";
 import {
 	attachNamedSession,
 	formatRelativeAge,
@@ -32,7 +32,7 @@ import {
 	startNamedSession,
 	stopNamedSession,
 	validateSlug,
-} from "./harness-named-sessions.js";
+} from "./harness-named-sessions";
 import {
 	appendBrowserEntry,
 	createSession,
@@ -42,9 +42,9 @@ import {
 	openSession,
 	readMetadataFromFile,
 	resolveSessionRef,
-} from "./harness-sessions.js";
-import { discoverCuaSkills } from "./harness-skills.js";
-import { runPrint } from "./print.js";
+} from "./harness-sessions";
+import { discoverCuaSkills } from "./harness-skills";
+import { runPrint } from "./print";
 
 const MODELS_HELP = `cua models — list supported -m/--model values
 
@@ -498,7 +498,7 @@ export async function runInteractiveCommand(
 	flags: HarnessCliFlags,
 ): Promise<number> {
 	const runtime = await setupHarnessRuntime(flags);
-	const { runInteractive } = await import("./tui/main.js");
+	const { runInteractive } = await import("./tui/main");
 	try {
 		return await runInteractive({
 			cwd: process.cwd(),

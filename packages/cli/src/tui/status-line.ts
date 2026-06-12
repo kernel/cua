@@ -1,5 +1,5 @@
 import { Text, hyperlink } from "@earendil-works/pi-tui";
-import { colors } from "./themes.js";
+import { colors } from "./themes";
 
 export interface StatusLineState {
 	model: string;

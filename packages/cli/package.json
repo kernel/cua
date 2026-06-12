@@ -5,7 +5,6 @@
   "license": "MIT",
   "type": "module",
   "main": "./dist/cli.js",
-  "types": "./dist/cli.d.ts",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/kernel/cua.git",
@@ -29,9 +28,10 @@
     "node": ">=22.19.0"
   },
   "scripts": {
-    "build": "tsc -b && chmod +x dist/cli.js",
-    "clean": "tsc -b --clean",
-    "test": "vitest --run"
+    "build": "tsdown && chmod +x dist/cli.js",
+    "clean": "tsc -b --clean && rm -rf dist dist-tsc",
+    "test": "vitest --run",
+    "typecheck": "tsc -b"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "0.79.1",
@@ -42,6 +42,7 @@
   },
   "devDependencies": {
     "@onkernel/ptywright": "0.1.0",
+    "tsdown": "^0.22.2",
     "vitest": "^3.2.4"
   }
 }
