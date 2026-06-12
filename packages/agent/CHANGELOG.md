@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.3 - 2026-06-12
+
+- The action translator now consumes the canonical `CuaAction` union with an
+  exhaustive switch. Malformed action shapes fail loudly instead of silently
+  coercing (previously e.g. a click at 0,0); the documented mouse-button
+  coercion to `"left"` is unchanged.
+- `prepareNextTurn` no longer rebuilds the turn context on every turn: it
+  keeps stock pi behavior until a user hook returns an update or a mid-run
+  model assignment requires a refresh.
+- One translator instance per runtime is shared between the executor tools
+  and the provider screenshot capability.
+- The `CuaAgentHarness` README quickstart showcases session-backed turns and
+  mid-session model switching; `computerUseExtra` is documented with its
+  rationale.
+- Update the `@onkernel/cua-ai` dependency to 0.3.0.
+
 ## 0.3.2 - 2026-06-11
 
 - Update the `@onkernel/cua-ai` dependency to 0.2.2.
