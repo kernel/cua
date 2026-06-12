@@ -162,7 +162,7 @@ end-to-end flow.
 ## CLI reference
 
 See [`packages/cua-cli/README.md`](packages/cua-cli/README.md) for the
-full CLI reference, configuration schema, and provider routing rules.
+full CLI reference, env-var configuration, and model selection.
 
 Highlights:
 

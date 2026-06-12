@@ -145,6 +145,13 @@ env-var-based API keys, a `JsonlSessionRepo`, pi skills, and the pi
 coding tools, then renders the result to text, JSONL, or pi-tui.
 
 - `cli.ts` — argv parsing, mode dispatch.
+- `cli-harness.ts` — shared dispatch layer behind `cli.ts`; exports
+  `runModelsSubcommand`, `runSessionSubcommand`,
+  `runPrintCommand`, `runActionCommand`, and `runInteractiveCommand`.
+  The harness-driven entry points share `setupHarnessRuntime`, which
+  resolves the model, browser, session, and skills before calling
+  `buildCuaHarness` and routing into `print.ts`, `action/`, or
+  `tui/main.ts`.
 - `harness.ts` — `buildCuaHarness(opts)`: one assembly function that
   produces the `CuaAgentHarness` shared by `--print`, action
   subcommands, and the interactive TUI.

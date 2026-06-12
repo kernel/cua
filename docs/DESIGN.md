@@ -62,13 +62,12 @@ CUA model refs should be provider-qualified, for example
 persisted config, and transcripts unambiguous. The SDK should not export a
 default CUA model.
 
-## Follow-up Direction
+## Current Surface
 
-The current additive packages are intended to become the public SDK surface.
-The expected follow-up work is:
-
-- migrate `@onkernel/cua-cli` to consume `@onkernel/cua-ai` and
-  `@onkernel/cua-agent`
-- remove the old provider-specific packages
-- remove the old translator package once the new internal translator fully
-  covers the needed behavior
+`@onkernel/cua-ai`, `@onkernel/cua-agent`, and `@onkernel/cua-cli` are the
+public SDK surface. `@onkernel/cua-cli` consumes both `@onkernel/cua-ai` (for
+the CUA model catalog and API-key helpers) and `@onkernel/cua-agent` (for the
+`CuaAgentHarness` and the re-exported pi-agent-core primitives). The legacy
+provider-specific packages and the public translator package have been removed
+from the workspace; provider quirks now live inside `@onkernel/cua-ai`'s
+internal providers and `@onkernel/cua-agent`'s tool translator.
