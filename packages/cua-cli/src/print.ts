@@ -4,7 +4,7 @@ import { stderr, stdout } from "node:process";
 import { captureScreenshot } from "./harness-browser";
 import type { CuaBrowserHandle } from "./harness-browser";
 import { attachHarnessJsonlSink } from "./output/harness-jsonl";
-import { parseSkillInvocation } from "./harness-skills";
+import { expandUnknownSkillInvocation, formatSkillInvocationPrompt, parseSkillInvocation } from "./harness-skills";
 
 export interface RunPrintOptions {
 	harness: CuaAgentHarness;
@@ -59,13 +59,21 @@ export async function runPrint(opts: RunPrintOptions): Promise<number> {
 	let exitCode = 0;
 	try {
 		const invocation = parseSkillInvocation(opts.prompt, opts.skills ?? []);
+		const images = await maybeInitialScreenshot(opts);
 		let assistant;
 		if (invocation?.skill) {
 			if (opts.verbose) stderr.write(`[cua] expanded /skill:${invocation.skill.name}\n`);
-			assistant = await opts.harness.skill(invocation.skill.name, invocation.remainder || undefined);
+			if (images) {
+				assistant = await opts.harness.prompt(
+					formatSkillInvocationPrompt(invocation.skill, invocation.remainder || undefined),
+					{ images },
+				);
+			} else {
+				assistant = await opts.harness.skill(invocation.skill.name, invocation.remainder || undefined);
+			}
 		} else {
-			const images = await maybeInitialScreenshot(opts);
-			assistant = await opts.harness.prompt(opts.prompt, images ? { images } : undefined);
+			const prompt = invocation ? expandUnknownSkillInvocation(invocation.name, invocation.remainder) : opts.prompt;
+			assistant = await opts.harness.prompt(prompt, images ? { images } : undefined);
 		}
 		if (assistant.stopReason === "error" || assistant.stopReason === "aborted") {
 			throw new Error(assistant.errorMessage ?? `agent stopped with ${assistant.stopReason}`);

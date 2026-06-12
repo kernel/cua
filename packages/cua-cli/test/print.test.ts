@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import type { Skill } from "@onkernel/cua-agent";
 import { runPrint } from "../src/print";
 import { buildTestHarness, type TestHarnessFixture } from "./fixtures/harness";
 
@@ -53,6 +54,45 @@ describe("runPrint", () => {
 		expect(exitCode).toBe(1);
 	});
 
+	it("captures the initial screenshot for /skill prompts on a fresh session", async () => {
+		const skill: Skill = {
+			name: "demo-skill",
+			description: "demo skill for tests",
+			content: "Do the thing.",
+			filePath: "/tmp/demo-skill/SKILL.md",
+		};
+		fixture = await buildTestHarness({
+			turns: [
+				{
+					steps: [{ type: "text", text: "ok" }],
+				},
+			],
+			skills: [skill],
+		});
+		const lines: string[] = [];
+		const exitCode = await runPrintIntoBuffer(fixture, "/skill:demo-skill check the page", lines, [skill]);
+		expect(exitCode).toBe(0);
+		expect(fixture.kernel.screenshots).toBe(1);
+	});
+
+	it("expands unknown /skill commands into a missing-skill prompt", async () => {
+		fixture = await buildTestHarness({
+			turns: [
+				{
+					steps: [{ type: "text", text: "ok" }],
+				},
+			],
+		});
+		const lines: string[] = [];
+		const exitCode = await runPrintIntoBuffer(fixture, "/skill:missing do thing", lines);
+		expect(exitCode).toBe(0);
+		const context = fixture.provider.lastContext();
+		const promptText = lastUserPromptText(context);
+		expect(promptText).toContain('(no skill named "missing" was found; pretending the user typed: do thing)');
+		expect(promptText).toContain("\n\ndo thing");
+		expect(promptText).not.toContain("/skill:missing");
+	});
+
 	it("emits tool_call and tool_result envelopes for tool turns in jsonl mode", async () => {
 		fixture = await buildTestHarness({
 			turns: [
@@ -86,6 +126,7 @@ async function runPrintIntoBuffer(
 	fixture: TestHarnessFixture,
 	prompt: string,
 	out: string[],
+	skills?: Skill[],
 ): Promise<number> {
 	const stdoutWrite = process.stdout.write.bind(process.stdout);
 	const stderrWrite = process.stderr.write.bind(process.stderr);
@@ -107,6 +148,7 @@ async function runPrintIntoBuffer(
 			modelRef: "openai:gpt-5.5",
 			provider: "openai",
 			prompt,
+			skills,
 		});
 		out.push(...stdoutChunks);
 		return code;
@@ -114,6 +156,27 @@ async function runPrintIntoBuffer(
 		process.stdout.write = stdoutWrite;
 		process.stderr.write = stderrWrite;
 	}
+}
+
+function lastUserPromptText(context: unknown): string {
+	if (!context || typeof context !== "object") return "";
+	const messages = (context as { messages?: unknown }).messages;
+	if (!Array.isArray(messages)) return "";
+	for (let i = messages.length - 1; i >= 0; i -= 1) {
+		const message = messages[i];
+		if (!message || typeof message !== "object") continue;
+		if ((message as { role?: unknown }).role !== "user") continue;
+		const content = (message as { content?: unknown }).content;
+		if (typeof content === "string") return content;
+		if (!Array.isArray(content)) return "";
+		for (const block of content) {
+			if (!block || typeof block !== "object") continue;
+			if ((block as { type?: unknown }).type !== "text") continue;
+			const text = (block as { text?: unknown }).text;
+			if (typeof text === "string") return text;
+		}
+	}
+	return "";
 }
 
 async function runPrintAsJsonl(

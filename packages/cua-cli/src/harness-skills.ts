@@ -45,11 +45,30 @@ export async function discoverCuaSkills(opts: DiscoverSkillsOptions): Promise<Di
 export function parseSkillInvocation(
 	text: string,
 	skills: Skill[],
-): { skill?: Skill; remainder: string } | undefined {
+): { name: string; skill?: Skill; remainder: string } | undefined {
 	const trimmed = text.trim();
 	const match = trimmed.match(/^\/skill:([A-Za-z0-9_\-.]+)\s*(.*)$/);
 	if (!match) return undefined;
 	const [, name, rest] = match;
 	const skill = skills.find((s) => s.name === name);
-	return { skill, remainder: (rest ?? "").trim() };
+	return { name, skill, remainder: (rest ?? "").trim() };
+}
+
+export function expandUnknownSkillInvocation(name: string, remainder: string): string {
+	return `(no skill named "${name}" was found; pretending the user typed: ${remainder || "(empty)"})\n\n${remainder}`;
+}
+
+export function formatSkillInvocationPrompt(skill: Skill, additionalInstructions?: string): string {
+	const skillBlock =
+		`<skill name="${skill.name}" location="${skill.filePath}">\n` +
+		`References are relative to ${dirnameEnvPath(skill.filePath)}.\n\n` +
+		`${skill.content}\n` +
+		"</skill>";
+	return additionalInstructions ? `${skillBlock}\n\n${additionalInstructions}` : skillBlock;
+}
+
+function dirnameEnvPath(path: string): string {
+	const normalized = path.replace(/\/+$/, "");
+	const slashIndex = normalized.lastIndexOf("/");
+	return slashIndex <= 0 ? "/" : normalized.slice(0, slashIndex);
 }
