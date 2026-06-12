@@ -81,7 +81,7 @@ function formatToolCall(name: string, args: unknown): string {
 			const more = actions.length > 4 ? colors.dim(` +${actions.length - 4} more`) : "";
 			return parts.join(colors.dim(" → ")) + more;
 		}
-		case "computer_navigation": {
+		case "computer_use_extra": {
 			const action = typeof obj.action === "string" ? obj.action : "?";
 			if (action === "goto" && typeof obj.url === "string") return `goto(${obj.url})`;
 			return action;

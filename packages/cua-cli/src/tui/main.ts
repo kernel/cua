@@ -3,6 +3,7 @@ import {
 	type AgentMessage,
 	type CuaAgentHarness,
 	estimateContextTokens,
+	formatSkillInvocation,
 	type Session,
 	type Skill,
 	type ThinkingLevel,
@@ -19,9 +20,9 @@ import {
 	TUI,
 	TUI_KEYBINDINGS,
 } from "@earendil-works/pi-tui";
-import type { Api, ImageContent, Model } from "@onkernel/cua-ai";
-import { stderr } from "node:process";
+import type { ImageContent, Model } from "@onkernel/cua-ai";
 import { captureScreenshot, type CuaBrowserHandle } from "../harness-browser";
+import { resolveCuaModelRef } from "../harness-models";
 import { openTuiDebugLog } from "./debug-log";
 import { applyAndSummarizeImageProtocol } from "./diagnostics";
 import { type AssistantBuffer, MessageList } from "./message-list";
@@ -40,7 +41,6 @@ export interface InteractiveOptions {
 	/** CUA model ref currently active. Used for the status line and `/model` default. */
 	modelRef: string;
 	provider: string;
-	thinkingLevel?: ThinkingLevel;
 	initialPrompt?: string;
 	/** Image protocol override: kitty | iterm2 | none | auto (default: auto). */
 	imageProtocol?: string;
@@ -67,7 +67,7 @@ export async function runInteractive(opts: InteractiveOptions): Promise<number> 
 	const debug = opts.debugTui ? openTuiDebugLog() : undefined;
 	const initialModel = opts.harness.getModel();
 	const initialThinking = opts.harness.getThinkingLevel();
-	const initialContextWindow = (initialModel as Model<Api>).contextWindow ?? undefined;
+	const initialContextWindow = initialModel.contextWindow ?? undefined;
 	debug?.log("interactive_init", {
 		model: opts.modelRef,
 		browserSession: opts.browserHandle.browser.session_id,
@@ -100,7 +100,7 @@ export async function runInteractive(opts: InteractiveOptions): Promise<number> 
 	const screenshot = new ScreenshotWidget();
 	const liveUrl = opts.browserHandle.browser.browser_live_view_url;
 	const status = new StatusLine({
-		model: opts.modelRef,
+		model: modelLabel(initialModel),
 		browserSession: opts.browserHandle.browser.session_id,
 		liveUrl,
 	});
@@ -249,7 +249,11 @@ export async function runInteractive(opts: InteractiveOptions): Promise<number> 
 				return;
 			}
 			case "model_update": {
-				footer.update({ model: modelLabel(event.model), contextWindow: (event.model as Model<Api>).contextWindow });
+				footer.update({
+					provider: event.model.provider,
+					model: modelLabel(event.model),
+					contextWindow: event.model.contextWindow,
+				});
 				status.update({ model: modelLabel(event.model) });
 				requestRender("model_update");
 				return;
@@ -300,7 +304,17 @@ export async function runInteractive(opts: InteractiveOptions): Promise<number> 
 				}
 				messages.addNotice(`invoking /skill:${skill.name}`);
 				requestRender("skill_invocation");
-				await opts.harness.skill(skill.name, parsed.remainder || undefined);
+				const skillRemainder = parsed.remainder || undefined;
+				const skillImages = await maybeInitialScreenshot(opts, firstPromptSent);
+				firstPromptSent = true;
+				if (skillImages) {
+					// `harness.skill` has no images option; fall back to `prompt`
+					// with the formatted skill invocation so the first turn sees
+					// the browser screenshot.
+					await opts.harness.prompt(formatSkillInvocation(skill, skillRemainder), { images: skillImages });
+				} else {
+					await opts.harness.skill(skill.name, skillRemainder);
+				}
 				return;
 			}
 			const images = await maybeInitialScreenshot(opts, firstPromptSent);
@@ -377,11 +391,6 @@ export async function runInteractive(opts: InteractiveOptions): Promise<number> 
 		removeListener();
 		unsubscribe();
 		tui.stop();
-		try {
-			await opts.browserHandle.close();
-		} catch (err) {
-			stderr.write(`[cua] cleanup warning: ${(err as Error).message}\n`);
-		}
 		debug?.close({
 			fullRedraws: tui.fullRedraws,
 			columns: terminal.columns,
@@ -397,7 +406,7 @@ async function waitForExit(shouldExit: () => boolean, isBusy: () => boolean): Pr
 	}
 }
 
-function modelLabel(model: Model<Api> | undefined): string {
+function modelLabel(model: Model<any> | undefined): string {
 	if (!model) return "";
 	return model.id;
 }
@@ -447,11 +456,16 @@ async function applyModelCommand(
 		return;
 	}
 	try {
-		await opts.harness.setModel(ref as never);
+		const resolved = resolveCuaModelRef(ref);
+		await opts.harness.setModel(resolved);
 		const model = opts.harness.getModel();
-		footer.update({ model: modelLabel(model), contextWindow: (model as Model<Api>).contextWindow });
+		footer.update({
+			provider: model.provider,
+			model: modelLabel(model),
+			contextWindow: model.contextWindow,
+		});
 		status.update({ model: modelLabel(model) });
-		messages.addNotice(`model → ${ref}`);
+		messages.addNotice(`model → ${resolved}`);
 	} catch (err) {
 		messages.addError((err as Error).message);
 	}
@@ -484,8 +498,9 @@ function isThinkingLevel(value: string): value is ThinkingLevel {
 async function applyCompactCommand(opts: InteractiveOptions, messages: MessageList): Promise<void> {
 	messages.addNotice("compacting…");
 	try {
-		const result = await opts.harness.compact();
-		messages.addNotice(`compacted ${result.tokensBefore} tokens`);
+		// The `session_compact` harness event posts the final
+		// "compacted N tokens" notice; emitting it here too would duplicate.
+		await opts.harness.compact();
 	} catch (err) {
 		messages.addError((err as Error).message);
 	}

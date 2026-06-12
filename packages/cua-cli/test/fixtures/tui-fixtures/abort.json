@@ -4,16 +4,6 @@
   "turns": [
     {
       "steps": [
-        { "type": "text", "text": "fixture response", "chunkSize": 8, "chunkMs": 5 }
-      ]
-    },
-    {
-      "steps": [
-        { "type": "text", "text": "multiline ok" }
-      ]
-    },
-    {
-      "steps": [
         { "type": "text", "text": "working...", "chunkSize": 5, "chunkMs": 10 },
         { "type": "wait_abort" }
       ]
@@ -21,11 +11,6 @@
     {
       "steps": [
         { "type": "text", "text": "fixture response" }
-      ]
-    },
-    {
-      "steps": [
-        { "type": "error", "message": "fixture provider failed" }
       ]
     }
   ]

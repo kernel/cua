@@ -499,22 +499,29 @@ export async function runInteractiveCommand(
 ): Promise<number> {
 	const runtime = await setupHarnessRuntime(flags);
 	const { runInteractive } = await import("./tui/main");
-	return await runInteractive({
-		cwd: process.cwd(),
-		harness: runtime.harness,
-		browserHandle: runtime.handle,
-		session: runtime.session,
-		skills: runtime.skills,
-		modelRef: runtime.modelRef,
-		provider: runtime.provider,
-		thinkingLevel: mapThinkingLevel(flags.thinking),
-		initialPrompt: initialPrompt || undefined,
-		imageProtocol: flags.imageProtocol,
-		debugTui: flags.debugTui,
-		resumed: runtime.resolved?.resumed === true,
-		transcriptPath: runtime.resolved?.transcriptPath,
-		skipInitialScreenshot: runtime.resolved?.resumed === true,
-	});
+	try {
+		return await runInteractive({
+			cwd: process.cwd(),
+			harness: runtime.harness,
+			browserHandle: runtime.handle,
+			session: runtime.session,
+			skills: runtime.skills,
+			modelRef: runtime.modelRef,
+			provider: runtime.provider,
+			initialPrompt: initialPrompt || undefined,
+			imageProtocol: flags.imageProtocol,
+			debugTui: flags.debugTui,
+			resumed: runtime.resolved?.resumed === true,
+			transcriptPath: runtime.resolved?.transcriptPath,
+			skipInitialScreenshot: runtime.resolved?.resumed === true,
+		});
+	} finally {
+		try {
+			await runtime.handle.close();
+		} catch (err) {
+			stderr.write(`[cua] cleanup warning: ${(err as Error).message}\n`);
+		}
+	}
 }
 
 /** Run a one-shot action subcommand through the new harness wiring. */

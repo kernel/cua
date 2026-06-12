@@ -2,6 +2,7 @@ import { describe, test } from "vitest";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
 import { strict as assert } from "node:assert";
+import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 
 /**
@@ -9,22 +10,29 @@ import { dirname, resolve } from "node:path";
  * below the real {@link CuaAgentHarness}. The runner script ({@link tuiRunnerPath})
  * registers the scripted provider, assembles the harness via the production
  * {@link buildCuaHarness}, and starts {@link runInteractive}. Each test case
- * exercises one ptywright scenario from the legacy `tui/testing/fixture.test.ts`
- * suite.
+ * spawns a fresh process with its own per-scenario fixture JSON so the
+ * scripted provider's sequential turn replay never crosses scenarios.
  *
- * ptywright requires a native ghostty-vt binding (built via Zig). If that
- * binding has not been built yet the suite is skipped with a clear message
- * instead of failing the broader vitest run.
+ * ptywright requires a native ghostty-vt binding (built via Zig). When that
+ * binding is missing the suite is skipped by default; set PTYWRIGHT_REQUIRED=1
+ * (CI uses this) to turn the silent skip into a failure.
  */
 
 const tuiRunnerPath = fileURLToPath(new URL("./fixtures/tui-fixture-runner.ts", import.meta.url));
-const tsxCliPath = fileURLToPath(new URL("../node_modules/.bin/tsx", import.meta.url));
-const fixtureJson = fileURLToPath(new URL("./fixtures/tui-fixtures/basic.json", import.meta.url));
+const require = createRequire(import.meta.url);
+const tsxCliPath = require.resolve("tsx/cli");
+const fixtureDir = fileURLToPath(new URL("./fixtures/tui-fixtures/", import.meta.url));
 const cwd = fileURLToPath(new URL("../", import.meta.url));
 
 const ptywrightDist = fileURLToPath(new URL("../../ptywright/dist/index.js", import.meta.url));
 const ptywrightNative = resolve(dirname(ptywrightDist), "..", "native", "build", "Release", "ptywright_native.node");
 const ptywrightAvailable = existsSync(ptywrightNative);
+
+if (!ptywrightAvailable && process.env.PTYWRIGHT_REQUIRED) {
+	throw new Error(
+		`ptywright native binding not found at ${ptywrightNative}; build with 'npm run build --workspace @onkernel/ptywright' or unset PTYWRIGHT_REQUIRED`,
+	);
+}
 
 const suite = ptywrightAvailable ? describe : describe.skip;
 const WAIT_MS = 15_000;
@@ -32,7 +40,7 @@ const WAIT_MS = 15_000;
 suite("TUI ptywright scenarios", () => {
 	test("streams assistant text into the message list", async (ctx) => {
 		const { spawnFixture, exitFixture, waitForFixtureReady } = await loadPtywrightHelpers();
-		const session = spawnFixture();
+		const session = spawnFixture("streaming.json");
 		ctx.onTestFinished(() => session.close());
 
 		await waitForFixtureReady(session);
@@ -48,7 +56,7 @@ suite("TUI ptywright scenarios", () => {
 
 	test("keeps multiline drafts left aligned", async (ctx) => {
 		const { spawnFixture, exitFixture, waitForFixtureReady, KeyEnter } = await loadPtywrightHelpers();
-		const session = spawnFixture();
+		const session = spawnFixture("multiline.json");
 		ctx.onTestFinished(() => session.close());
 
 		await waitForFixtureReady(session);
@@ -69,7 +77,7 @@ suite("TUI ptywright scenarios", () => {
 
 	test("aborts a running turn with ctrl+c and recovers on the next prompt", async (ctx) => {
 		const { spawnFixture, exitFixture, waitForFixtureReady, KeyCtrlC } = await loadPtywrightHelpers();
-		const session = spawnFixture();
+		const session = spawnFixture("abort.json");
 		ctx.onTestFinished(() => session.close());
 
 		await waitForFixtureReady(session);
@@ -87,7 +95,7 @@ suite("TUI ptywright scenarios", () => {
 
 	test("renders assistant errors as error notices", async (ctx) => {
 		const { spawnFixture, exitFixture, waitForFixtureReady } = await loadPtywrightHelpers();
-		const session = spawnFixture();
+		const session = spawnFixture("error.json");
 		ctx.onTestFinished(() => session.close());
 
 		await waitForFixtureReady(session);
@@ -110,10 +118,10 @@ async function loadPtywrightHelpers() {
 	const ptywright = await import("@onkernel/ptywright");
 	const { KeyCtrlC, KeyEnter, spawnSession } = ptywright;
 
-	const spawnFixture = () =>
+	const spawnFixture = (fixtureFile: string) =>
 		spawnSession({
-			command: tsxCliPath,
-			args: [tuiRunnerPath, fixtureJson],
+			command: process.execPath,
+			args: [tsxCliPath, tuiRunnerPath, resolve(fixtureDir, fixtureFile)],
 			cwd,
 			cols: 160,
 			rows: 40,

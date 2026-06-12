@@ -6,6 +6,7 @@
  * the interactive TUI.
  */
 import { InMemorySessionRepo } from "@onkernel/cua-agent";
+import type { CuaModelRef } from "@onkernel/cua-ai";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { buildCuaHarness } from "../../src/harness";
@@ -46,7 +47,7 @@ async function main(): Promise<void> {
 		client: kernel.client,
 		browser: kernel.browser,
 		session,
-		model: modelRef as never,
+		model: modelRef as CuaModelRef,
 		skills: [],
 		extraTools: [],
 		getApiKeyAndHeaders: async () => ({ apiKey: "fixture-key" }),
