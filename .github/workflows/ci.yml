@@ -84,6 +84,8 @@ jobs:
           key: ptywright-${{ runner.os }}-${{ hashFiles('packages/ptywright/GHOSTTY_UPSTREAM', 'packages/ptywright/native/**', 'packages/ptywright/scripts/**') }}
       - run: npm run build --workspace @onkernel/cua-ai
       - run: npm run build --workspace @onkernel/cua-agent
+      - name: Typecheck workspace
+        run: npx tsc -b
       - name: Build ptywright (native binding)
         run: npm run build --workspace @onkernel/ptywright
       - name: CLI unit tests
