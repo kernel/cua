@@ -2,9 +2,19 @@
   "name": "@onkernel/cua-cli",
   "version": "0.1.0",
   "description": "Kernel-cloud-browser computer-use TUI built on @onkernel/cua-agent and pi-tui",
+  "license": "MIT",
   "type": "module",
   "main": "./dist/cli.js",
   "types": "./dist/cli.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kernel/cua.git",
+    "directory": "packages/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/kernel/cua/issues"
+  },
+  "homepage": "https://github.com/kernel/cua/tree/main/packages/cli#readme",
   "bin": {
     "cua": "./dist/cli.js"
   },
@@ -12,6 +22,12 @@
     "dist",
     "README.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
   "scripts": {
     "build": "tsc -b && chmod +x dist/cli.js",
     "clean": "tsc -b --clean",
