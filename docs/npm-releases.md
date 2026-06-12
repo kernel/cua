@@ -23,10 +23,10 @@ Configure each package on npm with a GitHub Actions trusted publisher:
 The same configuration can be created from the npm CLI:
 
 ```sh
-npm install -g npm@^11.10.0
-npm trust github @onkernel/cua-ai --repo kernel/cua --file release-cua-ai.yml
-npm trust github @onkernel/cua-agent --repo kernel/cua --file release-cua-agent.yml
-npm trust github @onkernel/cua-cli --repo kernel/cua --file release-cua-cli.yml
+npm install -g npm@^11.17.0
+npm trust github @onkernel/cua-ai --repo kernel/cua --file release-cua-ai.yml --allow-publish
+npm trust github @onkernel/cua-agent --repo kernel/cua --file release-cua-agent.yml --allow-publish
+npm trust github @onkernel/cua-cli --repo kernel/cua --file release-cua-cli.yml --allow-publish
 ```
 
 npm requires packages to exist before a trusted publisher can be configured. If
@@ -104,8 +104,8 @@ Publishing access → Add trusted publisher) using the row from the
 [trusted publishing setup](#trusted-publishing-setup) table, or from the CLI:
 
 ```sh
-npm install -g npm@^11.10.0
-npm trust github @onkernel/cua-cli --repo kernel/cua --file release-cua-cli.yml
+npm install -g npm@^11.17.0
+npm trust github @onkernel/cua-cli --repo kernel/cua --file release-cua-cli.yml --allow-publish
 ```
 
 From `0.1.1` onward, bump `packages/cli/package.json` on `main`, then tag and
