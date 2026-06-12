@@ -10,13 +10,17 @@ coding tools for workspace access.
 ## Install (from the monorepo)
 
 ```bash
+# from the repo root:
 npm install
 # run directly from source via tsx (no global install required):
 npx tsx packages/cli/src/cli.ts --help
 
-# optional: pin a shell function in your rc so `cua` works from any cwd:
+# optional: pin a shell function in your rc so `cua` works from any cwd
+# while preserving the caller's directory (so `--out`, transcript
+# bucketing, and `.agents/skills` discovery use the directory you
+# invoked from):
 #   CUA_REPO=/absolute/path/to/cua
-#   cua() { (cd "$CUA_REPO" && npx tsx packages/cli/src/cli.ts "$@"); }
+#   cua() { "$CUA_REPO/node_modules/.bin/tsx" "$CUA_REPO/packages/cli/src/cli.ts" "$@"; }
 ```
 
 ## Usage

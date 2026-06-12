@@ -202,8 +202,6 @@ Strictly ordered; each PR merges before the next starts.
   update root `package.json` workspaces, root tsconfig references, CI, README
   workspace table + mermaid diagram, and any references under `docs/` and
   `skills/`.
-- Out of scope (manual follow-up, requires npm publish rights):
-  `npm deprecate` of the published `@onkernel/cua-*` provider packages.
 - Acceptance: clean `npm install` + build + tests from a fresh checkout.
 
 ## Manual follow-ups after the migration

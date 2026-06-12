@@ -90,9 +90,11 @@ npm install
 npx tsx packages/cli/src/cli.ts --help
 
 # if you want `cua` on $PATH from any directory, add a shell function to
-# your rc that pins the repo location, e.g. in ~/.bashrc:
+# your rc that pins the repo location while preserving the caller's cwd
+# (so `--out`, transcript bucketing, and `.agents/skills` discovery use
+# the directory you invoked from), e.g. in ~/.bashrc:
 #   CUA_REPO=/absolute/path/to/cua
-#   cua() { (cd "$CUA_REPO" && npx tsx packages/cli/src/cli.ts "$@"); }
+#   cua() { "$CUA_REPO/node_modules/.bin/tsx" "$CUA_REPO/packages/cli/src/cli.ts" "$@"; }
 
 # set API keys via env vars
 export OPENAI_API_KEY=sk-...                 # for gpt-5.5
