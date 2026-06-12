@@ -10,7 +10,6 @@ import {
 	runSessionSubcommand as runSessionSubcommandHarness,
 	type HarnessCliFlags,
 } from "./cli-harness";
-import * as configMod from "./config";
 import { DEFAULT_CUA_MODEL_REF } from "./harness-models";
 
 const HELP = `cua — Kernel-cloud-browser computer-use agent
@@ -28,7 +27,6 @@ Usage:
   cua do "<instruction>"
   cua models [-p provider]
   cua session start [name] | stop <name> | list | show <name>
-  cua config init|show
 
 Options:
   -p, --print                    Run a single prompt and exit
@@ -43,7 +41,6 @@ Options:
                                    yutori:    yutori:n1.5-latest
       --thinking <level>         Thinking level: off | minimal | low | medium | high | xhigh
                                  (default: low; applies to providers that support it)
-      --config-profile <p>       Legacy TOML config profile to load (only used by \`cua config show\`)
       --profile <name|id>        Kernel browser profile to load
       --profile-no-save-changes  Do not persist changes back to the profile
       --browser-timeout <s>      Browser inactivity timeout in seconds (default 300)
@@ -69,18 +66,19 @@ Options:
   -h, --help                     Show this help
 
 Environment:
-  OPENAI_API_KEY        Overrides the profile's OpenAI key
-  ANTHROPIC_API_KEY     Overrides the profile's Anthropic key
-  GOOGLE_API_KEY        Overrides the profile's Google (Gemini) key
+  KERNEL_API_KEY        Kernel API key (required)
+  OPENAI_API_KEY        OpenAI API key (required when -m openai:…)
+  ANTHROPIC_API_KEY     Anthropic API key (required when -m anthropic:…)
+  GOOGLE_API_KEY        Google API key (required when -m google:…)
   GEMINI_API_KEY        Alias for GOOGLE_API_KEY
-  TZAFON_API_KEY        Overrides the profile's Tzafon key
-  YUTORI_API_KEY        Overrides the profile's Yutori key
-  KERNEL_API_KEY        Overrides the profile's Kernel key
+  TZAFON_API_KEY        Tzafon API key (required when -m tzafon:…)
+  YUTORI_API_KEY        Yutori API key (required when -m yutori:…)
+  KERNEL_BASE_URL       Override Kernel base URL
   OPENAI_BASE_URL       Override OpenAI base URL
   ANTHROPIC_BASE_URL    Override Anthropic base URL
   GOOGLE_BASE_URL       Override Google base URL
+  TZAFON_BASE_URL       Override Tzafon base URL
   YUTORI_BASE_URL       Override Yutori base URL
-  KERNEL_BASE_URL       Override Kernel base URL
   XDG_DATA_HOME         Sessions are stored under \$XDG_DATA_HOME/cua/sessions
                         (defaults to ~/.local/share/cua/sessions)
   CUA_IMAGE_PROTOCOL    Force inline image protocol (\`kitty\`|\`iterm2\`|\`none\`|\`auto\`)
@@ -100,7 +98,6 @@ interface CliFlags {
 	jsonlIncludeImages: boolean;
 	model?: string;
 	thinking?: string;
-	configProfile?: string;
 	browserProfile?: string;
 	browserTimeout?: number;
 	maxSteps?: number;
@@ -129,7 +126,6 @@ function parseCliArgs(argv: string[]): CliFlags {
 				verbose: { type: "boolean", short: "v", default: false },
 				model: { type: "string", short: "m" },
 				thinking: { type: "string" },
-				"config-profile": { type: "string" },
 				profile: { type: "string" },
 				"profile-no-save-changes": { type: "boolean", default: false },
 				"browser-timeout": { type: "string" },
@@ -182,7 +178,6 @@ function parseCliArgs(argv: string[]): CliFlags {
 		debugTui: !!parsed.values["debug-tui"],
 		model: parsed.values.model as string | undefined,
 		thinking: parsed.values.thinking as string | undefined,
-		configProfile: parsed.values["config-profile"] as string | undefined,
 		browserProfile: parsed.values.profile as string | undefined,
 		browserTimeout: Number.isFinite(browserTimeout) ? browserTimeout : undefined,
 		maxSteps: Number.isFinite(maxSteps) ? maxSteps : undefined,
@@ -225,25 +220,6 @@ function toHarnessFlags(flags: CliFlags): HarnessCliFlags {
 	};
 }
 
-async function runConfigSubcommand(args: string[], profile?: string): Promise<number> {
-	const sub = args[0];
-	if (!sub || sub === "help" || sub === "--help" || sub === "-h") {
-		stdout.write("cua config init|show\n");
-		return 0;
-	}
-	if (sub === "init") {
-		await configMod.init();
-		return 0;
-	}
-	if (sub === "show") {
-		const text = await configMod.show(profile);
-		stdout.write(text);
-		return 0;
-	}
-	stderr.write(`unknown config subcommand: ${sub}\n`);
-	return 2;
-}
-
 const SUBCOMMANDS = new Set(["open", "click", "type", "press", "observe", "url", "screenshot", "do"]);
 
 export async function main(argv: string[]): Promise<number> {
@@ -266,15 +242,6 @@ export async function main(argv: string[]): Promise<number> {
 
 	const positionals = flags.positionals;
 	const first = positionals[0];
-
-	if (first === "config") {
-		try {
-			return await runConfigSubcommand(positionals.slice(1), flags.configProfile);
-		} catch (err) {
-			stderr.write(`config error: ${(err as Error).message}\n`);
-			return 2;
-		}
-	}
 
 	if (first === "session") {
 		try {

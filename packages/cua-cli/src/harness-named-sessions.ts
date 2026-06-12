@@ -7,9 +7,10 @@ import { createKernelClient, resolveProfileId } from "./harness-browser";
 
 /**
  * Named sessions: durable, slug-keyed pointers to a Kernel cloud browser
- * session that can be reused across `cua` invocations. The metadata file
- * format and path are preserved from the legacy implementation; only the
- * Kernel calls move from `cua-translator.browserSession` to the SDK.
+ * session that can be reused across `cua` invocations (e.g. `cua -s login
+ * open ...` then `cua -s login click ...`). The metadata file lives under
+ * `$XDG_DATA_HOME/cua/named-sessions/<name>.json`; the browser itself is
+ * server-side on Kernel.
  */
 
 export interface NamedSessionMetadata {
@@ -18,7 +19,6 @@ export interface NamedSessionMetadata {
 	live_url?: string;
 	profile_id?: string;
 	transcript_path?: string;
-	config_profile?: string;
 	created_at: number;
 }
 
@@ -95,7 +95,6 @@ export interface StartNamedSessionOptions {
 	name: string;
 	apiKey: string;
 	baseUrl?: string;
-	configProfile?: string;
 	browserTimeoutSeconds?: number;
 	/** Profile id or name (created if missing). Same semantics as `--profile`. */
 	profileSelector?: string;
@@ -139,7 +138,6 @@ export async function startNamedSession(opts: StartNamedSessionOptions): Promise
 		kernel_session_id: browser.session_id,
 		live_url: browser.browser_live_view_url,
 		profile_id: profileId,
-		config_profile: opts.configProfile,
 		created_at: Date.now(),
 	};
 	const metadataPath = await writeNamedSession(meta);

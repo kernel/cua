@@ -33,8 +33,7 @@ function looksLikeProfileId(selector: string): boolean {
 /**
  * Resolve a `--profile <name|id>` selector to a concrete profile id.
  * Looks up by id first; if the API reports not-found and the selector does
- * not look like a CUID2 id, the profile is created with that name (same
- * semantics as the legacy `cua-translator.browserSession.open` path).
+ * not look like a CUID2 id, the profile is created with that name.
  */
 export async function resolveProfileId(client: Kernel, selector: string): Promise<string> {
 	const trimmed = selector.trim();

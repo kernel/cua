@@ -1,14 +1,11 @@
 # `@onkernel/cua-cli`
 
 The CLI / TUI binary for the [`cua`](../../README.md) monorepo. Wires
-[`@onkernel/cua-translator`](../cua-translator),
-[`@onkernel/cua-openai`](../cua-openai),
-[`@onkernel/cua-anthropic`](../cua-anthropic), and
-[`@onkernel/cua-gemini`](../cua-gemini), and
-[`@onkernel/cua-yutori`](../cua-yutori)
-into a [`pi-agent-core`](https://www.npmjs.com/package/@earendil-works/pi-agent-core)
-agent with a [`pi-tui`](https://www.npmjs.com/package/@earendil-works/pi-tui)
-interactive front-end.
+[`@onkernel/cua-agent`](../agent)'s `CuaAgentHarness` to
+[`pi-tui`](https://www.npmjs.com/package/@earendil-works/pi-tui) for an
+interactive front-end and to
+[`pi-coding-agent`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent)'s
+coding tools for workspace access.
 
 ## Install (from the monorepo)
 
@@ -41,9 +38,10 @@ cua do "buy a pair of socks on amazon" --max-steps 20
 # List and pick supported models:
 cua models
 cua models -p openai
-cua --print --model claude-opus-4-7 "..."
-cua --print --model gemini-3-flash-preview "..."
-cua --print --model n1.5-latest "..."
+cua --print --model openai:gpt-5.5 "..."
+cua --print --model anthropic:claude-opus-4-7 "..."
+cua --print --model google:gemini-3-flash-preview "..."
+cua --print --model yutori:n1.5-latest "..."
 
 # Named sessions (browser stays alive across calls):
 cua session start login                       # provisions Kernel browser
@@ -65,79 +63,37 @@ cua --session abc12345                        # by id prefix
 
 Run `cua models` to list every supported `-m` / `--model` value and the
 provider it routes to. Filter by provider with `cua models -p openai`,
-`cua models -p anthropic`, `cua models -p gemini`, or
+`cua models -p anthropic`, `cua models -p google` (alias: `gemini`), or
 `cua models -p yutori`.
 
-CUA routes by exact model id from this supported model table. Unknown model
-ids fail fast with a pointer to `cua models`.
-
-Recommended Gemini model id (from
-[Google's Computer Use docs](https://ai.google.dev/gemini-api/docs/computer-use)):
-
-- `gemini-3-flash-preview` — Gemini 3 Flash with built-in computer use.
+`-m` / `--model` accepts a provider-qualified `provider:model` ref (e.g.
+`openai:gpt-5.5`) or a bare model id when it matches exactly one catalog
+entry. The default is `openai:gpt-5.5`.
 
 ## Configuration
 
-```bash
-cua config init   # interactive, writes ~/.config/cua/config.toml
-cua config show   # masked dump of the resolved config
-```
+Configuration is by environment variable. There is no config file.
 
-Example `~/.config/cua/config.toml`:
-
-```toml
-default_profile = "default"
-
-[profiles.default]
-openai_api_key      = "sk-..."
-anthropic_api_key   = "sk-ant-..."
-google_api_key      = "..."
-yutori_api_key      = "yt_..."
-kernel_api_key      = "kk_..."
-
-[profiles.default.openai.default]
-reasoning_effort  = "low"
-tool_preamble     = true
-compact_threshold = 100000
-
-[profiles.default.anthropic.default]
-reasoning_effort  = "low"
-tool_preamble     = true
-
-[profiles.default.gemini.default]
-reasoning_effort  = "low"
-tool_preamble     = true
-
-[profiles.default.yutori.default]
-reasoning_effort  = "low"
-tool_preamble     = true
-
-[[profiles.default.openai.models]]
-name              = "gpt-5.5"
-reasoning_effort  = "medium"
-```
-
-Per-model blocks resolve in order: exact match → longest prefix match
-→ default block.
-
-Env var overrides:
-
-| Env                  | Maps to                                        |
+| Env                  | Used for                                       |
 | -------------------- | ---------------------------------------------- |
-| `OPENAI_API_KEY`     | `openai_api_key`                               |
-| `OPENAI_BASE_URL`    | `openai_base_url`                              |
-| `ANTHROPIC_API_KEY`  | `anthropic_api_key`                            |
-| `ANTHROPIC_BASE_URL` | `anthropic_base_url`                           |
-| `GOOGLE_API_KEY`     | `google_api_key`                               |
+| `KERNEL_API_KEY`     | Kernel API key (required)                      |
+| `OPENAI_API_KEY`     | OpenAI API key (required when `-m openai:…`)   |
+| `ANTHROPIC_API_KEY`  | Anthropic API key (required when `-m anthropic:…`) |
+| `GOOGLE_API_KEY`     | Google API key (required when `-m google:…`)   |
 | `GEMINI_API_KEY`     | alias of `GOOGLE_API_KEY`                      |
-| `GOOGLE_BASE_URL`    | `google_base_url`                              |
-| `YUTORI_API_KEY`     | `yutori_api_key`                               |
-| `YUTORI_BASE_URL`    | `yutori_base_url`                              |
-| `KERNEL_API_KEY`     | `kernel_api_key`                               |
-| `KERNEL_BASE_URL`    | `kernel_base_url`                              |
-| `XDG_CONFIG_HOME`    | config dir base (defaults to `~/.config`)      |
+| `TZAFON_API_KEY`     | Tzafon API key (required when `-m tzafon:…`)   |
+| `YUTORI_API_KEY`     | Yutori API key (required when `-m yutori:…`)   |
+| `KERNEL_BASE_URL`    | override Kernel base URL                       |
+| `OPENAI_BASE_URL`    | override OpenAI base URL                       |
+| `ANTHROPIC_BASE_URL` | override Anthropic base URL                    |
+| `GOOGLE_BASE_URL`    | override Google base URL                       |
+| `TZAFON_BASE_URL`    | override Tzafon base URL                       |
+| `YUTORI_BASE_URL`    | override Yutori base URL                       |
 | `XDG_DATA_HOME`      | sessions dir base (defaults to `~/.local/share`) |
 | `CUA_IMAGE_PROTOCOL` | force inline image protocol (`kitty`/`iterm2`/`none`/`auto`) |
+
+Use `--thinking <level>` (`off | minimal | low | medium | high | xhigh`,
+default `low`) for providers that support reasoning effort.
 
 ## Output formats
 
