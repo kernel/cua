@@ -1,0 +1,110 @@
+import { afterEach, describe, expect, it } from "vitest";
+import {
+	formatSkillsForSystemPrompt,
+	InMemorySessionRepo,
+	type Skill,
+} from "@onkernel/cua-agent";
+import { createCodingTools } from "@earendil-works/pi-coding-agent";
+import { tmpdir } from "node:os";
+import { mkdtempSync } from "node:fs";
+import { join } from "node:path";
+import { resolveCuaRuntimeSpec } from "@onkernel/cua-ai";
+import { buildCuaHarness } from "../src/harness";
+import { createFakeKernelEnvironment } from "./fixtures/fake-kernel";
+import { registerScriptedProvider, type ScriptedProviderHandle } from "./fixtures/scripted-provider";
+
+let provider: ScriptedProviderHandle | undefined;
+
+afterEach(() => {
+	provider?.dispose();
+	provider = undefined;
+});
+
+describe("buildCuaHarness", () => {
+	it("installs createCodingTools as extraTools by default (pi-coding-agent 0.79 type compatibility)", async () => {
+		const cwd = mkdtempSync(join(tmpdir(), "cua-cli-harness-"));
+		const kernel = createFakeKernelEnvironment();
+		const session = await new InMemorySessionRepo().create();
+		const harness = buildCuaHarness({
+			cwd,
+			client: kernel.client,
+			browser: kernel.browser,
+			session,
+			model: "openai:gpt-5.5",
+		});
+		const toolNames = harness.getTools().map((tool) => tool.name);
+		const codingToolNames = createCodingTools(cwd).map((tool) => tool.name);
+		for (const name of codingToolNames) {
+			expect(toolNames).toContain(name);
+		}
+	});
+
+	it("composes the cua-ai default system prompt with the skill block", async () => {
+		provider = registerScriptedProvider("openai-responses", [
+			{ steps: [{ type: "text", text: "ok" }] },
+		]);
+		const cwd = mkdtempSync(join(tmpdir(), "cua-cli-harness-"));
+		const kernel = createFakeKernelEnvironment();
+		const session = await new InMemorySessionRepo().create();
+		const skill: Skill = {
+			name: "demo",
+			description: "demo skill for tests",
+			content: "Use the demo workflow.",
+			filePath: join(cwd, "demo.md"),
+		};
+		const harness = buildCuaHarness({
+			cwd,
+			client: kernel.client,
+			browser: kernel.browser,
+			session,
+			model: "openai:gpt-5.5",
+			skills: [skill],
+			extraTools: [],
+			getApiKeyAndHeaders: async () => ({ apiKey: "test-key" }),
+		});
+		let capturedSystemPrompt: string | undefined;
+		harness.on("before_agent_start", (event) => {
+			capturedSystemPrompt = event.systemPrompt;
+			return undefined;
+		});
+		await harness.prompt("hi");
+		const runtime = resolveCuaRuntimeSpec("openai:gpt-5.5");
+		const skillBlock = formatSkillsForSystemPrompt([skill]).trim();
+		expect(capturedSystemPrompt).toContain(runtime.defaultSystemPrompt.trim());
+		expect(capturedSystemPrompt).toContain(skillBlock);
+	});
+
+	it("delivers the first prompt with an image attached via harness.prompt({ images })", async () => {
+		provider = registerScriptedProvider("openai-responses", [
+			{ steps: [{ type: "text", text: "done" }] },
+		]);
+
+		const cwd = mkdtempSync(join(tmpdir(), "cua-cli-harness-"));
+		const kernel = createFakeKernelEnvironment();
+		const session = await new InMemorySessionRepo().create();
+		const harness = buildCuaHarness({
+			cwd,
+			client: kernel.client,
+			browser: kernel.browser,
+			session,
+			model: "openai:gpt-5.5",
+			extraTools: [],
+			getApiKeyAndHeaders: async () => ({ apiKey: "test-key" }),
+		});
+
+		const tinyPngBase64 =
+			"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
+		await harness.prompt("look at this", {
+			images: [{ type: "image", data: tinyPngBase64, mimeType: "image/png" }],
+		});
+
+		const entries = await session.getBranch();
+		const firstUser = entries.find((e) => e.type === "message" && e.message.role === "user");
+		expect(firstUser).toBeDefined();
+		const content = (firstUser as { message: { content: unknown[] } }).message.content as Array<{
+			type: string;
+			data?: string;
+		}>;
+		expect(content.some((c) => c.type === "image" && c.data === tinyPngBase64)).toBe(true);
+	});
+});
