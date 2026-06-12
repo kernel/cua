@@ -3,7 +3,7 @@ import Kernel from "@onkernel/sdk";
 import { mkdir, readdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { createKernelClient } from "./harness-browser";
+import { createKernelClient, resolveProfileId } from "./harness-browser";
 
 /**
  * Named sessions: durable, slug-keyed pointers to a Kernel cloud browser
@@ -97,7 +97,8 @@ export interface StartNamedSessionOptions {
 	baseUrl?: string;
 	configProfile?: string;
 	browserTimeoutSeconds?: number;
-	profileId?: string;
+	/** Profile id or name (created if missing). Same semantics as `--profile`. */
+	profileSelector?: string;
 	saveProfileChanges?: boolean;
 }
 
@@ -120,12 +121,16 @@ export async function startNamedSession(opts: StartNamedSessionOptions): Promise
 
 	const client = createKernelClient(opts.apiKey, opts.baseUrl);
 	const timeoutSeconds = opts.browserTimeoutSeconds && opts.browserTimeoutSeconds > 0 ? opts.browserTimeoutSeconds : 300;
+	let profileId: string | undefined;
+	if (opts.profileSelector && opts.profileSelector.trim()) {
+		profileId = await resolveProfileId(client, opts.profileSelector);
+	}
 	const params: Parameters<typeof client.browsers.create>[0] = {
 		stealth: true,
 		timeout_seconds: timeoutSeconds,
 	};
-	if (opts.profileId) {
-		params.profile = { id: opts.profileId, save_changes: opts.saveProfileChanges ?? false };
+	if (profileId) {
+		params.profile = { id: profileId, save_changes: opts.saveProfileChanges ?? false };
 	}
 	const browser = await client.browsers.create(params);
 
@@ -133,7 +138,7 @@ export async function startNamedSession(opts: StartNamedSessionOptions): Promise
 		name: opts.name,
 		kernel_session_id: browser.session_id,
 		live_url: browser.browser_live_view_url,
-		profile_id: opts.profileId,
+		profile_id: profileId,
 		config_profile: opts.configProfile,
 		created_at: Date.now(),
 	};

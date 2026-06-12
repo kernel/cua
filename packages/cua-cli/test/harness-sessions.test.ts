@@ -69,4 +69,17 @@ describe("JsonlSessionRepo-backed sessions", () => {
 		expect(byPrefix.id).toBe(id);
 		await expect(resolveSessionRef(repo, cwd, "no-such")).rejects.toThrow(/no session matches/);
 	});
+
+	it("resolves an absolute --session <path> from a different cwd", async () => {
+		const root = freshRoot();
+		const originCwd = mkdtempSync(join(tmpdir(), "cua-cli-cwd-"));
+		const otherCwd = mkdtempSync(join(tmpdir(), "cua-cli-other-"));
+		const repo = createSessionRepo(root);
+		const created = await createSession(repo, originCwd);
+		const path = (await created.getMetadata()).path;
+		// Invoke resolution from a different cwd than the session was created in.
+		const resolved = await resolveSessionRef(repo, otherCwd, path);
+		expect(resolved.path).toBe(path);
+		expect(resolved.cwd).toBe(originCwd);
+	});
 });

@@ -1,4 +1,5 @@
 import type { AgentHarnessEvent, CuaAgentHarness, Session } from "@onkernel/cua-agent";
+import type { AssistantMessage, ImageContent } from "@onkernel/cua-ai";
 import { writeFile } from "node:fs/promises";
 import { stderr, stdout } from "node:process";
 import { captureScreenshot, type CuaBrowserHandle } from "../harness-browser";
@@ -9,7 +10,8 @@ export interface HarnessRunOptions {
 	harness: CuaAgentHarness;
 	browserHandle: CuaBrowserHandle;
 	session: Session;
-	verbose?: boolean;
+	/** Skip the auto-attached first-prompt screenshot (resume case). */
+	skipInitialScreenshot?: boolean;
 	maxTurns?: number;
 }
 
@@ -68,6 +70,7 @@ export async function runAction(
 	let turns = 0;
 	let aborted = false;
 	let lastToolError: string | undefined;
+	let lastToolErrorDetail: string | undefined;
 
 	const unsubscribe = opts.harness.subscribe((event: AgentHarnessEvent) => {
 		switch (event.type) {
@@ -76,7 +79,9 @@ export async function runAction(
 				return;
 			case "tool_execution_end": {
 				if (event.isError) {
-					lastToolError = extractToolErrorText(event.result) ?? "tool execution failed";
+					const { text, detail } = inspectToolError(event.result);
+					lastToolError = text ?? "tool execution failed";
+					lastToolErrorDetail = detail;
 				}
 				return;
 			}
@@ -98,8 +103,10 @@ export async function runAction(
 	});
 
 	let runError: Error | undefined;
+	let assistant: AssistantMessage | undefined;
 	try {
-		const assistant = await opts.harness.prompt(prompt);
+		const images = await maybeInitialScreenshot(opts);
+		assistant = await opts.harness.prompt(prompt, images ? { images } : undefined);
 		if (assistant.stopReason === "error") {
 			runError = new Error(assistant.errorMessage ?? "agent stopped with error");
 		}
@@ -122,8 +129,42 @@ export async function runAction(
 		return { result, exitCode: exitCodeFor(result) };
 	}
 
-	const result = parseResult(req.action, assistantText, events, elapsed, lastToolError);
+	if (!assistantText.trim() && assistant) {
+		assistantText = textFromAssistant(assistant);
+	}
+
+	const toolError = lastToolErrorDetail ?? lastToolError;
+	const result = parseResult(req.action, assistantText, events, elapsed, toolError);
 	return { result, exitCode: exitCodeFor(result) };
+}
+
+async function maybeInitialScreenshot(opts: HarnessRunOptions): Promise<ImageContent[] | undefined> {
+	if (opts.skipInitialScreenshot) return undefined;
+	const hasPriorTurn = await sessionHasPriorTurn(opts.session);
+	if (hasPriorTurn) return undefined;
+	const png = await captureScreenshot(opts.browserHandle.client, opts.browserHandle.browser.session_id);
+	if (!png) return undefined;
+	return [{ type: "image", data: png.toString("base64"), mimeType: "image/png" }];
+}
+
+async function sessionHasPriorTurn(session: Session): Promise<boolean> {
+	const entries = await session.getBranch();
+	for (const entry of entries) {
+		if (entry.type === "message" && (entry.message.role === "user" || entry.message.role === "assistant")) {
+			return true;
+		}
+	}
+	return false;
+}
+
+function textFromAssistant(message: AssistantMessage): string {
+	const parts: string[] = [];
+	for (const block of message.content) {
+		if (block && block.type === "text" && typeof block.text === "string") {
+			parts.push(block.text);
+		}
+	}
+	return parts.join("");
 }
 
 /**
@@ -163,10 +204,12 @@ function addClickEvent(type: unknown, x: unknown, y: unknown, events: ActionEven
 	events.push({ actionType: type, x, y });
 }
 
-function extractToolErrorText(result: unknown): string | undefined {
-	if (!result || typeof result !== "object") return undefined;
+function inspectToolError(result: unknown): { text?: string; detail?: string } {
+	if (!result || typeof result !== "object") return {};
+	const detailsError = (result as { details?: { error?: unknown } }).details?.error;
+	const detail = typeof detailsError === "string" ? detailsError.trim() : undefined;
 	const content = (result as { content?: unknown }).content;
-	if (!Array.isArray(content)) return undefined;
+	if (!Array.isArray(content)) return { detail };
 	const parts: string[] = [];
 	for (const block of content) {
 		if (block && typeof block === "object" && (block as { type?: unknown }).type === "text") {
@@ -174,7 +217,8 @@ function extractToolErrorText(result: unknown): string | undefined {
 			if (typeof text === "string" && text.trim().length > 0) parts.push(text.trim());
 		}
 	}
-	return parts.length > 0 ? parts.join("\n") : undefined;
+	const text = parts.length > 0 ? parts.join("\n") : undefined;
+	return { text, detail };
 }
 
 /** Print a compact result line and return its exit code. */

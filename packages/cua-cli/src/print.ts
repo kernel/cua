@@ -34,6 +34,7 @@ export async function runPrint(opts: RunPrintOptions): Promise<number> {
 		unsubscribeJsonl = attachHarnessJsonlSink({
 			harness: opts.harness,
 			browser: opts.browserHandle.browser,
+			profileId: opts.browserHandle.profileId,
 			modelRef: opts.modelRef,
 			provider: opts.provider,
 			includeDeltas: opts.jsonlIncludeDeltas,

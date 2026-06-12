@@ -15,6 +15,8 @@ export interface JsonlSinkOptions {
 	browser: KernelBrowser;
 	modelRef: string;
 	provider: string;
+	/** Kernel profile id used to provision the browser, when --profile was set. */
+	profileId?: string;
 	/** Where to write each line. Defaults to process.stdout. */
 	write?: (line: string) => void;
 	/** When true, emit `assistant_text_delta` events. Default: false. */
@@ -61,7 +63,7 @@ export function attachHarnessJsonlSink(opts: JsonlSinkOptions): () => void {
 		type: "browser_created",
 		browser_session_id: opts.browser.session_id,
 		live_url: opts.browser.browser_live_view_url,
-		profile_id: undefined,
+		...(opts.profileId ? { profile_id: opts.profileId } : {}),
 		ts: Date.now(),
 	});
 

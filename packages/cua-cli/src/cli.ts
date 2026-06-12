@@ -174,6 +174,15 @@ function parseCliArgs(argv: string[]): CliFlags {
 	const browserTimeout = browserTimeoutRaw ? Number(browserTimeoutRaw) : undefined;
 	const maxStepsRaw = parsed.values["max-steps"];
 	const maxSteps = maxStepsRaw ? Number(maxStepsRaw) : undefined;
+	const thinkingRaw = parsed.values.thinking as string | undefined;
+	if (thinkingRaw !== undefined) {
+		const allowed = new Set(["off", "none", "minimal", "low", "medium", "high", "xhigh"]);
+		if (!allowed.has(thinkingRaw.trim().toLowerCase())) {
+			throw new Error(
+				`invalid --thinking value "${thinkingRaw}"; expected one of: off | minimal | low | medium | high | xhigh`,
+			);
+		}
+	}
 
 	return {
 		help: !!parsed.values.help,

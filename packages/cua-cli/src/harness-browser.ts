@@ -5,6 +5,8 @@ import Kernel, { NotFoundError } from "@onkernel/sdk";
 export interface CuaBrowserHandle {
 	client: Kernel;
 	browser: KernelBrowser;
+	/** Resolved Kernel profile id when --profile was used, otherwise undefined. */
+	profileId?: string;
 	close(): Promise<void>;
 }
 
@@ -28,7 +30,13 @@ function looksLikeProfileId(selector: string): boolean {
 	return trimmed.length === CUID2_LENGTH && CUID2_PATTERN.test(trimmed);
 }
 
-async function resolveProfileId(client: Kernel, selector: string): Promise<string> {
+/**
+ * Resolve a `--profile <name|id>` selector to a concrete profile id.
+ * Looks up by id first; if the API reports not-found and the selector does
+ * not look like a CUID2 id, the profile is created with that name (same
+ * semantics as the legacy `cua-translator.browserSession.open` path).
+ */
+export async function resolveProfileId(client: Kernel, selector: string): Promise<string> {
 	const trimmed = selector.trim();
 	if (!trimmed) throw new Error("profile selector is empty");
 	try {
@@ -73,6 +81,7 @@ export async function provisionBrowser(opts: ProvisionBrowserOptions): Promise<C
 	return {
 		client,
 		browser,
+		profileId: profileId || undefined,
 		async close(): Promise<void> {
 			await client.browsers.deleteByID(browser.session_id);
 		},

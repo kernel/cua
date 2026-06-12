@@ -152,6 +152,12 @@ cua --print -o jsonl "open https://example.com" \
 Add `--jsonl-include-deltas` for assistant-token deltas and
 `--jsonl-include-images` for base64 screenshots in `tool_result` events.
 
+The first event of every `--print -o jsonl` run is
+`session_created` with a `schema_version` field. The current schema
+version is `1`. The `model` field carries a provider-qualified ref
+(e.g. `openai:gpt-5.5`); use `parseCuaModelRef` from `@onkernel/cua-ai`
+if you only need the bare model id.
+
 ## Sessions and transcripts
 
 `--print`, the interactive TUI, and any `-s <name>` invocation persist

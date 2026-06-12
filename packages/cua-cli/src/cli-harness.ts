@@ -1,4 +1,5 @@
 import {
+	InMemorySessionRepo,
 	type JsonlSessionMetadata,
 	type JsonlSessionRepo,
 	NodeExecutionEnv,
@@ -7,8 +8,8 @@ import {
 } from "@onkernel/cua-agent";
 import {
 	type CuaModelRef,
-	getCuaEnvApiKey,
 	parseCuaModelRef,
+	requireCuaEnvApiKey,
 } from "@onkernel/cua-ai";
 import { parseArgs } from "node:util";
 import { stderr, stdout } from "node:process";
@@ -39,6 +40,7 @@ import {
 	findLatestSession,
 	listSessionsForCwd,
 	openSession,
+	readMetadataFromFile,
 	resolveSessionRef,
 } from "./harness-sessions";
 import { discoverCuaSkills } from "./harness-skills";
@@ -203,10 +205,8 @@ function resolveAuth(flags: HarnessCliFlags): ResolvedAuth {
 	const { apiKey, baseUrl } = requireKernelApiKey();
 	const modelRef = resolveCuaModelRef(flags.model);
 	const { provider } = parseCuaModelRef(modelRef);
-	const providerKey = getCuaEnvApiKey(provider);
-	if (!providerKey) {
-		throw new Error(`missing API key for provider "${provider}"`);
-	}
+	// Throws naming the env vars the user must set (`requireCuaEnvApiKey`).
+	requireCuaEnvApiKey(provider);
 	return { kernelApiKey: apiKey, kernelBaseUrl: baseUrl, modelRef };
 }
 
@@ -229,6 +229,7 @@ async function provisionForFlags(flags: HarnessCliFlags, auth: ResolvedAuth): Pr
 		const handle: CuaBrowserHandle = {
 			client,
 			browser,
+			profileId: meta.profile_id,
 			async close(): Promise<void> {
 				// no-op: named-session browsers are torn down via `cua session stop`.
 			},
@@ -296,10 +297,9 @@ async function resolveSession(
 		return { session: await openSession(repo, picked), transcriptPath: picked.path, resumed: true };
 	}
 	if (namedMeta?.transcript_path) {
-		const sessions = await listSessionsForCwd(repo, cwd);
-		const match = sessions.find((m) => m.path === namedMeta.transcript_path);
-		if (match) {
-			return { session: await openSession(repo, match), transcriptPath: match.path, resumed: true };
+		const direct = await readMetadataFromFile(namedMeta.transcript_path);
+		if (direct) {
+			return { session: await openSession(repo, direct), transcriptPath: direct.path, resumed: true };
 		}
 	}
 	const fresh = await createSession(repo, cwd);
@@ -337,13 +337,27 @@ async function pickSession(sessions: JsonlSessionMetadata[]): Promise<JsonlSessi
 interface HarnessRuntime {
 	handle: CuaBrowserHandle;
 	resolved: ResolvedSession | undefined;
+	session: Session;
 	skills: Skill[];
 	harness: ReturnType<typeof buildCuaHarness>;
 	provider: string;
 	modelRef: CuaModelRef;
 }
 
-async function setupHarnessRuntime(flags: HarnessCliFlags): Promise<HarnessRuntime> {
+export interface SetupHarnessRuntimeOptions {
+	/**
+	 * When true, never create or open a JsonlSession; use an InMemorySession instead.
+	 * One-shot action subcommands without -s/-c/-r/--session pass this so they
+	 * don't pollute the on-disk transcript list. The print path always persists
+	 * (so `-c` / `--session latest` keeps working).
+	 */
+	skipDiskSession?: boolean;
+}
+
+async function setupHarnessRuntime(
+	flags: HarnessCliFlags,
+	opts: SetupHarnessRuntimeOptions = {},
+): Promise<HarnessRuntime> {
 	const auth = resolveAuth(flags);
 	const cwd = process.cwd();
 	const env = new NodeExecutionEnv({ cwd });
@@ -357,11 +371,11 @@ async function setupHarnessRuntime(flags: HarnessCliFlags): Promise<HarnessRunti
 	const provisioned = await provisionForFlags(flags, auth);
 	const repo = createSessionRepo(flags.sessionDir);
 
-	const resolved = await resolveSession(repo, cwd, flags, provisioned.named);
+	const skipDisk = opts.skipDiskSession === true && !hasExplicitSessionFlag(flags);
+	const resolved = skipDisk ? undefined : await resolveSession(repo, cwd, flags, provisioned.named);
 
 	let inMemorySession: Session | undefined;
 	if (!resolved) {
-		const { InMemorySessionRepo } = await import("@onkernel/cua-agent");
 		const memRepo = new InMemorySessionRepo();
 		inMemorySession = await memRepo.create();
 	}
@@ -373,6 +387,7 @@ async function setupHarnessRuntime(flags: HarnessCliFlags): Promise<HarnessRunti
 		await appendBrowserEntry(session, {
 			sessionId: provisioned.handle.browser.session_id,
 			liveUrl: provisioned.handle.browser.browser_live_view_url,
+			profileId: provisioned.handle.profileId,
 			createdAt: Date.now(),
 		});
 		if (provisioned.named) {
@@ -385,6 +400,7 @@ async function setupHarnessRuntime(flags: HarnessCliFlags): Promise<HarnessRunti
 	}
 
 	const thinkingLevel = mapThinkingLevel(flags.thinking);
+	const baseUrlOverride = providerBaseUrlOverride(provider);
 	const harness = buildCuaHarness({
 		cwd,
 		client: provisioned.handle.client,
@@ -393,16 +409,33 @@ async function setupHarnessRuntime(flags: HarnessCliFlags): Promise<HarnessRunti
 		model: auth.modelRef,
 		skills,
 		thinkingLevel,
+		modelBaseUrl: baseUrlOverride,
 	});
 
 	return {
 		handle: provisioned.handle,
 		resolved,
+		session,
 		skills,
 		harness,
 		provider,
 		modelRef: auth.modelRef,
 	};
+}
+
+function hasExplicitSessionFlag(flags: HarnessCliFlags): boolean {
+	return (
+		!!flags.sessionRef ||
+		flags.continueLatest ||
+		flags.resumePicker ||
+		!!flags.namedSession
+	);
+}
+
+function providerBaseUrlOverride(provider: string): string | undefined {
+	const envName = `${provider.toUpperCase()}_BASE_URL`;
+	const value = process.env[envName]?.trim();
+	return value && value.length > 0 ? value : undefined;
 }
 
 function mapThinkingLevel(raw: string | undefined): "off" | "minimal" | "low" | "medium" | "high" | "xhigh" {
@@ -421,8 +454,11 @@ function mapThinkingLevel(raw: string | undefined): "off" | "minimal" | "low" | 
 			return "xhigh";
 		case "low":
 		case "":
-		default:
 			return "low";
+		default:
+			throw new Error(
+				`invalid --thinking value "${raw}"; expected one of: off | minimal | low | medium | high | xhigh`,
+			);
 	}
 }
 
@@ -434,7 +470,7 @@ export async function runPrintCommand(prompt: string, flags: HarnessCliFlags): P
 		return await runPrint({
 			harness: runtime.harness,
 			browserHandle: runtime.handle,
-			session: (runtime.resolved?.session ?? (await fallbackInMemorySession())) as Session,
+			session: runtime.session,
 			modelRef: runtime.modelRef,
 			provider: runtime.provider,
 			prompt,
@@ -454,19 +490,13 @@ export async function runPrintCommand(prompt: string, flags: HarnessCliFlags): P
 	}
 }
 
-async function fallbackInMemorySession(): Promise<Session> {
-	const { InMemorySessionRepo } = await import("@onkernel/cua-agent");
-	const repo = new InMemorySessionRepo();
-	return repo.create();
-}
-
 /** Run a one-shot action subcommand through the new harness wiring. */
 export async function runActionCommand(
 	action: ActionType,
 	rest: string[],
 	flags: HarnessCliFlags,
 ): Promise<number> {
-	const runtime = await setupHarnessRuntime(flags);
+	const runtime = await setupHarnessRuntime(flags, { skipDiskSession: true });
 	const req: ActionRequest = buildActionRequest(action, rest);
 	if (flags.maxSteps !== undefined) req.maxTurns = flags.maxSteps;
 	const screenshotOut = flags.out
@@ -478,8 +508,8 @@ export async function runActionCommand(
 		const res = await runAction(req, {
 			harness: runtime.harness,
 			browserHandle: runtime.handle,
-			session: (runtime.resolved?.session ?? (await fallbackInMemorySession())) as Session,
-			verbose: flags.verbose,
+			session: runtime.session,
+			skipInitialScreenshot: runtime.resolved?.resumed === true,
 		}, screenshotOut);
 		return emitCompact(res);
 	} finally {
@@ -529,7 +559,7 @@ export async function runSessionSubcommand(args: string[], flags: HarnessCliFlag
 				apiKey: auth.kernelApiKey,
 				baseUrl: auth.kernelBaseUrl,
 				browserTimeoutSeconds: flags.browserTimeout,
-				profileId: flags.browserProfile,
+				profileSelector: flags.browserProfile,
 				saveProfileChanges: flags.profileSaveChanges,
 			});
 			stdout.write(`name=${meta.name}\n`);

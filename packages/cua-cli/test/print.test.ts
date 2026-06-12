@@ -52,6 +52,34 @@ describe("runPrint", () => {
 		const exitCode = await runPrintIntoBuffer(fixture, "fail", lines);
 		expect(exitCode).toBe(1);
 	});
+
+	it("emits tool_call and tool_result envelopes for tool turns in jsonl mode", async () => {
+		fixture = await buildTestHarness({
+			turns: [
+				{
+					steps: [
+						{
+							type: "tool_call",
+							toolName: "click",
+							args: { x: 12, y: 34 },
+						},
+					],
+				},
+				{ steps: [{ type: "text", text: "done" }] },
+			],
+		});
+		const events = await runPrintAsJsonl(fixture, "click button");
+		const types = events.map((e) => e.type);
+		expect(types).toContain("tool_call");
+		expect(types).toContain("tool_result");
+		const call = events.find((e) => e.type === "tool_call") as Record<string, unknown>;
+		expect(call.tool_name).toBe("click");
+		const result = events.find((e) => e.type === "tool_result") as Record<string, unknown>;
+		expect(result.tool_name).toBe("click");
+		// ok / call_id present on the result envelope, mirroring the documented schema.
+		expect(typeof result.ok).toBe("boolean");
+		expect(typeof result.call_id).toBe("string");
+	});
 });
 
 async function runPrintIntoBuffer(

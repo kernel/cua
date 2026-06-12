@@ -9,8 +9,11 @@ import {
 	type ThinkingLevel,
 } from "@onkernel/cua-agent";
 import {
+	type Api,
 	type CuaModelRef,
+	type Model,
 	getCuaEnvApiKey,
+	getCuaModel,
 	resolveCuaRuntimeSpec,
 } from "@onkernel/cua-ai";
 import type Kernel from "@onkernel/sdk";
@@ -29,6 +32,8 @@ export interface BuildCuaHarnessOptions {
 	extraTools?: CuaAgentHarnessOptions["extraTools"];
 	/** Override env-var API-key resolution (mainly for tests). */
 	getApiKeyAndHeaders?: CuaAgentHarnessOptions["getApiKeyAndHeaders"];
+	/** Override the catalog `baseUrl` on the resolved model (e.g. from `<PROVIDER>_BASE_URL`). */
+	modelBaseUrl?: string;
 }
 
 /**
@@ -41,23 +46,26 @@ export interface BuildCuaHarnessOptions {
 export function buildCuaHarness(opts: BuildCuaHarnessOptions): CuaAgentHarness {
 	const skills = opts.skills ?? [];
 	const extraTools = opts.extraTools ?? createCodingTools(opts.cwd);
+	const model: CuaModelRef | Model<Api> = opts.modelBaseUrl
+		? { ...getCuaModel(opts.model), baseUrl: opts.modelBaseUrl }
+		: opts.model;
 	return new CuaAgentHarness({
 		env: new NodeExecutionEnv({ cwd: opts.cwd }),
 		session: opts.session,
-		model: opts.model,
+		model,
 		browser: opts.browser,
 		client: opts.client,
 		extraTools,
 		resources: { skills },
 		thinkingLevel: opts.thinkingLevel,
-		systemPrompt: ({ model }) => {
-			const runtime = resolveCuaRuntimeSpec(model);
-			return composeSystemPrompt(runtime.defaultSystemPrompt, skills);
+		systemPrompt: ({ model: activeModel, resources }) => {
+			const runtime = resolveCuaRuntimeSpec(activeModel);
+			return composeSystemPrompt(runtime.defaultSystemPrompt, resources.skills ?? []);
 		},
 		getApiKeyAndHeaders:
 			opts.getApiKeyAndHeaders ??
-			(async (model) => {
-				const apiKey = getCuaEnvApiKey(model.provider);
+			(async (resolvedModel) => {
+				const apiKey = getCuaEnvApiKey(resolvedModel.provider);
 				return apiKey ? { apiKey } : undefined;
 			}),
 	});
