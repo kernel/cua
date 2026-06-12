@@ -21,16 +21,16 @@ import {
 	TUI_KEYBINDINGS,
 } from "@earendil-works/pi-tui";
 import type { ImageContent, Model } from "@onkernel/cua-ai";
-import { captureScreenshot, type CuaBrowserHandle } from "../harness-browser";
-import { resolveCuaModelRef } from "../harness-models";
-import { openTuiDebugLog } from "./debug-log";
-import { applyAndSummarizeImageProtocol } from "./diagnostics";
-import { type AssistantBuffer, MessageList } from "./message-list";
-import { ScreenshotWidget } from "./screenshot-widget";
-import { buildAutocompleteProvider, parseSlashCommand } from "./slash-commands";
-import { StatusLine } from "./status-line";
-import { TelemetryFooter } from "./telemetry-footer";
-import { colors, editorTheme } from "./themes";
+import { captureScreenshot, type CuaBrowserHandle } from "../harness-browser.js";
+import { resolveCuaModelRef } from "../harness-models.js";
+import { openTuiDebugLog } from "./debug-log.js";
+import { applyAndSummarizeImageProtocol } from "./diagnostics.js";
+import { type AssistantBuffer, MessageList } from "./message-list.js";
+import { ScreenshotWidget } from "./screenshot-widget.js";
+import { buildAutocompleteProvider, parseSlashCommand } from "./slash-commands.js";
+import { StatusLine } from "./status-line.js";
+import { TelemetryFooter } from "./telemetry-footer.js";
+import { colors, editorTheme } from "./themes.js";
 
 export interface InteractiveOptions {
 	cwd: string;

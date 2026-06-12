@@ -1,10 +1,10 @@
 import type { AgentHarnessEvent, CuaAgentHarness, Session, Skill } from "@onkernel/cua-agent";
 import type { ImageContent } from "@onkernel/cua-ai";
 import { stderr, stdout } from "node:process";
-import { captureScreenshot } from "./harness-browser";
-import type { CuaBrowserHandle } from "./harness-browser";
-import { attachHarnessJsonlSink } from "./output/harness-jsonl";
-import { parseSkillInvocation } from "./harness-skills";
+import { captureScreenshot } from "./harness-browser.js";
+import type { CuaBrowserHandle } from "./harness-browser.js";
+import { attachHarnessJsonlSink } from "./output/harness-jsonl.js";
+import { parseSkillInvocation } from "./harness-skills.js";
 
 export interface RunPrintOptions {
 	harness: CuaAgentHarness;

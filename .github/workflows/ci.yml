@@ -92,6 +92,20 @@ jobs:
         env:
           PTYWRIGHT_REQUIRED: "1"
         run: npm test --workspace @onkernel/cua-cli
+      - name: Build cua-cli
+        run: npm run build --workspace @onkernel/cua-cli
+      - name: Pack tarball
+        run: npm pack --workspace @onkernel/cua-cli --pack-destination "$RUNNER_TEMP"
+      - name: CLI bin smoke test
+        run: |
+          SMOKE_DIR=$(mktemp -d)
+          cd "$SMOKE_DIR"
+          npm init -y > /dev/null
+          npm install "$RUNNER_TEMP"/onkernel-cua-cli-*.tgz
+          OUTPUT=$(./node_modules/.bin/cua --help)
+          echo "$OUTPUT"
+          echo "$OUTPUT" | grep -q "Usage:"
+          echo "$OUTPUT" | grep -q "cua \[options\] \[prompt\.\.\.\]"
 
   integration:
     runs-on: ubuntu-latest

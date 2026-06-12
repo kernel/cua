@@ -2,9 +2,9 @@ import type { AgentHarnessEvent, CuaAgentHarness, Session } from "@onkernel/cua-
 import type { AssistantMessage, ImageContent } from "@onkernel/cua-ai";
 import { writeFile } from "node:fs/promises";
 import { stderr, stdout } from "node:process";
-import { captureScreenshot, type CuaBrowserHandle } from "../harness-browser";
-import { type ActionRequest, buildPrompt, DEFAULT_MAX_TURNS } from "./prompts";
-import { type ActionEventInfo, type ActionResult, exitCodeFor, formatCompact, parseResult } from "./result";
+import { captureScreenshot, type CuaBrowserHandle } from "../harness-browser.js";
+import { type ActionRequest, buildPrompt, DEFAULT_MAX_TURNS } from "./prompts.js";
+import { type ActionEventInfo, type ActionResult, exitCodeFor, formatCompact, parseResult } from "./result.js";
 
 export interface HarnessRunOptions {
 	harness: CuaAgentHarness;

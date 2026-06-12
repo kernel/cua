@@ -1,5 +1,5 @@
 import { Container, Markdown, Text } from "@earendil-works/pi-tui";
-import { colors, markdownTheme } from "./themes";
+import { colors, markdownTheme } from "./themes.js";
 
 /**
  * Append-only chat log of user prompts, assistant text, tool-call summaries,

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { stderr, stdout } from "node:process";
 import { parseArgs } from "node:util";
-import { type ActionType } from "./action/prompts";
+import { type ActionType } from "./action/prompts.js";
 import {
 	runActionCommand,
 	runInteractiveCommand,
@@ -9,8 +9,8 @@ import {
 	runPrintCommand,
 	runSessionSubcommand as runSessionSubcommandHarness,
 	type HarnessCliFlags,
-} from "./cli-harness";
-import { DEFAULT_CUA_MODEL_REF } from "./harness-models";
+} from "./cli-harness.js";
+import { DEFAULT_CUA_MODEL_REF } from "./harness-models.js";
 
 const HELP = `cua — Kernel-cloud-browser computer-use agent
 

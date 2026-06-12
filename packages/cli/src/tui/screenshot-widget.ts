@@ -1,5 +1,5 @@
 import { Container, Image, allocateImageId } from "@earendil-works/pi-tui";
-import { imageTheme } from "./themes";
+import { imageTheme } from "./themes.js";
 
 const MAX_WIDTH_CELLS = 60;
 

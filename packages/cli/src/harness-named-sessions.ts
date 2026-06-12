@@ -3,7 +3,7 @@ import Kernel from "@onkernel/sdk";
 import { mkdir, readdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { createKernelClient, resolveProfileId } from "./harness-browser";
+import { createKernelClient, resolveProfileId } from "./harness-browser.js";
 
 /**
  * Named sessions: durable, slug-keyed pointers to a Kernel cloud browser
