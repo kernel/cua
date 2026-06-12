@@ -1,4 +1,4 @@
-import { type Component, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import { type Component, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { colors } from "./themes";
 
 export interface TelemetryFooterState {
@@ -7,7 +7,6 @@ export interface TelemetryFooterState {
 	thinkingLevel?: string;
 	contextTokens?: number;
 	contextWindow?: number;
-	autoCompactEnabled?: boolean;
 }
 
 export class TelemetryFooter implements Component {
@@ -50,8 +49,7 @@ export class TelemetryFooter implements Component {
 
 		const used = Math.max(0, this.state.contextTokens ?? 0);
 		const percent = this.state.contextWindow > 0 ? ((used / this.state.contextWindow) * 100).toFixed(1) : "?";
-		const auto = this.state.autoCompactEnabled ? " (auto)" : "";
-		return colors.dim(`${percent}%/${formatTokens(this.state.contextWindow)}${auto}`);
+		return colors.dim(`${percent}%/${formatTokens(this.state.contextWindow)}`);
 	}
 
 	private renderModelInfo(): string {

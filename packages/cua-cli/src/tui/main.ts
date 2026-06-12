@@ -1,5 +1,13 @@
 import {
-	type Component,
+	type AgentHarnessEvent,
+	type AgentMessage,
+	type CuaAgentHarness,
+	estimateContextTokens,
+	type Session,
+	type Skill,
+	type ThinkingLevel,
+} from "@onkernel/cua-agent";
+import {
 	Container,
 	Editor,
 	hyperlink,
@@ -10,68 +18,60 @@ import {
 	Text,
 	TUI,
 	TUI_KEYBINDINGS,
-} from "@mariozechner/pi-tui";
-import type { SessionManager } from "@mariozechner/pi-coding-agent";
-import type { ResourceDiagnostic } from "@mariozechner/pi-coding-agent";
-import { anthropicSupportsCompaction } from "@onkernel/cua-anthropic";
-import type { BrowserSession } from "@onkernel/cua-translator";
-import { homedir } from "node:os";
-import { relative } from "node:path";
+} from "@earendil-works/pi-tui";
+import type { Api, ImageContent, Model } from "@onkernel/cua-ai";
 import { stderr } from "node:process";
-import { createCuaAgent } from "../agent";
-import type { Config } from "../config";
-import { DEFAULT_MODEL_ID, resolveProvider } from "../models";
-import {
-	appendBrowserMetadata,
-	persistAgentEvents,
-	seedAgentFromSession,
-} from "../sessions";
-import { expandSkillInvocation, type Skill, type StartupResources } from "../skills";
+import { captureScreenshot, type CuaBrowserHandle } from "../harness-browser";
 import { openTuiDebugLog } from "./debug-log";
 import { applyAndSummarizeImageProtocol } from "./diagnostics";
-import { LiveInteractiveDriver, type InteractiveDriver } from "./driver";
 import { type AssistantBuffer, MessageList } from "./message-list";
 import { ScreenshotWidget } from "./screenshot-widget";
+import { buildAutocompleteProvider, parseSlashCommand } from "./slash-commands";
 import { StatusLine } from "./status-line";
 import { TelemetryFooter } from "./telemetry-footer";
 import { colors, editorTheme } from "./themes";
 
 export interface InteractiveOptions {
 	cwd: string;
-	browser: BrowserSession;
-	config: Config;
-	modelId?: string;
+	harness: CuaAgentHarness;
+	browserHandle: CuaBrowserHandle;
+	session: Session;
+	skills?: Skill[];
+	/** CUA model ref currently active. Used for the status line and `/model` default. */
+	modelRef: string;
+	provider: string;
+	thinkingLevel?: ThinkingLevel;
 	initialPrompt?: string;
-	verbose?: boolean;
 	/** Image protocol override: kitty | iterm2 | none | auto (default: auto). */
 	imageProtocol?: string;
-	/** Optional session manager for transcript persistence. */
-	sessionManager?: SessionManager;
+	/** Skip the first-prompt screenshot (resume case). */
+	skipInitialScreenshot?: boolean;
 	/** True when seeding the agent from a previously persisted session. */
 	resumed?: boolean;
-	/** Skills available for /skill:name expansion and system-prompt injection. */
-	skills?: Skill[];
-	/** Optional startup sections mirroring pi's Context/Skills inventory. */
-	startupResources?: StartupResources;
+	/** Display path of the on-disk transcript, when one exists. */
+	transcriptPath?: string;
 	/** Enable extra TUI render diagnostics for manual repros. */
 	debugTui?: boolean;
-	/** Optional driver override used by deterministic PTY fixtures. */
-	driver?: InteractiveDriver;
 }
 
 /**
- * Run the interactive cua TUI: pi-tui differential renderer with header /
- * message list / screenshot widget / editor / status line / footer hint.
+ * Run the interactive cua TUI: pi-tui differential renderer with header,
+ * message list, sticky screenshot widget, editor (autocomplete-backed slash
+ * commands), status line, and telemetry footer. Drives a {@link CuaAgentHarness}
+ * directly via `harness.subscribe()`.
  */
 export async function runInteractive(opts: InteractiveOptions): Promise<number> {
 	// Apply image protocol override BEFORE constructing TUI components so
 	// the Image component sees the resolved capabilities on its first render.
 	const { summary: capsSummary, overridden } = applyAndSummarizeImageProtocol(opts.imageProtocol);
 	const debug = opts.debugTui ? openTuiDebugLog() : undefined;
+	const initialModel = opts.harness.getModel();
+	const initialThinking = opts.harness.getThinkingLevel();
+	const initialContextWindow = (initialModel as Model<Api>).contextWindow ?? undefined;
 	debug?.log("interactive_init", {
-		model: opts.modelId ?? DEFAULT_MODEL_ID,
-		browserSession: opts.browser.sessionId,
-		liveUrl: opts.browser.liveUrl,
+		model: opts.modelRef,
+		browserSession: opts.browserHandle.browser.session_id,
+		liveUrl: opts.browserHandle.browser.browser_live_view_url,
 		capsSummary,
 		imageProtocol: opts.imageProtocol ?? "auto",
 		overridden,
@@ -93,30 +93,22 @@ export async function runInteractive(opts: InteractiveOptions): Promise<number> 
 
 	const _keybindings = new KeybindingsManager(TUI_KEYBINDINGS);
 	void _keybindings;
-	const liveHandle = opts.driver
-		? undefined
-		: createCuaAgent({
-				cwd: opts.cwd,
-				browser: opts.browser,
-				config: opts.config,
-				modelId: opts.modelId,
-				sessionId: opts.browser.sessionId,
-				skills: opts.skills,
-			});
+
 	const editor = new Editor(tui, editorTheme);
+	editor.setAutocompleteProvider(buildAutocompleteProvider(opts.cwd, opts.skills ?? []));
 	const messages = new MessageList();
 	const screenshot = new ScreenshotWidget();
+	const liveUrl = opts.browserHandle.browser.browser_live_view_url;
 	const status = new StatusLine({
-		model: opts.modelId ?? DEFAULT_MODEL_ID,
-		browserSession: opts.browser.sessionId,
-		liveUrl: opts.browser.liveUrl,
+		model: opts.modelRef,
+		browserSession: opts.browserHandle.browser.session_id,
+		liveUrl,
 	});
 	const footer = new TelemetryFooter({
-		provider: liveHandle?.provider ?? (opts.driver ? "fixture" : resolveProvider(opts.modelId ?? DEFAULT_MODEL_ID)),
-		model: liveHandle?.model.id ?? (opts.modelId ?? DEFAULT_MODEL_ID),
-		thinkingLevel: liveHandle?.thinkingLevel,
-		contextWindow: liveHandle?.model.contextWindow,
-		autoCompactEnabled: isAutoCompactEnabled(liveHandle),
+		provider: opts.provider,
+		model: modelLabel(initialModel),
+		thinkingLevel: initialThinking,
+		contextWindow: initialContextWindow,
 		contextTokens: 0,
 	});
 
@@ -126,15 +118,16 @@ export async function runInteractive(opts: InteractiveOptions): Promise<number> 
 		? colors.dim(capsSummary)
 		: colors.dim(capsSummary + " · set CUA_IMAGE_PROTOCOL=kitty|iterm2 to force inline images");
 	header.addChild(new Text(capsHint, 0, 0));
-	if (opts.browser.liveUrl) {
-		header.addChild(new Text(colors.dim("live ") + hyperlink(opts.browser.liveUrl, opts.browser.liveUrl), 0, 0));
+	if (liveUrl) {
+		header.addChild(new Text(colors.dim("live ") + hyperlink(liveUrl, liveUrl), 0, 0));
 	}
 	header.addChild(new Text("", 0, 0));
-	const startupSections = buildStartupComponents(opts.startupResources, opts.cwd);
 
+	const skillSection = buildSkillSection(opts.skills ?? []);
 	tui.addChild(header);
-	for (const section of startupSections) {
-		tui.addChild(section);
+	if (skillSection) {
+		tui.addChild(skillSection);
+		tui.addChild(new Spacer(1));
 	}
 	tui.addChild(messages);
 	tui.addChild(new Spacer(1));
@@ -152,21 +145,14 @@ export async function runInteractive(opts: InteractiveOptions): Promise<number> 
 		});
 	};
 
-	let unsubscribePersist = () => {};
-	const sm = opts.sessionManager;
-	if (liveHandle && sm && opts.resumed) seedAgentFromSession(liveHandle.agent, sm);
-	if (liveHandle && sm) appendBrowserMetadata(sm, opts.browser);
-	if (liveHandle && sm && opts.resumed) {
-		messages.addNotice(
-			`resumed from ${sm.getSessionFile() ?? "memory"} · ${liveHandle.agent.state.messages.length} prior messages · fresh browser`,
-		);
+	if (opts.resumed) {
+		const transcript = opts.transcriptPath ? ` ${opts.transcriptPath}` : "";
+		messages.addNotice(`resumed${transcript} · fresh browser`);
 	}
-	unsubscribePersist = liveHandle && sm ? persistAgentEvents(liveHandle.agent, sm) : () => {};
-	let driver: InteractiveDriver =
-		opts.driver ?? new LiveInteractiveDriver(liveHandle!, { skipInitialScreenshot: opts.resumed === true });
 
 	let assistantBuffer: AssistantBuffer | undefined;
 	let inflight = 0;
+	let firstPromptSent = false;
 	let lastDisplayedError: string | undefined;
 
 	const displayAgentError = (error: unknown, reason: string): void => {
@@ -179,111 +165,170 @@ export async function runInteractive(opts: InteractiveOptions): Promise<number> 
 		requestRender("agent_error", false, { reason });
 	};
 
-	const unsubscribe = driver.subscribe((event) => {
-		if (event.type === "agent_start") {
-			inflight += 1;
-			status.update({ working: "thinking…" });
-			debug?.log("agent_start", { inflight });
-			requestRender("agent_start", false, { inflight });
-			return;
-		}
-		if (event.type === "agent_end") {
-			inflight -= 1;
-			if (inflight <= 0) status.update({ working: undefined });
-			const finalError = event.messages
-				.slice()
-				.reverse()
-				.find((message) => "errorMessage" in message && typeof message.errorMessage === "string");
-			displayAgentError(finalError && "errorMessage" in finalError ? finalError.errorMessage : undefined, "agent_end");
-			debug?.log("agent_end", { inflight });
-			requestRender("agent_end", false, { inflight });
-			return;
-		}
-		if (event.type === "message_start" && event.message.role === "assistant") {
-			assistantBuffer = messages.addAssistantStart();
-			debug?.log("assistant_message_start");
-			requestRender("assistant_message_start");
-			return;
-		}
-		if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
-			assistantBuffer?.append(event.assistantMessageEvent.delta);
-			requestRender("assistant_text_delta", false, {
-				deltaLength: event.assistantMessageEvent.delta.length,
-			});
-			return;
-		}
-		if (event.type === "message_end" && event.message.role === "assistant") {
-			const usage = "usage" in event.message ? event.message.usage : undefined;
-			if (usage) {
-				footer.update({
-					contextTokens: usage.input,
+	const unsubscribe = opts.harness.subscribe((event: AgentHarnessEvent) => {
+		switch (event.type) {
+			case "agent_start": {
+				inflight += 1;
+				status.update({ working: "thinking…" });
+				debug?.log("agent_start", { inflight });
+				requestRender("agent_start", false, { inflight });
+				return;
+			}
+			case "agent_end": {
+				inflight -= 1;
+				if (inflight <= 0) status.update({ working: undefined });
+				const finalError = lastErrorMessage(event.messages);
+				displayAgentError(finalError, "agent_end");
+				debug?.log("agent_end", { inflight });
+				requestRender("agent_end", false, { inflight });
+				return;
+			}
+			case "message_start": {
+				if (event.message.role === "assistant") {
+					assistantBuffer = messages.addAssistantStart();
+					debug?.log("assistant_message_start");
+					requestRender("assistant_message_start");
+				}
+				return;
+			}
+			case "message_update": {
+				if (event.assistantMessageEvent.type === "text_delta") {
+					assistantBuffer?.append(event.assistantMessageEvent.delta);
+					requestRender("assistant_text_delta", false, {
+						deltaLength: event.assistantMessageEvent.delta.length,
+					});
+				}
+				return;
+			}
+			case "message_end": {
+				if (event.message.role === "assistant") {
+					if (event.message.usage) {
+						footer.update({ contextTokens: event.message.usage.input });
+					}
+					assistantBuffer?.end();
+					assistantBuffer = undefined;
+					displayAgentError(event.message.errorMessage, "assistant_message_end");
+					debug?.log("assistant_message_end");
+					requestRender("assistant_message_end");
+				}
+				return;
+			}
+			case "tool_execution_start": {
+				messages.addToolCall(event.toolName, event.args);
+				status.update({ working: event.toolName });
+				debug?.log("tool_execution_start", { toolName: event.toolName });
+				requestRender("tool_execution_start", false, { toolName: event.toolName });
+				return;
+			}
+			case "tool_execution_end": {
+				const result = event.result as
+					| {
+							content?: Array<{ type?: string; data?: string; mimeType?: string }>;
+							details?: { error?: string };
+					  }
+					| undefined;
+				const isError = !!event.isError;
+				let summary = isError ? colors.red("error") : colors.green("ok");
+				if (!isError && result?.content) {
+					const imgs = result.content.filter((c) => c?.type === "image");
+					if (imgs.length > 0) summary += colors.dim(` · ${imgs.length} screenshot${imgs.length > 1 ? "s" : ""}`);
+					const lastImg = imgs[imgs.length - 1];
+					if (lastImg?.data) screenshot.update(lastImg.data, lastImg.mimeType ?? "image/png");
+				}
+				if (isError && result?.details?.error) summary = colors.red(result.details.error);
+				messages.addToolResult(event.toolName, !isError, summary);
+				debug?.log("tool_execution_end", {
+					toolName: event.toolName,
+					isError,
+					hasImage: !!result?.content?.some((c) => c?.type === "image"),
 				});
+				requestRender("tool_execution_end", false, {
+					toolName: event.toolName,
+					isError,
+				});
+				return;
 			}
-			assistantBuffer?.end();
-			assistantBuffer = undefined;
-			displayAgentError(
-				"errorMessage" in event.message ? event.message.errorMessage : undefined,
-				"assistant_message_end",
-			);
-			debug?.log("assistant_message_end");
-			requestRender("assistant_message_end");
-			return;
-		}
-		if (event.type === "tool_execution_start") {
-			messages.addToolCall(event.toolName, event.args);
-			status.update({ working: event.toolName });
-			debug?.log("tool_execution_start", { toolName: event.toolName });
-			requestRender("tool_execution_start", false, { toolName: event.toolName });
-			return;
-		}
-		if (event.type === "tool_execution_end") {
-			const result = event.result as
-				| {
-						content?: Array<{ type?: string; data?: string; mimeType?: string }>;
-						details?: { error?: string };
-				  }
-				| undefined;
-			const isError = !!event.isError;
-			let summary = isError ? colors.red("error") : colors.green("ok");
-			if (!isError && result?.content) {
-				const imgs = result.content.filter((c) => c?.type === "image");
-				if (imgs.length > 0) summary += colors.dim(` · ${imgs.length} screenshot${imgs.length > 1 ? "s" : ""}`);
-				const lastImg = imgs[imgs.length - 1];
-				if (lastImg?.data) screenshot.update(lastImg.data, lastImg.mimeType ?? "image/png");
+			case "model_update": {
+				footer.update({ model: modelLabel(event.model), contextWindow: (event.model as Model<Api>).contextWindow });
+				status.update({ model: modelLabel(event.model) });
+				requestRender("model_update");
+				return;
 			}
-			if (isError && result?.details?.error) summary = colors.red(result.details.error);
-			messages.addToolResult(event.toolName, !isError, summary);
-			debug?.log("tool_execution_end", {
-				toolName: event.toolName,
-				isError,
-				hasImage: !!result?.content?.some((c) => c?.type === "image"),
-			});
-			requestRender("tool_execution_end", false, {
-				toolName: event.toolName,
-				isError,
-			});
-			return;
+			case "thinking_level_update": {
+				footer.update({ thinkingLevel: event.level });
+				requestRender("thinking_level_update");
+				return;
+			}
+			case "session_compact": {
+				messages.addNotice(`compacted ${event.compactionEntry.tokensBefore} tokens`);
+				void refreshContextTokens(opts.session).then((tokens) => {
+					footer.update({ contextTokens: tokens });
+					requestRender("session_compact");
+				});
+				return;
+			}
+			default:
+				return;
 		}
 	});
 
 	const pendingPrompt = opts.initialPrompt?.trim() || "";
 	let exitRequested = false;
 
+	const runPrompt = async (text: string): Promise<void> => {
+		debug?.log("run_prompt_start", { length: text.length });
+		try {
+			const parsed = parseSlashCommand(text);
+			if (parsed?.command === "model") {
+				await applyModelCommand(opts, footer, status, messages, parsed.argument);
+				return;
+			}
+			if (parsed?.command === "thinking") {
+				await applyThinkingCommand(opts, footer, messages, parsed.argument);
+				return;
+			}
+			if (parsed?.command === "compact") {
+				await applyCompactCommand(opts, messages);
+				return;
+			}
+			if (parsed?.command === "skill") {
+				const skill = (opts.skills ?? []).find((s) => s.name === parsed.name);
+				if (!skill) {
+					messages.addError(`unknown skill "${parsed.name}"`);
+					requestRender("skill_unknown");
+					return;
+				}
+				messages.addNotice(`invoking /skill:${skill.name}`);
+				requestRender("skill_invocation");
+				await opts.harness.skill(skill.name, parsed.remainder || undefined);
+				return;
+			}
+			const images = await maybeInitialScreenshot(opts, firstPromptSent);
+			firstPromptSent = true;
+			await opts.harness.prompt(text, images ? { images } : undefined);
+		} catch (err) {
+			messages.addError((err as Error).message);
+			debug?.log("run_prompt_error", { message: (err as Error).message });
+			requestRender("run_prompt_error", false, { message: (err as Error).message });
+			return;
+		}
+		debug?.log("run_prompt_end");
+	};
+
 	editor.onSubmit = (text: string) => {
 		const trimmed = text.trim();
 		if (!trimmed) return;
 		editor.setText("");
+		editor.addToHistory(trimmed);
 		messages.addUser(trimmed);
 		debug?.log("editor_submit", { length: trimmed.length });
-		const { expanded, skill } = expandSkillInvocation(trimmed, opts.skills ?? []);
-		if (skill) messages.addNotice(`expanding /skill:${skill.name}`);
-		void runPrompt(expanded);
+		void runPrompt(trimmed);
 	};
 
 	const removeListener = tui.addInputListener((data) => {
 		if (matchesKey(data, "ctrl+c")) {
-			if (driver.isStreaming()) {
-				driver.abort();
+			if (inflight > 0) {
+				void opts.harness.abort();
 				messages.addNotice("aborted");
 				debug?.log("input_abort_stream", { key: "ctrl+c" });
 				requestRender("input_abort_stream", false, { key: "ctrl+c" });
@@ -299,8 +344,8 @@ export async function runInteractive(opts: InteractiveOptions): Promise<number> 
 			debug?.log("input_exit_request", { key: "ctrl+d" });
 			return { consume: true };
 		}
-		if (matchesKey(data, "escape") && driver.isStreaming()) {
-			driver.abort();
+		if (matchesKey(data, "escape") && inflight > 0) {
+			void opts.harness.abort();
 			messages.addNotice("turn aborted");
 			debug?.log("input_abort_stream", { key: "escape" });
 			requestRender("input_abort_stream", false, { key: "escape" });
@@ -316,40 +361,24 @@ export async function runInteractive(opts: InteractiveOptions): Promise<number> 
 		fullRedraws: tui.fullRedraws,
 	});
 
-	const runPrompt = async (text: string): Promise<void> => {
-		debug?.log("run_prompt_start", { length: text.length });
-		try {
-			await driver.submit(text);
-		} catch (err) {
-			messages.addError((err as Error).message);
-			debug?.log("run_prompt_error", { message: (err as Error).message });
-			requestRender("run_prompt_error", false, { message: (err as Error).message });
-			return;
-		}
-		debug?.log("run_prompt_end");
-	};
-
 	try {
 		if (pendingPrompt) {
 			messages.addUser(pendingPrompt);
-			const { expanded, skill } = expandSkillInvocation(pendingPrompt, opts.skills ?? []);
-			if (skill) messages.addNotice(`expanding /skill:${skill.name}`);
-			void runPrompt(expanded);
+			void runPrompt(pendingPrompt);
 		}
 
 		await waitForExit(
 			() => exitRequested,
-			() => driver.isStreaming(),
+			() => inflight > 0,
 		);
 
 		return 0;
 	} finally {
 		removeListener();
 		unsubscribe();
-		unsubscribePersist();
 		tui.stop();
 		try {
-			await driver.dispose();
+			await opts.browserHandle.close();
 		} catch (err) {
 			stderr.write(`[cua] cleanup warning: ${(err as Error).message}\n`);
 		}
@@ -368,108 +397,108 @@ async function waitForExit(shouldExit: () => boolean, isBusy: () => boolean): Pr
 	}
 }
 
-function isAutoCompactEnabled(
-	handle:
-		| {
-				provider?: unknown;
-				model?: { id?: unknown };
-				modelConfig?: unknown;
-		  }
-		| undefined,
-): boolean {
-	const compactThreshold =
-		handle?.modelConfig &&
-		typeof handle.modelConfig === "object" &&
-		"compactThreshold" in handle.modelConfig
-			? (handle.modelConfig as { compactThreshold?: unknown }).compactThreshold
-			: undefined;
-	if (handle?.provider === "anthropic") {
-		const modelId = typeof handle.model?.id === "string" ? handle.model.id : "";
-		return compactThreshold !== false && anthropicSupportsCompaction(modelId);
-	}
-	return typeof compactThreshold === "number" && compactThreshold > 0;
+function modelLabel(model: Model<Api> | undefined): string {
+	if (!model) return "";
+	return model.id;
 }
 
-function buildStartupComponents(resources: StartupResources | undefined, cwd: string): Component[] {
-	if (!resources) return [];
-
-	const components: Component[] = [];
-	const sections: Array<{ heading: string; color: (text: string) => string; body: string }> = [];
-
-	if (resources.contextFiles.length > 0) {
-		sections.push({
-			heading: "Context",
-			color: colors.blue,
-			body: resources.contextFiles.map((file) => formatDisplayPath(file.path, cwd)).join(", "),
-		});
+function lastErrorMessage(messages: AgentMessage[]): string | undefined {
+	for (let i = messages.length - 1; i >= 0; i -= 1) {
+		const m = messages[i];
+		if (m && m.role === "assistant" && typeof m.errorMessage === "string") {
+			return m.errorMessage;
+		}
 	}
-
-	if (resources.skills.length > 0) {
-		sections.push({
-			heading: "Skills",
-			color: colors.blue,
-			body: resources.skills.map((skill) => skill.name).join(", "),
-		});
-	}
-
-	if (resources.skillDiagnostics.length > 0) {
-		sections.push({
-			heading: "Skill conflicts",
-			color: colors.yellow,
-			body: formatSkillDiagnostics(resources.skillDiagnostics, cwd),
-		});
-	}
-
-	for (const section of sections) {
-		components.push(new Text(section.color(`[${section.heading}]`) + `\n${section.body}`, 0, 0));
-		components.push(new Spacer(1));
-	}
-
-	return components;
+	return undefined;
 }
 
-function formatSkillDiagnostics(diagnostics: ResourceDiagnostic[], cwd: string): string {
-	const lines: string[] = [];
-	const collisions = new Map<string, ResourceDiagnostic[]>();
-
-	for (const diagnostic of diagnostics) {
-		if (diagnostic.type === "collision" && diagnostic.collision) {
-			const current = collisions.get(diagnostic.collision.name) ?? [];
-			current.push(diagnostic);
-			collisions.set(diagnostic.collision.name, current);
-			continue;
-		}
-
-		if (diagnostic.path) {
-			lines.push(`  ${formatDisplayPath(diagnostic.path, cwd)}`);
-			lines.push(`    ${diagnostic.message}`);
-		} else {
-			lines.push(`  ${diagnostic.message}`);
-		}
-	}
-
-	for (const [name, entries] of collisions) {
-		const first = entries[0]?.collision;
-		if (!first) continue;
-		lines.push(`  "${name}" collision:`);
-		lines.push(`    ${colors.green("✓")} ${formatDisplayPath(first.winnerPath, cwd)}`);
-		for (const entry of entries) {
-			if (!entry.collision) continue;
-			lines.push(`    ${colors.yellow("✗")} ${formatDisplayPath(entry.collision.loserPath, cwd)} (skipped)`);
-		}
-	}
-
-	return lines.join("\n");
+async function maybeInitialScreenshot(
+	opts: InteractiveOptions,
+	firstPromptSent: boolean,
+): Promise<ImageContent[] | undefined> {
+	if (firstPromptSent) return undefined;
+	if (opts.skipInitialScreenshot) return undefined;
+	if (await sessionHasPriorTurn(opts.session)) return undefined;
+	const png = await captureScreenshot(opts.browserHandle.client, opts.browserHandle.browser.session_id);
+	if (!png) return undefined;
+	return [{ type: "image", data: png.toString("base64"), mimeType: "image/png" }];
 }
 
-function formatDisplayPath(filePath: string, cwd: string): string {
-	const home = homedir();
-	if (filePath === cwd) return ".";
-	if (filePath.startsWith(`${cwd}/`)) {
-		return relative(cwd, filePath) || ".";
+async function sessionHasPriorTurn(session: Session): Promise<boolean> {
+	const entries = await session.getBranch();
+	for (const entry of entries) {
+		if (entry.type === "message" && (entry.message.role === "user" || entry.message.role === "assistant")) {
+			return true;
+		}
 	}
-	if (filePath.startsWith(`${home}/`)) {
-		return `~/${relative(home, filePath)}`;
+	return false;
+}
+
+async function applyModelCommand(
+	opts: InteractiveOptions,
+	footer: TelemetryFooter,
+	status: StatusLine,
+	messages: MessageList,
+	argument: string,
+): Promise<void> {
+	const ref = argument.trim();
+	if (!ref) {
+		messages.addError("usage: /model <provider:model>");
+		return;
 	}
-	return filePath;
+	try {
+		await opts.harness.setModel(ref as never);
+		const model = opts.harness.getModel();
+		footer.update({ model: modelLabel(model), contextWindow: (model as Model<Api>).contextWindow });
+		status.update({ model: modelLabel(model) });
+		messages.addNotice(`model → ${ref}`);
+	} catch (err) {
+		messages.addError((err as Error).message);
+	}
+}
+
+async function applyThinkingCommand(
+	opts: InteractiveOptions,
+	footer: TelemetryFooter,
+	messages: MessageList,
+	argument: string,
+): Promise<void> {
+	const value = argument.trim().toLowerCase();
+	if (!isThinkingLevel(value)) {
+		messages.addError("usage: /thinking <off|minimal|low|medium|high|xhigh>");
+		return;
+	}
+	try {
+		await opts.harness.setThinkingLevel(value);
+		footer.update({ thinkingLevel: value });
+		messages.addNotice(`thinking → ${value}`);
+	} catch (err) {
+		messages.addError((err as Error).message);
+	}
+}
+
+function isThinkingLevel(value: string): value is ThinkingLevel {
+	return ["off", "minimal", "low", "medium", "high", "xhigh"].includes(value);
+}
+
+async function applyCompactCommand(opts: InteractiveOptions, messages: MessageList): Promise<void> {
+	messages.addNotice("compacting…");
+	try {
+		const result = await opts.harness.compact();
+		messages.addNotice(`compacted ${result.tokensBefore} tokens`);
+	} catch (err) {
+		messages.addError((err as Error).message);
+	}
+}
+
+async function refreshContextTokens(session: Session): Promise<number> {
+	const context = await session.buildContext();
+	return estimateContextTokens(context.messages).tokens;
+}
+
+function buildSkillSection(skills: Skill[]): Container | undefined {
+	if (skills.length === 0) return undefined;
+	const container = new Container();
+	container.addChild(new Text(colors.blue("[Skills]") + "\n" + skills.map((s) => s.name).join(", "), 0, 0));
+	return container;
 }

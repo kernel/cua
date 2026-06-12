@@ -1,10 +1,18 @@
-import type { EditorTheme, ImageTheme, SelectListTheme } from "@mariozechner/pi-tui";
+import type {
+	EditorTheme,
+	ImageTheme,
+	MarkdownTheme,
+	SelectListTheme,
+} from "@earendil-works/pi-tui";
 
 const RESET = "\x1b[0m";
 
 const ansi = {
 	dim: (text: string) => `\x1b[2m${text}${RESET}`,
 	bold: (text: string) => `\x1b[1m${text}${RESET}`,
+	italic: (text: string) => `\x1b[3m${text}${RESET}`,
+	underline: (text: string) => `\x1b[4m${text}${RESET}`,
+	strikethrough: (text: string) => `\x1b[9m${text}${RESET}`,
 	cyan: (text: string) => `\x1b[36m${text}${RESET}`,
 	green: (text: string) => `\x1b[32m${text}${RESET}`,
 	yellow: (text: string) => `\x1b[33m${text}${RESET}`,
@@ -32,4 +40,21 @@ export const editorTheme: EditorTheme = {
 
 export const imageTheme: ImageTheme = {
 	fallbackColor: (text) => ansi.dim(text),
+};
+
+export const markdownTheme: MarkdownTheme = {
+	heading: (text) => ansi.bold(text),
+	link: (text) => ansi.cyan(text),
+	linkUrl: (text) => ansi.dim(text),
+	code: (text) => ansi.magenta(text),
+	codeBlock: (text) => text,
+	codeBlockBorder: (text) => ansi.dim(text),
+	quote: (text) => ansi.dim(text),
+	quoteBorder: (text) => ansi.dim(text),
+	hr: (text) => ansi.dim(text),
+	listBullet: (text) => ansi.cyan(text),
+	bold: (text) => ansi.bold(text),
+	italic: (text) => ansi.italic(text),
+	strikethrough: (text) => ansi.strikethrough(text),
+	underline: (text) => ansi.underline(text),
 };

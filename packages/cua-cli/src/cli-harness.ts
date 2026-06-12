@@ -173,6 +173,7 @@ export interface HarnessCliFlags {
 	resumePicker: boolean;
 	noSession: boolean;
 	noSkills: boolean;
+	debugTui: boolean;
 	jsonlIncludeDeltas: boolean;
 	jsonlIncludeImages: boolean;
 	model?: string;
@@ -182,6 +183,7 @@ export interface HarnessCliFlags {
 	maxSteps?: number;
 	out?: string;
 	output?: string;
+	imageProtocol?: string;
 	namedSession?: string;
 	sessionRef?: string;
 	sessionDir?: string;
@@ -488,6 +490,31 @@ export async function runPrintCommand(prompt: string, flags: HarnessCliFlags): P
 			stderr.write(`[cua] cleanup warning: ${(err as Error).message}\n`);
 		}
 	}
+}
+
+/** Run the interactive TUI through the new harness wiring. */
+export async function runInteractiveCommand(
+	initialPrompt: string,
+	flags: HarnessCliFlags,
+): Promise<number> {
+	const runtime = await setupHarnessRuntime(flags);
+	const { runInteractive } = await import("./tui/main");
+	return await runInteractive({
+		cwd: process.cwd(),
+		harness: runtime.harness,
+		browserHandle: runtime.handle,
+		session: runtime.session,
+		skills: runtime.skills,
+		modelRef: runtime.modelRef,
+		provider: runtime.provider,
+		thinkingLevel: mapThinkingLevel(flags.thinking),
+		initialPrompt: initialPrompt || undefined,
+		imageProtocol: flags.imageProtocol,
+		debugTui: flags.debugTui,
+		resumed: runtime.resolved?.resumed === true,
+		transcriptPath: runtime.resolved?.transcriptPath,
+		skipInitialScreenshot: runtime.resolved?.resumed === true,
+	});
 }
 
 /** Run a one-shot action subcommand through the new harness wiring. */

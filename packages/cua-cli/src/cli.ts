@@ -1,31 +1,17 @@
 #!/usr/bin/env node
-import { browserSession, type BrowserSession } from "@onkernel/cua-translator";
 import { stderr, stdout } from "node:process";
 import { parseArgs } from "node:util";
 import { type ActionType } from "./action/prompts";
 import {
 	runActionCommand,
+	runInteractiveCommand,
 	runModelsSubcommand as runModelsSubcommandHarness,
 	runPrintCommand,
 	runSessionSubcommand as runSessionSubcommandHarness,
 	type HarnessCliFlags,
 } from "./cli-harness";
 import * as configMod from "./config";
-import { DEFAULT_MODEL_ID, resolveProvider } from "./models";
-import {
-	type NamedSessionMetadata,
-	recordTranscriptPath,
-	attachNamedSession,
-} from "./named-sessions";
-import {
-	findLatestSession,
-	listSessions,
-	openSession,
-	resolveSessionPath,
-	type SessionInfo,
-} from "./sessions";
-import { discoverStartupResources } from "./skills";
-import { runInteractive } from "./tui/main";
+import { DEFAULT_CUA_MODEL_REF } from "./harness-models";
 
 const HELP = `cua — Kernel-cloud-browser computer-use agent
 
@@ -46,18 +32,18 @@ Usage:
 
 Options:
   -p, --print                    Run a single prompt and exit
-  -m, --model <ref>              Model ref (default: openai:${DEFAULT_MODEL_ID})
+  -m, --model <ref>              Model ref (default: ${DEFAULT_CUA_MODEL_REF})
                                  Accepts \`provider:model\` refs or bare ids that
                                  match exactly one entry in \`cua models\`.
                                  Recommended:
-                                   openai:    openai:${DEFAULT_MODEL_ID}
+                                   openai:    openai:gpt-5.5
                                    anthropic: anthropic:claude-opus-4-7
                                    google:    google:gemini-3-flash-preview
                                    tzafon:    tzafon:tzafon.northstar-cua-fast
                                    yutori:    yutori:n1.5-latest
       --thinking <level>         Thinking level: off | minimal | low | medium | high | xhigh
                                  (default: low; applies to providers that support it)
-      --config-profile <p>       Config profile to load (default: from default_profile; interactive only)
+      --config-profile <p>       Legacy TOML config profile to load (only used by \`cua config show\`)
       --profile <name|id>        Kernel browser profile to load
       --profile-no-save-changes  Do not persist changes back to the profile
       --browser-timeout <s>      Browser inactivity timeout in seconds (default 300)
@@ -221,6 +207,7 @@ function toHarnessFlags(flags: CliFlags): HarnessCliFlags {
 		resumePicker: flags.resumePicker,
 		noSession: flags.noSession,
 		noSkills: flags.noSkills,
+		debugTui: flags.debugTui,
 		jsonlIncludeDeltas: flags.jsonlIncludeDeltas,
 		jsonlIncludeImages: flags.jsonlIncludeImages,
 		model: flags.model,
@@ -230,6 +217,7 @@ function toHarnessFlags(flags: CliFlags): HarnessCliFlags {
 		maxSteps: flags.maxSteps,
 		out: flags.out,
 		output: flags.output,
+		imageProtocol: flags.imageProtocol,
 		namedSession: flags.namedSession,
 		sessionRef: flags.sessionRef,
 		sessionDir: flags.sessionDir,
@@ -237,156 +225,7 @@ function toHarnessFlags(flags: CliFlags): HarnessCliFlags {
 	};
 }
 
-/**
- * Load the legacy cua config and verify the keys we need for the requested
- * provider. Only the interactive entry point still consumes this; the new
- * non-interactive paths read API keys from env vars directly.
- */
-async function loadConfigOrFail(flags: CliFlags): Promise<configMod.Config> {
-	const cfg = await configMod.load(flags.configProfile);
-	const modelId = flags.model ?? DEFAULT_MODEL_ID;
-	const provider = resolveProvider(modelId);
-	if (provider === "openai" && !cfg.openaiApiKey) {
-		throw new Error("missing OpenAI API key (set in profile or OPENAI_API_KEY)");
-	}
-	if (provider === "anthropic" && !cfg.anthropicApiKey) {
-		throw new Error("missing Anthropic API key (set in profile or ANTHROPIC_API_KEY)");
-	}
-	if (provider === "gemini" && !cfg.googleApiKey) {
-		throw new Error("missing Google API key (set in profile or GOOGLE_API_KEY / GEMINI_API_KEY)");
-	}
-	if (provider === "tzafon" && !cfg.tzafonApiKey) {
-		throw new Error("missing Tzafon API key (set in profile or TZAFON_API_KEY)");
-	}
-	if (provider === "yutori" && !cfg.yutoriApiKey) {
-		throw new Error("missing Yutori API key (set in profile or YUTORI_API_KEY)");
-	}
-	if (!cfg.kernelApiKey) {
-		throw new Error("missing Kernel API key (set in profile or KERNEL_API_KEY)");
-	}
-	return cfg;
-}
-
-/**
- * Resolve the session policy from CLI flags for the legacy interactive
- * stack. Returns whether to attach to an existing file, create a fresh
- * one, or skip persistence entirely.
- */
-async function resolveSessionFlags(
-	flags: CliFlags,
-	cwd: string,
-	namedMeta?: NamedSessionMetadata,
-): Promise<{ ephemeral: boolean; sessionPath?: string; resumed: boolean }> {
-	if (flags.noSession) return { ephemeral: true, resumed: false };
-	const dir = flags.sessionDir;
-
-	if (flags.sessionRef) {
-		const path = await resolveSessionPath(flags.sessionRef, cwd, dir);
-		return { ephemeral: false, sessionPath: path, resumed: true };
-	}
-
-	if (flags.continueLatest) {
-		const latest = await findLatestSession(cwd, dir);
-		if (!latest) {
-			stderr.write("[cua] no previous session for this cwd; starting fresh\n");
-			return { ephemeral: false, resumed: false };
-		}
-		return { ephemeral: false, sessionPath: latest.path, resumed: true };
-	}
-
-	if (flags.resumePicker) {
-		const sessions = await listSessions(cwd, dir);
-		if (sessions.length === 0) {
-			stderr.write("[cua] no previous sessions for this cwd; starting fresh\n");
-			return { ephemeral: false, resumed: false };
-		}
-		const picked = await pickSession(sessions);
-		if (!picked) return { ephemeral: false, resumed: false };
-		return { ephemeral: false, sessionPath: picked.path, resumed: true };
-	}
-
-	if (namedMeta?.transcript_path) {
-		return { ephemeral: false, sessionPath: namedMeta.transcript_path, resumed: true };
-	}
-
-	return { ephemeral: false, resumed: false };
-}
-
-/** Plain-text session picker. Uses stderr for prompts so stdout stays clean. */
-async function pickSession(sessions: SessionInfo[]): Promise<SessionInfo | undefined> {
-	const sorted = [...sessions].sort((a, b) => b.modified.getTime() - a.modified.getTime());
-	stderr.write("\nResume which session?\n");
-	const limit = Math.min(sorted.length, 20);
-	for (let i = 0; i < limit; i++) {
-		const s = sorted[i]!;
-		const name = s.name ?? truncate(s.firstMessage || "(no messages yet)", 60);
-		const when = formatRelative(s.modified);
-		stderr.write(`  [${i + 1}] ${s.id.slice(0, 8)} · ${when} · ${s.messageCount} msgs · ${name}\n`);
-	}
-	if (sorted.length > limit) {
-		stderr.write(`  (${sorted.length - limit} more not shown; use --session <prefix> to select directly)\n`);
-	}
-	const { createInterface } = await import("node:readline/promises");
-	const rl = createInterface({ input: process.stdin, output: process.stderr });
-	try {
-		const answer = (await rl.question("Pick a number (or blank to skip): ")).trim();
-		if (!answer) return undefined;
-		const n = Number(answer);
-		if (!Number.isFinite(n) || n < 1 || n > limit) {
-			stderr.write("[cua] invalid selection; starting fresh\n");
-			return undefined;
-		}
-		return sorted[n - 1];
-	} finally {
-		rl.close();
-	}
-}
-
-function truncate(text: string, max: number): string {
-	if (text.length <= max) return text;
-	return text.slice(0, max - 1) + "…";
-}
-
-function formatRelative(date: Date): string {
-	const diff = Date.now() - date.getTime();
-	const min = Math.floor(diff / 60_000);
-	if (min < 1) return "just now";
-	if (min < 60) return `${min}m ago`;
-	const hr = Math.floor(min / 60);
-	if (hr < 24) return `${hr}h ago`;
-	const d = Math.floor(hr / 24);
-	return `${d}d ago`;
-}
-
-/** Provision a legacy-stack browser session for the interactive entry point. */
-async function provisionInteractiveBrowser(
-	cfg: configMod.Config,
-	flags: CliFlags,
-): Promise<{ browser: BrowserSession; named?: NamedSessionMetadata }> {
-	if (flags.namedSession) {
-		const { browser, meta } = await attachNamedSession({ name: flags.namedSession, cfg });
-		if (flags.verbose) {
-			stderr.write(`[cua] attached named session "${meta.name}" (browser=${browser.sessionId})\n`);
-			if (browser.liveUrl) stderr.write(`[cua] live view=${browser.liveUrl}\n`);
-		}
-		return { browser, named: meta };
-	}
-	if (flags.verbose) stderr.write("[cua] provisioning Kernel browser...\n");
-	const browser = await browserSession.open({
-		apiKey: cfg.kernelApiKey,
-		baseUrl: cfg.kernelBaseUrl || undefined,
-		timeoutSeconds: flags.browserTimeout,
-		profileSelector: flags.browserProfile,
-		saveChanges: flags.profileSaveChanges,
-	});
-	if (flags.verbose) {
-		stderr.write(`[cua] browser session=${browser.sessionId}\n`);
-		if (browser.liveUrl) stderr.write(`[cua] live view=${browser.liveUrl}\n`);
-	}
-	return { browser };
-}
-
-async function runConfigSubcommand(args: string[], profileFlag?: string): Promise<number> {
+async function runConfigSubcommand(args: string[], profile?: string): Promise<number> {
 	const sub = args[0];
 	if (!sub || sub === "help" || sub === "--help" || sub === "-h") {
 		stdout.write("cua config init|show\n");
@@ -397,7 +236,7 @@ async function runConfigSubcommand(args: string[], profileFlag?: string): Promis
 		return 0;
 	}
 	if (sub === "show") {
-		const text = await configMod.show(profileFlag);
+		const text = await configMod.show(profile);
 		stdout.write(text);
 		return 0;
 	}
@@ -471,48 +310,11 @@ export async function main(argv: string[]): Promise<number> {
 	}
 
 	try {
-		return await runInteractiveCli(prompt, flags);
+		return await runInteractiveCommand(prompt, toHarnessFlags(flags));
 	} catch (err) {
 		stderr.write(`error: ${(err as Error).message}\n`);
 		return 1;
 	}
-}
-
-async function runInteractiveCli(initialPrompt: string, flags: CliFlags): Promise<number> {
-	const cfg = await loadConfigOrFail(flags);
-	const cwd = process.cwd();
-	const provision = await provisionInteractiveBrowser(cfg, flags);
-	const browser = provision.browser;
-	const sessionPolicy = await resolveSessionFlags(flags, cwd, provision.named);
-	const sm = openSession({
-		cwd,
-		sessionDir: flags.sessionDir,
-		sessionPath: sessionPolicy.sessionPath,
-		ephemeral: sessionPolicy.ephemeral,
-	});
-	const transcriptPath = sm.getSessionFile();
-	if (provision.named && transcriptPath) {
-		await recordTranscriptPath(provision.named.name, transcriptPath);
-	}
-	const startupResources = discoverStartupResources({
-		cwd,
-		extraPaths: flags.skillPaths,
-		disabled: flags.noSkills,
-	});
-	return await runInteractive({
-		cwd,
-		browser,
-		config: cfg,
-		modelId: flags.model,
-		initialPrompt: initialPrompt || undefined,
-		verbose: flags.verbose,
-		debugTui: flags.debugTui,
-		imageProtocol: flags.imageProtocol,
-		sessionManager: sm,
-		resumed: sessionPolicy.resumed,
-		skills: startupResources.skills,
-		startupResources,
-	});
 }
 
 main(process.argv.slice(2)).then(

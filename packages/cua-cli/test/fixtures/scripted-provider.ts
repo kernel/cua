@@ -11,8 +11,9 @@ import {
 
 /** One scripted step replayed when the harness asks the provider for a turn. */
 export type ScriptedStep =
-	| { type: "text"; text: string }
+	| { type: "text"; text: string; chunkSize?: number; chunkMs?: number }
 	| { type: "tool_call"; toolName: string; args: Record<string, unknown>; id?: string }
+	| { type: "wait_abort" }
 	| { type: "error"; message: string };
 
 export interface ScriptedTurn {
@@ -51,17 +52,17 @@ export function registerScriptedProvider(api: Api, turns: ScriptedTurn[]): Scrip
 	registerApiProvider(
 		{
 			api,
-			streamSimple: (model, context, _options?: SimpleStreamOptions) => {
+			streamSimple: (model, context, options?: SimpleStreamOptions) => {
 				state.lastContext = context;
 				const turn = turns[state.index];
 				state.index += 1;
-				return buildStream(model, turn);
+				return buildStream(model, turn, options?.signal);
 			},
-			stream: (model, context, _options) => {
+			stream: (model, context, options) => {
 				state.lastContext = context;
 				const turn = turns[state.index];
 				state.index += 1;
-				return buildStream(model, turn);
+				return buildStream(model, turn, options?.signal);
 			},
 		},
 		sourceId,
@@ -82,7 +83,7 @@ export function registerScriptedProvider(api: Api, turns: ScriptedTurn[]): Scrip
 	};
 }
 
-function buildStream(model: Model<Api>, turn: ScriptedTurn | undefined) {
+function buildStream(model: Model<Api>, turn: ScriptedTurn | undefined, signal?: AbortSignal) {
 	const stream = createAssistantMessageEventStream();
 	void (async () => {
 		const message = baseAssistantMessage(model);
@@ -99,14 +100,39 @@ function buildStream(model: Model<Api>, turn: ScriptedTurn | undefined) {
 		let hasToolCall = false;
 		let errorStep: { message: string } | undefined;
 		let contentIndex = 0;
+		let aborted = false;
 
 		for (const step of turn.steps) {
+			if (signal?.aborted) {
+				aborted = true;
+				break;
+			}
 			if (step.type === "text") {
-				message.content.push({ type: "text", text: step.text });
+				const chunkSize = Math.max(1, step.chunkSize ?? step.text.length);
+				const chunkMs = step.chunkMs ?? 0;
+				const aggregated = { text: "" };
 				stream.push({ type: "text_start", contentIndex, partial: message });
-				stream.push({ type: "text_delta", contentIndex, delta: step.text, partial: message });
-				stream.push({ type: "text_end", contentIndex, content: step.text, partial: message });
-				contentIndex += 1;
+				for (const chunk of chunkText(step.text, chunkSize)) {
+					if (signal?.aborted) {
+						aborted = true;
+						break;
+					}
+					aggregated.text += chunk;
+					// Append text to message progressively so the final assistant
+					// message reflects the full streamed value when consumers
+					// inspect partials.
+					if (message.content[contentIndex]?.type === "text") {
+						(message.content[contentIndex] as { text: string }).text = aggregated.text;
+					} else {
+						message.content.push({ type: "text", text: aggregated.text });
+					}
+					stream.push({ type: "text_delta", contentIndex, delta: chunk, partial: message });
+					if (chunkMs > 0) await delay(chunkMs, signal);
+				}
+				if (!aborted) {
+					stream.push({ type: "text_end", contentIndex, content: aggregated.text, partial: message });
+					contentIndex += 1;
+				}
 			} else if (step.type === "tool_call") {
 				hasToolCall = true;
 				const id = step.id ?? `call_${contentIndex + 1}`;
@@ -124,6 +150,10 @@ function buildStream(model: Model<Api>, turn: ScriptedTurn | undefined) {
 					partial: message,
 				});
 				contentIndex += 1;
+			} else if (step.type === "wait_abort") {
+				await waitForAbort(signal);
+				aborted = true;
+				break;
 			} else if (step.type === "error") {
 				errorStep = { message: step.message };
 				break;
@@ -138,12 +168,55 @@ function buildStream(model: Model<Api>, turn: ScriptedTurn | undefined) {
 			return;
 		}
 
+		if (aborted) {
+			message.stopReason = "aborted";
+			message.errorMessage = "aborted";
+			stream.push({ type: "error", reason: "aborted", error: message });
+			stream.end(message);
+			return;
+		}
+
 		const stopReason = turn.stopReason ?? (hasToolCall ? "toolUse" : "stop");
 		message.stopReason = stopReason;
 		stream.push({ type: "done", reason: stopReason, message });
 		stream.end(message);
 	})();
 	return stream;
+}
+
+function chunkText(text: string, chunkSize: number): string[] {
+	const chunks: string[] = [];
+	for (let index = 0; index < text.length; index += chunkSize) {
+		chunks.push(text.slice(index, index + chunkSize));
+	}
+	return chunks.length > 0 ? chunks : [""];
+}
+
+async function delay(ms: number, signal?: AbortSignal): Promise<void> {
+	if (signal?.aborted || ms <= 0) return;
+	await new Promise<void>((resolve) => {
+		const timer = setTimeout(() => {
+			cleanup();
+			resolve();
+		}, ms);
+		const cleanup = () => {
+			clearTimeout(timer);
+			signal?.removeEventListener("abort", onAbort);
+		};
+		const onAbort = () => {
+			cleanup();
+			resolve();
+		};
+		signal?.addEventListener("abort", onAbort, { once: true });
+	});
+}
+
+async function waitForAbort(signal?: AbortSignal): Promise<void> {
+	if (!signal) return;
+	if (signal.aborted) return;
+	await new Promise<void>((resolve) => {
+		signal.addEventListener("abort", () => resolve(), { once: true });
+	});
 }
 
 function baseAssistantMessage(model: Model<Api>): AssistantMessage {
