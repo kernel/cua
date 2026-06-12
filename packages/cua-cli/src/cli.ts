@@ -2,41 +2,29 @@
 import { browserSession, type BrowserSession } from "@onkernel/cua-translator";
 import { stderr, stdout } from "node:process";
 import { parseArgs } from "node:util";
-import { type ActionRequest, type ActionType } from "./action/prompts";
-import { emitCompact, runAction, type RunActionResult } from "./action/runner";
-import { createCuaAgent } from "./agent";
-import { promptWithScreenshot } from "./agent-prompt";
+import { type ActionType } from "./action/prompts";
+import {
+	runActionCommand,
+	runModelsSubcommand as runModelsSubcommandHarness,
+	runPrintCommand,
+	runSessionSubcommand as runSessionSubcommandHarness,
+	type HarnessCliFlags,
+} from "./cli-harness";
 import * as configMod from "./config";
+import { DEFAULT_MODEL_ID, resolveProvider } from "./models";
 import {
-	DEFAULT_MODEL_ID,
-	SUPPORTED_PROVIDERS,
-	type ProviderId,
-	listSupportedModels,
-	resolveProvider,
-} from "./models";
-import {
-	attachNamedSession,
-	formatRelativeAge,
-	listNamedSessions,
 	type NamedSessionMetadata,
 	recordTranscriptPath,
-	shortKernelId,
-	startNamedSession,
-	stopNamedSession,
-	validateSlug,
+	attachNamedSession,
 } from "./named-sessions";
-import { attachJsonlSink } from "./output/jsonl";
 import {
-	appendBrowserMetadata,
 	findLatestSession,
 	listSessions,
 	openSession,
-	persistAgentEvents,
 	resolveSessionPath,
-	seedAgentFromSession,
 	type SessionInfo,
 } from "./sessions";
-import { discoverCuaSkills, discoverStartupResources, expandSkillInvocation } from "./skills";
+import { discoverStartupResources } from "./skills";
 import { runInteractive } from "./tui/main";
 
 const HELP = `cua — Kernel-cloud-browser computer-use agent
@@ -58,14 +46,18 @@ Usage:
 
 Options:
   -p, --print                    Run a single prompt and exit
-  -m, --model <id>               Model id (default: ${DEFAULT_MODEL_ID})
+  -m, --model <ref>              Model ref (default: openai:${DEFAULT_MODEL_ID})
+                                 Accepts \`provider:model\` refs or bare ids that
+                                 match exactly one entry in \`cua models\`.
                                  Recommended:
-                                   openai:    ${DEFAULT_MODEL_ID}
-                                   anthropic: claude-opus-4-7
-                                   gemini:    gemini-3-flash-preview
-                                   tzafon:    tzafon.northstar-cua-fast
-                                   yutori:    n1.5-latest
-      --config-profile <p>       Config profile to load (default: from default_profile)
+                                   openai:    openai:${DEFAULT_MODEL_ID}
+                                   anthropic: anthropic:claude-opus-4-7
+                                   google:    google:gemini-3-flash-preview
+                                   tzafon:    tzafon:tzafon.northstar-cua-fast
+                                   yutori:    yutori:n1.5-latest
+      --thinking <level>         Thinking level: off | minimal | low | medium | high | xhigh
+                                 (default: low; applies to providers that support it)
+      --config-profile <p>       Config profile to load (default: from default_profile; interactive only)
       --profile <name|id>        Kernel browser profile to load
       --profile-no-save-changes  Do not persist changes back to the profile
       --browser-timeout <s>      Browser inactivity timeout in seconds (default 300)
@@ -121,6 +113,7 @@ interface CliFlags {
 	jsonlIncludeDeltas: boolean;
 	jsonlIncludeImages: boolean;
 	model?: string;
+	thinking?: string;
 	configProfile?: string;
 	browserProfile?: string;
 	browserTimeout?: number;
@@ -149,6 +142,7 @@ function parseCliArgs(argv: string[]): CliFlags {
 				print: { type: "boolean", short: "p", default: false },
 				verbose: { type: "boolean", short: "v", default: false },
 				model: { type: "string", short: "m" },
+				thinking: { type: "string" },
 				"config-profile": { type: "string" },
 				profile: { type: "string" },
 				"profile-no-save-changes": { type: "boolean", default: false },
@@ -180,6 +174,15 @@ function parseCliArgs(argv: string[]): CliFlags {
 	const browserTimeout = browserTimeoutRaw ? Number(browserTimeoutRaw) : undefined;
 	const maxStepsRaw = parsed.values["max-steps"];
 	const maxSteps = maxStepsRaw ? Number(maxStepsRaw) : undefined;
+	const thinkingRaw = parsed.values.thinking as string | undefined;
+	if (thinkingRaw !== undefined) {
+		const allowed = new Set(["off", "none", "minimal", "low", "medium", "high", "xhigh"]);
+		if (!allowed.has(thinkingRaw.trim().toLowerCase())) {
+			throw new Error(
+				`invalid --thinking value "${thinkingRaw}"; expected one of: off | minimal | low | medium | high | xhigh`,
+			);
+		}
+	}
 
 	return {
 		help: !!parsed.values.help,
@@ -192,6 +195,7 @@ function parseCliArgs(argv: string[]): CliFlags {
 		noSkills: !!parsed.values["no-skills"],
 		debugTui: !!parsed.values["debug-tui"],
 		model: parsed.values.model as string | undefined,
+		thinking: parsed.values.thinking as string | undefined,
 		configProfile: parsed.values["config-profile"] as string | undefined,
 		browserProfile: parsed.values.profile as string | undefined,
 		browserTimeout: Number.isFinite(browserTimeout) ? browserTimeout : undefined,
@@ -209,10 +213,34 @@ function parseCliArgs(argv: string[]): CliFlags {
 	};
 }
 
+function toHarnessFlags(flags: CliFlags): HarnessCliFlags {
+	return {
+		verbose: flags.verbose,
+		profileSaveChanges: flags.profileSaveChanges,
+		continueLatest: flags.continueLatest,
+		resumePicker: flags.resumePicker,
+		noSession: flags.noSession,
+		noSkills: flags.noSkills,
+		jsonlIncludeDeltas: flags.jsonlIncludeDeltas,
+		jsonlIncludeImages: flags.jsonlIncludeImages,
+		model: flags.model,
+		thinking: flags.thinking,
+		browserProfile: flags.browserProfile,
+		browserTimeout: flags.browserTimeout,
+		maxSteps: flags.maxSteps,
+		out: flags.out,
+		output: flags.output,
+		namedSession: flags.namedSession,
+		sessionRef: flags.sessionRef,
+		sessionDir: flags.sessionDir,
+		skillPaths: flags.skillPaths,
+	};
+}
+
 /**
- * Load the cua config and verify the keys we need for the requested
- * provider. The provider comes from the supported model table, matching
- * what {@link createCuaAgent} will use at run time.
+ * Load the legacy cua config and verify the keys we need for the requested
+ * provider. Only the interactive entry point still consumes this; the new
+ * non-interactive paths read API keys from env vars directly.
  */
 async function loadConfigOrFail(flags: CliFlags): Promise<configMod.Config> {
 	const cfg = await configMod.load(flags.configProfile);
@@ -239,134 +267,10 @@ async function loadConfigOrFail(flags: CliFlags): Promise<configMod.Config> {
 	return cfg;
 }
 
-const MODELS_HELP = `cua models — list supported -m/--model values
-
-Usage:
-  cua models
-  cua models -p openai
-  cua models --provider anthropic
-  cua models --json
-
-Options:
-  -p, --provider <id>  Filter by provider: openai | anthropic | gemini | tzafon | yutori
-      --json           Output JSON
-  -h, --help           Show this help
-`;
-
-interface ModelsFlags {
-	provider?: ProviderId;
-	json: boolean;
-	help: boolean;
-}
-
-function parseModelsProvider(value?: string): ProviderId | undefined {
-	if (!value) return undefined;
-	const v = value.trim().toLowerCase();
-	if (SUPPORTED_PROVIDERS.includes(v as ProviderId)) return v as ProviderId;
-	throw new Error(`unknown provider "${value}" (expected: ${SUPPORTED_PROVIDERS.join(" | ")})`);
-}
-
-function parseModelsArgs(argv: string[]): ModelsFlags {
-	const parsed = parseArgs({
-		args: argv,
-		options: {
-			provider: { type: "string", short: "p" },
-			json: { type: "boolean", default: false },
-			help: { type: "boolean", short: "h", default: false },
-		},
-		allowPositionals: true,
-		strict: true,
-	});
-	const positionalProvider = parsed.positionals[0];
-	if (parsed.positionals.length > 1) {
-		throw new Error(`unexpected arguments: ${parsed.positionals.slice(1).join(" ")}`);
-	}
-	return {
-		provider: parseModelsProvider((parsed.values.provider as string | undefined) ?? positionalProvider),
-		json: !!parsed.values.json,
-		help: !!parsed.values.help,
-	};
-}
-
-async function runModelsSubcommand(args: string[]): Promise<number> {
-	let flags: ModelsFlags;
-	try {
-		flags = parseModelsArgs(args);
-	} catch (err) {
-		stderr.write(`${(err as Error).message}\n\n${MODELS_HELP}`);
-		return 2;
-	}
-	if (flags.help) {
-		stdout.write(MODELS_HELP);
-		return 0;
-	}
-
-	const models = listSupportedModels(flags.provider);
-	if (flags.json) {
-		stdout.write(`${JSON.stringify(models, null, 2)}\n`);
-		return 0;
-	}
-
-	stdout.write(formatModelsTable(models));
-	return 0;
-}
-
-function formatModelsTable(models: ReturnType<typeof listSupportedModels>): string {
-	const rows = models.map((model) => ({
-		provider: model.provider,
-		model: model.model,
-		default: model.default ? "yes" : "",
-		name: model.name,
-	}));
-	const headers = {
-		provider: "PROVIDER",
-		model: "MODEL",
-		default: "DEFAULT",
-		name: "NAME",
-	};
-	const widths = {
-		provider: columnWidth(headers.provider, rows.map((row) => row.provider)),
-		model: columnWidth(headers.model, rows.map((row) => row.model)),
-		default: columnWidth(headers.default, rows.map((row) => row.default)),
-		name: columnWidth(headers.name, rows.map((row) => row.name)),
-	};
-	const lines = [
-		[
-			headers.provider.padEnd(widths.provider),
-			headers.model.padEnd(widths.model),
-			headers.default.padEnd(widths.default),
-			headers.name,
-		].join("  "),
-		[
-			"-".repeat(widths.provider),
-			"-".repeat(widths.model),
-			"-".repeat(widths.default),
-			"-".repeat(widths.name),
-		].join("  "),
-	];
-	for (const row of rows) {
-		lines.push(
-			[
-				row.provider.padEnd(widths.provider),
-				row.model.padEnd(widths.model),
-				row.default.padEnd(widths.default),
-				row.name,
-			].join("  "),
-		);
-	}
-	return `${lines.join("\n")}\n`;
-}
-
-function columnWidth(header: string, values: string[]): number {
-	return Math.max(header.length, ...values.map((value) => value.length));
-}
-
 /**
- * Resolve the session policy from CLI flags. Returns the source of truth
- * for whether to attach to an existing file, create a fresh one, or skip
- * persistence entirely. When `namedMeta` is provided (i.e. `-s <name>`
- * was used), its `transcript_path` becomes the default session path
- * unless an explicit `--session` / `-c` / `-r` flag overrides it.
+ * Resolve the session policy from CLI flags for the legacy interactive
+ * stack. Returns whether to attach to an existing file, create a fresh
+ * one, or skip persistence entirely.
  */
 async function resolveSessionFlags(
 	flags: CliFlags,
@@ -454,13 +358,11 @@ function formatRelative(date: Date): string {
 	return `${d}d ago`;
 }
 
-interface ProvisionedBrowser {
-	browser: BrowserSession;
-	/** Named session metadata when `-s <name>` was used; otherwise undefined. */
-	named?: NamedSessionMetadata;
-}
-
-async function provisionBrowser(cfg: configMod.Config, flags: CliFlags): Promise<ProvisionedBrowser> {
+/** Provision a legacy-stack browser session for the interactive entry point. */
+async function provisionInteractiveBrowser(
+	cfg: configMod.Config,
+	flags: CliFlags,
+): Promise<{ browser: BrowserSession; named?: NamedSessionMetadata }> {
 	if (flags.namedSession) {
 		const { browser, meta } = await attachNamedSession({ name: flags.namedSession, cfg });
 		if (flags.verbose) {
@@ -469,7 +371,6 @@ async function provisionBrowser(cfg: configMod.Config, flags: CliFlags): Promise
 		}
 		return { browser, named: meta };
 	}
-
 	if (flags.verbose) stderr.write("[cua] provisioning Kernel browser...\n");
 	const browser = await browserSession.open({
 		apiKey: cfg.kernelApiKey,
@@ -504,292 +405,11 @@ async function runConfigSubcommand(args: string[], profileFlag?: string): Promis
 	return 2;
 }
 
-const SESSION_HELP = `cua session start [name]   Start a new named browser session.
-cua session stop  <name>   Tear down a named session.
-cua session list           List existing named sessions.
-cua session show  <name>   Print full metadata for a named session.
-
-Use \`-s <name>\` on any other command to reuse the named session's
-browser (e.g. \`cua -s login open https://...\`).`;
-
-function generateSessionSlug(): string {
-	const adjectives = ["calm", "brisk", "swift", "quiet", "bright", "sharp"];
-	const nouns = ["fox", "owl", "lynx", "hawk", "wolf", "moth"];
-	const adj = adjectives[Math.floor(Math.random() * adjectives.length)] ?? "calm";
-	const noun = nouns[Math.floor(Math.random() * nouns.length)] ?? "fox";
-	const stamp = Date.now().toString(36).slice(-4);
-	return `${adj}-${noun}-${stamp}`;
-}
-
-async function runSessionSubcommand(args: string[], flags: CliFlags): Promise<number> {
-	const sub = args[0];
-	if (!sub || sub === "help" || sub === "--help" || sub === "-h") {
-		stdout.write(`${SESSION_HELP}\n`);
-		return 0;
-	}
-
-	switch (sub) {
-		case "start": {
-			const name = (args[1] ?? "").trim() || generateSessionSlug();
-			validateSlug(name);
-			const cfg = await loadConfigOrFail(flags);
-			const { meta, metadataPath, browser } = await startNamedSession({
-				name,
-				cfg,
-				configProfile: flags.configProfile,
-				browserProfile: flags.browserProfile,
-				browserTimeoutSeconds: flags.browserTimeout,
-				saveProfileChanges: flags.profileSaveChanges,
-			});
-			stdout.write(`name=${meta.name}\n`);
-			stdout.write(`kernel_session_id=${browser.sessionId}\n`);
-			if (browser.liveUrl) stdout.write(`live_url=${browser.liveUrl}\n`);
-			stdout.write(`metadata=${metadataPath}\n`);
-			stdout.write(`\nUse: cua -s ${meta.name} <subcommand>...\n`);
-			return 0;
-		}
-		case "stop": {
-			const name = (args[1] ?? "").trim();
-			if (!name) {
-				stderr.write("usage: cua session stop <name>\n");
-				return 2;
-			}
-			validateSlug(name);
-			const cfg = await loadConfigOrFail(flags);
-			const result = await stopNamedSession({ name, cfg });
-			if (!result.existed) {
-				stderr.write(`no named session "${name}"\n`);
-				return 1;
-			}
-			stdout.write(
-				result.kernelDeleted
-					? `stopped ${name} (kernel browser deleted)\n`
-					: `stopped ${name} (kernel browser was already gone)\n`,
-			);
-			return 0;
-		}
-		case "list": {
-			const sessions = await listNamedSessions();
-			if (sessions.length === 0) {
-				stdout.write("(no named sessions; run `cua session start [name]`)\n");
-				return 0;
-			}
-			const header = ["NAME", "KERNEL_ID", "AGE", "LIVE_URL"].join("\t");
-			stdout.write(`${header}\n`);
-			for (const s of sessions) {
-				stdout.write(
-					[s.name, shortKernelId(s.kernel_session_id), formatRelativeAge(s.created_at), s.live_url ?? "-"].join("\t") +
-						"\n",
-				);
-			}
-			return 0;
-		}
-		case "show": {
-			const name = (args[1] ?? "").trim();
-			if (!name) {
-				stderr.write("usage: cua session show <name>\n");
-				return 2;
-			}
-			validateSlug(name);
-			const sessions = await listNamedSessions();
-			const meta = sessions.find((s) => s.name === name);
-			if (!meta) {
-				stderr.write(`no named session "${name}"\n`);
-				return 1;
-			}
-			stdout.write(`${JSON.stringify(meta, null, 2)}\n`);
-			return 0;
-		}
-		default:
-			stderr.write(`unknown session subcommand: ${sub}\n${SESSION_HELP}\n`);
-			return 2;
-	}
-}
-
-async function runPrint(prompt: string, flags: CliFlags): Promise<number> {
-	const cfg = await loadConfigOrFail(flags);
-	const cwd = process.cwd();
-	const provision = await provisionBrowser(cfg, flags);
-	const browser = provision.browser;
-	const sessionPolicy = await resolveSessionFlags(flags, cwd, provision.named);
-	const sm = openSession({
-		cwd,
-		sessionDir: flags.sessionDir,
-		sessionPath: sessionPolicy.sessionPath,
-		ephemeral: sessionPolicy.ephemeral,
-	});
-	const { skills } = discoverCuaSkills({ cwd, extraPaths: flags.skillPaths, disabled: flags.noSkills });
-	const { expanded, skill: invokedSkill } = expandSkillInvocation(prompt, skills);
-	if (invokedSkill && flags.verbose) stderr.write(`[cua] expanded /skill:${invokedSkill.name}\n`);
-	const handle = createCuaAgent({
-		cwd,
-		browser,
-		config: cfg,
-		modelId: flags.model,
-		sessionId: browser.sessionId,
-		skills,
-	});
-	if (sessionPolicy.resumed) seedAgentFromSession(handle.agent, sm);
-	appendBrowserMetadata(sm, browser);
-	const unsubscribePersist = persistAgentEvents(handle.agent, sm);
-	const transcriptPath = sm.getSessionFile();
-	if (provision.named && transcriptPath) {
-		await recordTranscriptPath(provision.named.name, transcriptPath);
-	}
-	if (flags.verbose) {
-		if (transcriptPath) stderr.write(`[cua] session=${transcriptPath}\n`);
-		if (sessionPolicy.resumed) stderr.write("[cua] resumed prior session into fresh browser\n");
-	}
-
-	const jsonlMode = (flags.output ?? "text").toLowerCase() === "jsonl";
-	let unsubscribeJsonl: (() => void) | undefined;
-	if (jsonlMode) {
-		unsubscribeJsonl = attachJsonlSink(handle.agent, {
-			browser,
-			modelId: handle.model.id,
-			provider: handle.provider,
-			includeDeltas: flags.jsonlIncludeDeltas,
-			includeImages: flags.jsonlIncludeImages,
-		});
-	}
-
-	const unsubscribe = handle.agent.subscribe((event) => {
-		if (jsonlMode) return;
-		if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
-			stdout.write(event.assistantMessageEvent.delta);
-			return;
-		}
-		if (flags.verbose && event.type === "tool_execution_start") {
-			stderr.write(`\n[cua] tool ${event.toolName} ${JSON.stringify(event.args)}\n`);
-		}
-		if (flags.verbose && event.type === "tool_execution_end") {
-			stderr.write(`[cua] tool ${event.toolName} done\n`);
-		}
-	});
-
-	let exitCode = 0;
-	try {
-		await promptWithScreenshot({
-			agent: handle.agent,
-			translator: handle.translator,
-			prompt: expanded,
-			options: { skipInitialScreenshot: sessionPolicy.resumed },
-		});
-		const agentError = (handle.agent.state as { errorMessage?: string }).errorMessage;
-		if (agentError) {
-			throw new Error(agentError);
-		}
-		if (!jsonlMode) stdout.write("\n");
-	} catch (err) {
-		if (jsonlMode) {
-			stdout.write(
-				JSON.stringify({
-					type: "error",
-					code: "run_failed",
-					message: (err as Error).message,
-					ts: Date.now(),
-				}) + "\n",
-			);
-		} else {
-			stderr.write(`\n[cua] error: ${(err as Error).message}\n`);
-		}
-		exitCode = 1;
-	} finally {
-		unsubscribe();
-		unsubscribeJsonl?.();
-		unsubscribePersist();
-		try {
-			await handle.dispose();
-		} catch (err) {
-			stderr.write(`[cua] cleanup warning: ${(err as Error).message}\n`);
-		}
-	}
-	return exitCode;
-}
-
-async function runActionSub(action: ActionType, rest: string[], flags: CliFlags): Promise<number> {
-	const cfg = await loadConfigOrFail(flags);
-	const cwd = process.cwd();
-	const provision = await provisionBrowser(cfg, flags);
-	const browser = provision.browser;
-
-	const req: ActionRequest = buildActionRequest(action, rest);
-	if (flags.maxSteps !== undefined) req.maxTurns = flags.maxSteps;
-
-	const screenshotOut = flags.out
-		? { out: flags.out }
-		: action === "screenshot"
-			? { out: "screenshot.png" }
-			: undefined;
-
-	// For named sessions the transcript should persist across action calls so
-	// external analysis can correlate them. For one-shot subcommand calls
-	// without a named session we skip the SessionManager entirely.
-	let sm: ReturnType<typeof openSession> | undefined;
-	if (provision.named) {
-		const sessionPolicy = await resolveSessionFlags(flags, cwd, provision.named);
-		sm = openSession({
-			cwd,
-			sessionDir: flags.sessionDir,
-			sessionPath: sessionPolicy.sessionPath,
-			ephemeral: sessionPolicy.ephemeral,
-		});
-		appendBrowserMetadata(sm, browser);
-		const transcriptPath = sm.getSessionFile();
-		if (transcriptPath) await recordTranscriptPath(provision.named.name, transcriptPath);
-		if (flags.verbose && transcriptPath) stderr.write(`[cua] session=${transcriptPath}\n`);
-	}
-
-	let res: RunActionResult;
-	try {
-		res = await runAction(
-			req,
-			{
-				cwd,
-				browser,
-				config: cfg,
-				modelId: flags.model,
-				verbose: flags.verbose,
-				sessionManager: sm,
-			},
-			screenshotOut,
-		);
-	} finally {
-		try {
-			await browser.close();
-		} catch (err) {
-			stderr.write(`[cua] cleanup warning: ${(err as Error).message}\n`);
-		}
-	}
-	return emitCompact(res);
-}
-
-function buildActionRequest(action: ActionType, rest: string[]): ActionRequest {
-	switch (action) {
-		case "open":
-			return { action, text: rest[0] };
-		case "click":
-			return { action, target: rest.join(" ") };
-		case "type":
-			return { action, target: rest[0], text: rest[1] };
-		case "press":
-			return { action, keys: rest };
-		case "observe":
-			return { action, text: rest.join(" ") };
-		case "url":
-			return { action };
-		case "screenshot":
-			return { action };
-		case "do":
-			return { action, text: rest.join(" ") };
-	}
-}
-
 const SUBCOMMANDS = new Set(["open", "click", "type", "press", "observe", "url", "screenshot", "do"]);
 
 export async function main(argv: string[]): Promise<number> {
 	if (argv[0] === "models") {
-		return await runModelsSubcommand(argv.slice(1));
+		return await runModelsSubcommandHarness(argv.slice(1));
 	}
 
 	let flags: CliFlags;
@@ -819,7 +439,7 @@ export async function main(argv: string[]): Promise<number> {
 
 	if (first === "session") {
 		try {
-			return await runSessionSubcommand(positionals.slice(1), flags);
+			return await runSessionSubcommandHarness(positionals.slice(1), toHarnessFlags(flags));
 		} catch (err) {
 			stderr.write(`session error: ${(err as Error).message}\n`);
 			return 2;
@@ -828,7 +448,7 @@ export async function main(argv: string[]): Promise<number> {
 
 	if (first && SUBCOMMANDS.has(first)) {
 		try {
-			return await runActionSub(first as ActionType, positionals.slice(1), flags);
+			return await runActionCommand(first as ActionType, positionals.slice(1), toHarnessFlags(flags));
 		} catch (err) {
 			stderr.write(`error: ${(err as Error).message}\n`);
 			return 2;
@@ -843,7 +463,7 @@ export async function main(argv: string[]): Promise<number> {
 			return 2;
 		}
 		try {
-			return await runPrint(prompt, flags);
+			return await runPrintCommand(prompt, toHarnessFlags(flags));
 		} catch (err) {
 			stderr.write(`error: ${(err as Error).message}\n`);
 			return 1;
@@ -861,7 +481,7 @@ export async function main(argv: string[]): Promise<number> {
 async function runInteractiveCli(initialPrompt: string, flags: CliFlags): Promise<number> {
 	const cfg = await loadConfigOrFail(flags);
 	const cwd = process.cwd();
-	const provision = await provisionBrowser(cfg, flags);
+	const provision = await provisionInteractiveBrowser(cfg, flags);
 	const browser = provision.browser;
 	const sessionPolicy = await resolveSessionFlags(flags, cwd, provision.named);
 	const sm = openSession({
