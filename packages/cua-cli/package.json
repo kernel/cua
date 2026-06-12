@@ -1,7 +1,7 @@
 {
   "name": "@onkernel/cua-cli",
   "version": "0.1.0",
-  "description": "Kernel-cloud-browser computer-use TUI: provider-agnostic CLI integrating @onkernel/cua-{translator,openai,anthropic,gemini,tzafon}",
+  "description": "Kernel-cloud-browser computer-use TUI built on @onkernel/cua-agent and pi-tui",
   "type": "module",
   "main": "./dist/cli.js",
   "types": "./dist/cli.d.ts",
@@ -20,20 +20,9 @@
   "dependencies": {
     "@earendil-works/pi-coding-agent": "0.79.1",
     "@earendil-works/pi-tui": "0.79.1",
-    "@mariozechner/pi-agent-core": "0.67.6",
-    "@mariozechner/pi-ai": "0.67.6",
-    "@mariozechner/pi-coding-agent": "0.67.6",
-    "@mariozechner/pi-tui": "0.67.6",
     "@onkernel/cua-agent": "0.3.3",
     "@onkernel/cua-ai": "0.3.0",
-    "@onkernel/cua-anthropic": "0.1.0",
-    "@onkernel/cua-gemini": "0.1.0",
-    "@onkernel/cua-openai": "0.1.0",
-    "@onkernel/cua-translator": "0.1.0",
-    "@onkernel/cua-tzafon": "0.1.0",
-    "@onkernel/cua-yutori": "0.1.0",
-    "@onkernel/sdk": "0.49.0",
-    "smol-toml": "1.5.1"
+    "@onkernel/sdk": "0.49.0"
   },
   "devDependencies": {
     "@onkernel/ptywright": "0.1.0",
