@@ -1,0 +1,124 @@
+name: Release CUA CLI
+
+on:
+  push:
+    tags:
+      - "cua-cli/v*"
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: release-cua-cli-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PTYWRIGHT_ZIG_VERSION: "0.15.2"
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Verify tag is on main
+        run: |
+          git fetch origin main:refs/remotes/origin/main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Ensure npm supports trusted publishing
+        run: npm install -g npm@^11.5.1
+
+      - run: npm ci
+
+      - name: Verify package version matches tag
+        run: |
+          node --input-type=module <<'EOF'
+          import { readFileSync } from "node:fs";
+
+          const tag = process.env.GITHUB_REF_NAME;
+          const prefix = "cua-cli/v";
+          if (!tag?.startsWith(prefix)) {
+            throw new Error(`Expected tag to start with ${prefix}, got ${tag}`);
+          }
+
+          const tagVersion = tag.slice(prefix.length);
+          const pkg = JSON.parse(readFileSync("packages/cli/package.json", "utf8"));
+          if (pkg.version !== tagVersion) {
+            throw new Error(`Tag version ${tagVersion} does not match ${pkg.name} package.json version ${pkg.version}`);
+          }
+
+          console.log(`${pkg.name}@${pkg.version}`);
+          EOF
+
+      - name: Cache Zig toolchain
+        uses: actions/cache@v4
+        with:
+          path: .dev/tools/zig-x86_64-linux-${{ env.PTYWRIGHT_ZIG_VERSION }}
+          key: zig-${{ runner.os }}-${{ env.PTYWRIGHT_ZIG_VERSION }}
+
+      - name: Install Zig ${{ env.PTYWRIGHT_ZIG_VERSION }}
+        run: |
+          set -euo pipefail
+          ZIG_DIR=".dev/tools/zig-x86_64-linux-${PTYWRIGHT_ZIG_VERSION}"
+          if [ ! -x "${ZIG_DIR}/zig" ]; then
+            mkdir -p .dev/tools
+            curl -fsSL "https://ziglang.org/download/${PTYWRIGHT_ZIG_VERSION}/zig-x86_64-linux-${PTYWRIGHT_ZIG_VERSION}.tar.xz" \
+              | tar -xJ -C .dev/tools
+          fi
+          "${ZIG_DIR}/zig" version
+          echo "${GITHUB_WORKSPACE}/${ZIG_DIR}" >> "${GITHUB_PATH}"
+
+      - name: Cache ptywright native artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            packages/ptywright/.cache
+            packages/ptywright/native/build
+          key: ptywright-${{ runner.os }}-${{ hashFiles('packages/ptywright/GHOSTTY_UPSTREAM', 'packages/ptywright/native/**', 'packages/ptywright/scripts/**') }}
+
+      - run: npm run build --workspace @onkernel/cua-ai
+      - run: npm run build --workspace @onkernel/cua-agent
+
+      - name: Build ptywright (native binding)
+        run: npm run build --workspace @onkernel/ptywright
+
+      - name: Build cua-cli
+        run: npm run build --workspace @onkernel/cua-cli
+
+      - name: Verify runtime dependencies are published
+        run: |
+          node -p 'require("./packages/cli/package.json").dependencies["@onkernel/cua-ai"]' \
+            | xargs -I{} npm view @onkernel/cua-ai@{} version
+          node -p 'require("./packages/cli/package.json").dependencies["@onkernel/cua-agent"]' \
+            | xargs -I{} npm view @onkernel/cua-agent@{} version
+
+      - name: CLI unit tests
+        env:
+          PTYWRIGHT_REQUIRED: "1"
+        run: npm test --workspace @onkernel/cua-cli
+
+      - name: Pack tarball
+        run: npm pack --workspace @onkernel/cua-cli --pack-destination "$RUNNER_TEMP"
+
+      - name: CLI bin smoke test
+        run: |
+          SMOKE_DIR=$(mktemp -d)
+          cd "$SMOKE_DIR"
+          npm init -y > /dev/null
+          npm install "$RUNNER_TEMP"/onkernel-cua-cli-*.tgz
+          OUTPUT=$(./node_modules/.bin/cua --help)
+          echo "$OUTPUT"
+          echo "$OUTPUT" | grep -q "Usage:"
+          echo "$OUTPUT" | grep -q "cua \[options\] \[prompt\.\.\.\]"
+
+      - name: Publish to npm
+        run: npm publish --workspace @onkernel/cua-cli --access public
