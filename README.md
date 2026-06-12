@@ -42,14 +42,9 @@ All of them expect you to:
 
 ```
 packages/
-├── ai/               # @onkernel/cua-ai           - CUA model catalog + tool schemas + provider adapters (on npm)
-├── agent/            # @onkernel/cua-agent        - CuaAgent/CuaAgentHarness Kernel-browser execution loop (on npm)
-├── cua-translator/   # @onkernel/cua-translator   - [deprecated] shared SDK types + translator + browser-session
-├── cua-openai/       # @onkernel/cua-openai       - [deprecated] gpt-* (batch_computer_actions + computer_use_extra)
-├── cua-anthropic/    # @onkernel/cua-anthropic    - [deprecated] claude-* (computer_20251124 + batch_computer_actions + onPayload)
-├── cua-gemini/       # @onkernel/cua-gemini       - [deprecated] gemini-* (predefined functions + batch_computer_actions)
-├── cua-yutori/       # @onkernel/cua-yutori       - [deprecated] n1* (Navigator browser actions)
-└── cua-cli/          # @onkernel/cua-cli          - the CLI; depends on the cua-* providers above
+├── ai/      # @onkernel/cua-ai    - CUA model catalog + tool schemas + provider adapters (on npm)
+├── agent/   # @onkernel/cua-agent - CuaAgent/CuaAgentHarness Kernel-browser execution loop (on npm)
+└── cua-cli/ # @onkernel/cua-cli   - the `cua` binary; built on cua-agent + cua-ai
 ```
 
 **Building your own agent? Start here:** [`packages/agent`](packages/agent)
@@ -58,42 +53,29 @@ computer-use loop against a Kernel browser. It sits on
 [`packages/ai`](packages/ai) (`@onkernel/cua-ai`), the model layer with the
 curated computer-use model catalog, canonical tool schemas, and per-provider
 adapters on top of pi-ai; reach for cua-ai directly only when you bring your
-own execution. Both are published to npm. The `cua-*` packages below are
-deprecated — cua-ai/cua-agent are the canonical source now — and remain only
-to back the `cua` CLI.
+own execution. Both are published to npm.
 
 ```mermaid
 flowchart LR
-  trans[("@onkernel/cua-translator")]
-  oai[("@onkernel/cua-openai")]
-  ant[("@onkernel/cua-anthropic")]
-  gem[("@onkernel/cua-gemini")]
-  yut[("@onkernel/cua-yutori")]
+  ai[("@onkernel/cua-ai")]
+  agent[("@onkernel/cua-agent")]
   cli[("@onkernel/cua-cli")]
   pi[("pi-agent-core / pi-ai / pi-tui / pi-coding-agent")]
   sdk[("@onkernel/sdk")]
-  trans --> oai
-  trans --> ant
-  trans --> gem
-  trans --> yut
-  trans --> sdk
-  oai --> cli
-  ant --> cli
-  gem --> cli
-  yut --> cli
+  ai --> agent
+  agent --> cli
+  ai --> cli
+  pi --> agent
   pi --> cli
+  sdk --> agent
+  sdk --> cli
 ```
 
-| Package                                               | What it ships                                                                                                                            |
-| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| [`@onkernel/cua-ai`](packages/ai)                     | Computer-use model catalog (`getCuaModel`/`listCuaModels`), canonical CUA tool schemas, and provider adapters/runtime specs built on pi-ai. On npm. |
-| [`@onkernel/cua-agent`](packages/agent)               | `CuaAgent`/`CuaAgentHarness` classes that execute cua-ai tool calls against a Kernel browser, screenshot loop included. On npm.          |
-| [`@onkernel/cua-translator`](packages/cua-translator) | **Deprecated** (use `cua-ai`/`cua-agent`). Provider-agnostic `ComputerTranslator`, key/scroll/drag math, `goto`/`back`/`forward`/`url` builders, browser-session helper.            |
-| [`@onkernel/cua-openai`](packages/cua-openai)         | **Deprecated** (use `cua-ai`/`cua-agent`). `batch_computer_actions` + `computer_use_extra` AgentTools and JSON Schemas for OpenAI computer-use models.                              |
-| [`@onkernel/cua-anthropic`](packages/cua-anthropic)   | **Deprecated** (use `cua-ai`/`cua-agent`). `computer` (built-in `computer_20251124`) + `batch_computer_actions` AgentTools, beta-header stream wrapper, payload hook.               |
-| [`@onkernel/cua-gemini`](packages/cua-gemini)         | **Deprecated** (use `cua-ai`/`cua-agent`). 13 per-action AgentTools matching Gemini's predefined computer-use functions, plus `batch_computer_actions`. Coordinate denormalization. |
-| [`@onkernel/cua-yutori`](packages/cua-yutori)         | **Deprecated** (use `cua-ai`/`cua-agent`). AgentTools matching Yutori Navigator browser actions, with outbound payload filtering so Yutori uses its built-in action set.             |
-| [`@onkernel/cua-cli`](packages/cua-cli)               | The `cua` binary: argv parsing, config, sessions, skills, JSONL output, pi-tui front-end.                                                |
+| Package                                 | What it ships                                                                                                                            |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| [`@onkernel/cua-ai`](packages/ai)       | Computer-use model catalog (`getCuaModel`/`listCuaModels`), canonical CUA tool schemas, and provider adapters/runtime specs built on pi-ai. On npm. |
+| [`@onkernel/cua-agent`](packages/agent) | `CuaAgent`/`CuaAgentHarness` classes that execute cua-ai tool calls against a Kernel browser, screenshot loop included. On npm.          |
+| [`@onkernel/cua-cli`](packages/cua-cli) | The `cua` binary: argv parsing, sessions, skills, JSONL output, pi-tui front-end.                                                        |
 
 ---
 
@@ -154,42 +136,26 @@ cua -p -o jsonl "open example.com and tell me the heading"
 
 ## How it works
 
-1. **Agent loop** — `pi-agent-core`'s `Agent` owns the message
-   transcript, tool execution, and streaming. `pi-ai` handles the actual
-   HTTP call to OpenAI Responses, Anthropic Messages, or Google
-   Generative AI.
-2. **Translator** — `@onkernel/cua-translator` exposes a canonical
-   `ModelAction` vocabulary (click/scroll/type/keypress/drag/wait, plus
-   the cua-added `goto`/`back`/`forward`/`url`) and translates batched
-   sequences into a single Kernel `browsers.computer.batch` call. Read
-   actions (`url`, `screenshot`) flush pending writes and return
-   structured results.
-3. **Provider adapters** — one focused npm package per provider wraps
-   the translator with `pi-agent-core` `AgentTool`s shaped exactly the
-   way that provider expects. Each adapter ships:
-   - The official action vocabulary (with citations).
-   - The cua-added `batch_computer_actions` tool with the same canonical
-     action union, so users get one-round-trip multi-action calls
-     consistently across providers.
-   - Any provider-specific glue (Anthropic's `onPayload` tool-spec
-     injection + `computer-use-2025-11-24` beta header, Gemini's
-     0-1000 coord denormalization, …).
+1. **Model layer** — `@onkernel/cua-ai` owns the curated computer-use
+   model catalog (`getCuaModel`/`listCuaModels`), the canonical CUA
+   tool-call schemas, and per-provider adapters on top of `pi-ai` so
+   every model emits the same `CuaAction` vocabulary.
+2. **Execution layer** — `@onkernel/cua-agent` wraps `pi-agent-core`'s
+   `Agent`/`AgentHarness`. `CuaAgentHarness` runs the
+   prompt/screenshot/tool loop against a Kernel browser: it dispatches
+   canonical CUA tool calls into Kernel SDK `browsers.computer.*` calls
+   and captures a fresh screenshot back to the model on every turn.
+3. **CLI** — `@onkernel/cua-cli` assembles a `CuaAgentHarness` from
+   command-line flags, env-var-based API keys, a `JsonlSessionRepo` for
+   transcripts, and pi skills; renders the result either as plain text
+   (`--print`), JSONL events (`-o jsonl`), or an interactive pi-tui
+   front-end.
 4. **Browser** — a fresh Kernel cloud browser session per run (or per
    resume) with optional named profile load/save. Every screenshot the
    model sees is a real PNG of a real browser tab.
 
-Per-provider differences in one place:
-
-|                       | OpenAI gpt-5.5                                           | Anthropic claude-opus-4-7                                           | Google gemini-3-flash-preview                                         |
-| --------------------- | -------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| Transport             | HTTP SSE (`api.openai.com/v1/responses`)                 | HTTP SSE (`api.anthropic.com/v1/messages`)                          | HTTP SSE (`generativelanguage.googleapis.com`)                        |
-| Beta header           | none                                                     | `anthropic-beta: computer-use-2025-11-24`                           | none                                                                  |
-| Computer tool surface | `batch_computer_actions` + `computer_use_extra` (custom) | built-in `computer_20251124` + `batch_computer_actions` (cua-added) | 13 predefined functions + `batch_computer_actions` (cua-added)        |
-| Action shape          | `{type:"click", x, y}`, `{type:"goto", url}`             | `{action:"left_click", coordinate:[x,y]}`                           | per-function (`click_at {x, y}`, `navigate {url}`, …) — 0-1000 coords |
-| Tool result           | `function_call_output` w/ text + image                   | `tool_result` w/ text + image                                       | `functionResponse` w/ text + image                                    |
-
-All three flavors land in the same `ComputerTranslator` and the same
-Kernel SDK calls. See [`docs/architecture.md`](docs/architecture.md).
+See [`docs/architecture.md`](docs/architecture.md) for the full
+end-to-end flow.
 
 ---
 
@@ -349,93 +315,23 @@ ln -s "$(pwd)/skills/cua-cli" ~/.agents/skills/cua-cli
 
 ---
 
-## Provider package details
-
-Each provider package documents its own action reference (official
-per-provider actions vs cua extensions, with citations) and a
-copy-pasteable "embed in your own agent" snippet:
-
-- [`@onkernel/cua-openai`](packages/cua-openai/README.md)
-- [`@onkernel/cua-anthropic`](packages/cua-anthropic/README.md)
-- [`@onkernel/cua-gemini`](packages/cua-gemini/README.md)
-- [`@onkernel/cua-yutori`](packages/cua-yutori/README.md)
-
-The cua-added actions (`goto`, `back`, `forward`, `url`, plus the
-`batch_computer_actions` tool itself) are clearly marked as "cua
-extension, not in the provider's official set" in each package's README
-and live in `src/cua-extras.ts` for easy removal.
-
----
-
 ## Project layout
 
 ```
 bin/
-└── cua                         # POSIX wrapper script (symlink into your $PATH)
+└── cua              # POSIX wrapper script (symlink into your $PATH)
 skills/
-└── cua-cli/SKILL.md            # skill aimed at OTHER agents driving cua via shell
+└── cua-cli/SKILL.md # skill aimed at OTHER agents driving cua via shell
 packages/
-├── ai/                         # @onkernel/cua-ai — model layer (see packages/ai/README.md)
-├── agent/                      # @onkernel/cua-agent — Kernel-browser execution layer (see packages/agent/README.md)
-├── cua-translator/
-│   └── src/
-│       ├── types.ts            # ModelAction / BatchAction / errors
-│       ├── keysym.ts           # X11 keysym map + splitKeypress
-│       ├── scroll.ts           # pixel-delta ↔ wheel-tick helpers
-│       ├── cua-extras.ts       # goto/back/forward/url builders
-│       ├── translator.ts       # ComputerTranslator
-│       └── browser-session.ts  # @onkernel/sdk wrapper (open + attach)
-├── cua-openai/
-│   └── src/
-│       ├── official.ts         # OpenAI computer-use official 9 actions (TypeBox + JSDoc citations)
-│       ├── cua-extras.ts       # cua-added actions schema
-│       ├── batch-tool.ts       # batch_computer_actions AgentTool
-│       ├── extra-tool.ts       # computer_use_extra AgentTool
-│       └── system-prompt.ts    # OPENAI_BATCH_INSTRUCTIONS preamble
-├── cua-anthropic/
-│   └── src/
-│       ├── official.ts         # action shapes for computer_20241022/20250124/20251124 + spec const
-│       ├── cua-extras.ts       # cua-added actions for the batch tool
-│       ├── computer-tool.ts    # AgentTool that routes Anthropic tool_use blocks to translator
-│       ├── batch-tool.ts       # batch_computer_actions (Anthropic input_schema)
-│       ├── stream-wrapper.ts   # wrapAnthropicStream + registerAnthropicProvider
-│       ├── payload-hook.ts     # anthropicComputerOnPayload + composeOnPayload
-│       └── system-prompt.ts    # ANTHROPIC_COMPUTER_INSTRUCTIONS + batch nudge
-├── cua-gemini/
-│   └── src/
-│       ├── official.ts         # GeminiAction enum + PREDEFINED_COMPUTER_USE_FUNCTIONS + arg shapes
-│       ├── coords.ts           # denormalize 0-1000 → pixels
-│       ├── cua-extras.ts       # cua-added action types (just `url`)
-│       ├── computer-tool.ts    # 13 per-action AgentTools dispatching to translator.executeBatch
-│       ├── batch-tool.ts       # batch_computer_actions (Gemini FunctionDeclaration)
-│       └── system-prompt.ts    # GEMINI_COMPUTER_INSTRUCTIONS + batch nudge
-├── cua-yutori/
-│   └── src/
-│       ├── official.ts         # Yutori Navigator action enum + supported n1/n1.5 ids
-│       ├── coords.ts           # denormalize 0-1000 → pixels
-│       ├── computer-tool.ts    # per-action AgentTools dispatching to translator.executeBatch
-│       └── system-prompt.ts    # minimal Yutori runtime note
-└── cua-cli/
-    └── src/
-        ├── cli.ts              # argv parsing, mode dispatch
-        ├── config.ts           # TOML loader (OpenAI + Anthropic + Gemini + Kernel)
-        ├── agent.ts            # provider routing + agent factory + synthetic Gemini model fallback
-        ├── agent-prompt.ts     # initial-screenshot wrapping for first user turn
-        ├── named-sessions.ts   # `cua session start/stop/list` + `-s <name>` storage / liveness
-        ├── sessions.ts         # SessionManager helpers (transcripts)
-        ├── skills.ts           # skill discovery (~/.agents/skills) + /skill:<name> expansion
-        ├── action/             # constrained subcommand prompts + runner
-        ├── output/jsonl.ts     # JSONL event sink for -o jsonl
-        └── tui/                # pi-tui interactive front-end
+├── ai/              # @onkernel/cua-ai — model layer (see packages/ai/README.md)
+├── agent/           # @onkernel/cua-agent — Kernel-browser execution layer (see packages/agent/README.md)
+└── cua-cli/         # @onkernel/cua-cli — the `cua` binary (see packages/cua-cli/README.md)
 ```
 
 ---
 
 ## Roadmap
 
-- Publish the remaining per-provider `@onkernel/cua-*` packages to npm
-  (`@onkernel/cua-ai` and `@onkernel/cua-agent` are already published) so
-  `kernel/cli` templates and other consumers can depend on them directly.
 - Auto-respawn dead Kernel sessions when `-s <name>` is used (today we
   refuse with a clear error and ask the user to re-`session start`).
 - `--local` Docker-backed browser as an alternative to Kernel cloud.

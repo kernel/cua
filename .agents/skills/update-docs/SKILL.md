@@ -41,24 +41,20 @@ For every doc update:
 Start with these source-of-truth checks:
 
 - Package topology: `package.json`, `tsconfig.json`, and `packages/*/package.json`.
-- Design invariants: provider package roots stay generic, provider `/pi` subpaths isolate `pi-agent-core` bindings, provider packages expose relatively consistent APIs, `@onkernel/cua-translator` owns canonical actions, and `@onkernel/cua-cli` gets provider-specific behavior through translator/provider packages while owning orchestration.
-- Translator flow: `packages/cua-translator/src/types.ts`, `translator.ts`, `cua-extras.ts`, `browser-session.ts`, and `computer-use.ts`.
-- Provider root surfaces: each provider's `src/index.ts`, `model.ts`, `official.ts`, `batch.ts`, `computer.ts` or `extra.ts`, `cua-extras.ts`, and `system-prompt.ts`.
-- Provider `/pi` bindings: each provider's `src/pi/index.ts` plus `*-tool.ts`; for Anthropic also check `payload-hook.ts` and `stream-wrapper.ts`.
-- CLI runtime flow: `packages/cua-cli/src/agent.ts`, `cli.ts`, `config.ts`, `skills.ts`, `sessions.ts`, `named-sessions.ts`, `output/jsonl.ts`, `action/`, and `tui/`.
-- Supported models and routing: `packages/cua-cli/src/models.ts`, `cli.ts`, provider package READMEs, and the top-level `README.md`.
+- Design invariants: `@onkernel/cua-ai` owns provider-specific policy (catalog, tool schemas, payload transforms); `@onkernel/cua-agent` is provider-neutral runtime glue around `pi-agent-core` (no provider names in `packages/agent/src`); every provider difference reaches the agent as data through `CuaRuntimeSpec`; `@onkernel/cua-cli` composes both for orchestration.
+- Model layer: `packages/ai/src/index.ts`, `getCuaModel`/`listCuaModels`/`parseCuaModelRef`, `resolveCuaRuntimeSpec`, provider adapters, and `api-keys.ts`.
+- Execution layer: `packages/agent/src/index.ts`, `CuaAgent` and `CuaAgentHarness` wiring, and the canonical CUA tool executors against `@onkernel/sdk`.
+- CLI runtime flow: `packages/cua-cli/src/cli.ts`, `harness.ts`, `harness-browser.ts`, `harness-models.ts`, `harness-sessions.ts`, `harness-named-sessions.ts`, `harness-skills.ts`, `print.ts`, `output/harness-jsonl.ts`, `action/`, and `tui/`.
 - TUI test infrastructure: `packages/ptywright/package.json`, `src/index.ts`, `src/session.ts`, `src/terminal.ts`, and `README.md`.
-- External drift: provider computer-use docs, provider SDK versions, `@earendil-works/pi-*` versions, and `@onkernel/sdk` versions in package manifests.
+- External drift: provider computer-use docs, `@earendil-works/pi-*` versions, and `@onkernel/sdk` versions in package manifests.
 
 Questions `architecture.md` should answer after each update:
 
-- What owns the canonical action vocabulary?
-- Which packages are generic provider glue, and which entry points are `pi-agent-core` specific?
-- Do provider packages expose consistent root and `/pi` APIs for the CLI to compose?
+- What owns the canonical action vocabulary and the model catalog?
+- Where is the cua-ai vs cua-agent ownership boundary, and how do provider differences reach the agent without provider conditionals in `packages/agent/src`?
 - Where does Kernel SDK browser execution happen?
-- What does the CLI compose at runtime?
+- What does the CLI compose at runtime via `buildCuaHarness`?
 - Which package is dev/test infrastructure only?
-- Are root single-invocation flows clearly separate from the CLI's `pi-agent-core` loop?
 
 ## Validation
 

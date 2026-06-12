@@ -7,12 +7,6 @@
   "workspaces": [
     "packages/ai",
     "packages/agent",
-    "packages/cua-translator",
-    "packages/cua-openai",
-    "packages/cua-anthropic",
-    "packages/cua-gemini",
-    "packages/cua-tzafon",
-    "packages/cua-yutori",
     "packages/ptywright",
     "packages/cua-cli"
   ],
