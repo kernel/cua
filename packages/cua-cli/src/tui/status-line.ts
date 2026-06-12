@@ -1,4 +1,4 @@
-import { Text, hyperlink } from "@mariozechner/pi-tui";
+import { Text, hyperlink } from "@earendil-works/pi-tui";
 import { colors } from "./themes";
 
 export interface StatusLineState {

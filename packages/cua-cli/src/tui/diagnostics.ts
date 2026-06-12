@@ -4,7 +4,7 @@ import {
 	detectCapabilities,
 	getCapabilities,
 	setCapabilities,
-} from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-tui";
 
 export type ImageProtocolOverride = "kitty" | "iterm2" | "none" | "auto";
 

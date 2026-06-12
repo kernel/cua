@@ -1,10 +1,10 @@
-import { Container, Text } from "@mariozechner/pi-tui";
-import { colors } from "./themes";
+import { Container, Markdown, Text } from "@earendil-works/pi-tui";
+import { colors, markdownTheme } from "./themes";
 
 /**
  * Append-only chat log of user prompts, assistant text, tool-call summaries,
- * and inline error notes. Each entry is a Text component (or compound) so we
- * delegate wrapping to pi-tui's renderer.
+ * and inline error notes. Assistant blocks render through pi-tui's
+ * {@link Markdown}; everything else uses plain styled {@link Text}.
  */
 export class MessageList extends Container {
 	addUser(text: string): void {
@@ -19,7 +19,7 @@ export class MessageList extends Container {
 	}
 
 	addToolCall(name: string, args: unknown): void {
-		const summary = this.formatToolCall(name, args);
+		const summary = formatToolCall(name, args);
 		this.appendBlock([colors.cyan("· ") + colors.dim(name) + " " + summary]);
 	}
 
@@ -42,67 +42,17 @@ export class MessageList extends Container {
 		}
 		this.invalidate();
 	}
-
-	private formatToolCall(name: string, args: unknown): string {
-		if (!args || typeof args !== "object") return "";
-		const obj = args as Record<string, unknown>;
-		switch (name) {
-			case "batch_computer_actions": {
-				const actions = Array.isArray(obj.actions) ? obj.actions : [];
-				if (actions.length === 0) return "(empty)";
-				const parts = (actions as Array<Record<string, unknown>>).slice(0, 4).map(describeAction);
-				const more = actions.length > 4 ? colors.dim(` +${actions.length - 4} more`) : "";
-				return parts.join(colors.dim(" → ")) + more;
-			}
-			case "computer_use_extra": {
-				const action = typeof obj.action === "string" ? obj.action : "?";
-				if (action === "goto" && typeof obj.url === "string") return `goto(${obj.url})`;
-				return action;
-			}
-			case "computer": {
-				const action = typeof obj.action === "string" ? obj.action : "?";
-				const c = obj.coordinate as [number, number] | undefined;
-				if (Array.isArray(c) && c.length >= 2) return `${action}(${c[0]}, ${c[1]})`;
-				return action;
-			}
-			case "click_at":
-			case "hover_at":
-			case "scroll_at":
-			case "type_text_at":
-			case "drag_and_drop":
-				return colors.dim(JSON.stringify(obj));
-			case "navigate":
-				return typeof obj.url === "string" ? `navigate(${obj.url})` : "navigate";
-			case "key_combination":
-				return typeof obj.keys === "string" ? `key(${obj.keys})` : "key";
-			case "go_back":
-			case "go_forward":
-			case "search":
-			case "wait_5_seconds":
-			case "open_web_browser":
-			case "scroll_document":
-				return "";
-			case "bash":
-				return colors.dim(typeof obj.command === "string" ? truncate(obj.command, 80) : "");
-			case "read":
-			case "write":
-			case "edit":
-				return colors.dim(typeof obj.path === "string" ? obj.path : "");
-			default:
-				return colors.dim(truncate(JSON.stringify(obj), 80));
-		}
-	}
 }
 
 /** Live-updating buffer for the in-flight assistant message. */
 export class AssistantBuffer extends Container {
 	private text = "";
-	private readonly body: Text;
+	private readonly body: Markdown;
 
 	constructor() {
 		super();
 		this.addChild(new Text(colors.green("assistant"), 0, 0));
-		this.body = new Text("", 0, 0);
+		this.body = new Markdown("", 0, 0, markdownTheme);
 		this.addChild(this.body);
 	}
 
@@ -117,6 +67,33 @@ export class AssistantBuffer extends Container {
 			this.children = [];
 		}
 		this.invalidate();
+	}
+}
+
+function formatToolCall(name: string, args: unknown): string {
+	if (!args || typeof args !== "object") return "";
+	const obj = args as Record<string, unknown>;
+	switch (name) {
+		case "computer_batch": {
+			const actions = Array.isArray(obj.actions) ? obj.actions : [];
+			if (actions.length === 0) return "(empty)";
+			const parts = (actions as Array<Record<string, unknown>>).slice(0, 4).map(describeAction);
+			const more = actions.length > 4 ? colors.dim(` +${actions.length - 4} more`) : "";
+			return parts.join(colors.dim(" → ")) + more;
+		}
+		case "computer_use_extra": {
+			const action = typeof obj.action === "string" ? obj.action : "?";
+			if (action === "goto" && typeof obj.url === "string") return `goto(${obj.url})`;
+			return action;
+		}
+		case "bash":
+			return colors.dim(typeof obj.command === "string" ? truncate(obj.command, 80) : "");
+		case "read":
+		case "write":
+		case "edit":
+			return colors.dim(typeof obj.path === "string" ? obj.path : "");
+		default:
+			return describeAction(obj);
 	}
 }
 
@@ -158,6 +135,6 @@ function describeAction(action: Record<string, unknown>): string {
 		case "screenshot":
 			return "screenshot";
 		default:
-			return t || "?";
+			return t || colors.dim(truncate(JSON.stringify(action), 80));
 	}
 }
