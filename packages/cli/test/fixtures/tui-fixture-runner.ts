@@ -5,11 +5,12 @@
  * scripted provider, assembles the real {@link buildCuaHarness}, and starts
  * the interactive TUI.
  */
-import { InMemorySessionRepo } from "@onkernel/cua-agent";
+import { InMemorySessionRepo, type Skill } from "@onkernel/cua-agent";
 import type { CuaModelRef } from "@onkernel/cua-ai";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { buildCuaHarness } from "../../src/harness";
+import type { ContextFile } from "../../src/harness-skills";
 import { runInteractive } from "../../src/tui/main";
 import { createFakeKernelEnvironment } from "./fake-kernel";
 import { registerScriptedProvider, type ScriptedTurn } from "./scripted-provider";
@@ -18,6 +19,8 @@ interface TuiFixture {
 	modelRef?: string;
 	api?: string;
 	turns: ScriptedTurn[];
+	skills?: Skill[];
+	contextFiles?: ContextFile[];
 }
 
 const DEFAULT_API_FOR_MODEL: Record<string, string> = {
@@ -42,13 +45,16 @@ async function main(): Promise<void> {
 	const sessionRepo = new InMemorySessionRepo();
 	const session = await sessionRepo.create();
 	const cwd = process.cwd();
+	const skills = fixture.skills ?? [];
+	const contextFiles = fixture.contextFiles ?? [];
 	const harness = buildCuaHarness({
 		cwd,
 		client: kernel.client,
 		browser: kernel.browser,
 		session,
 		model: modelRef as CuaModelRef,
-		skills: [],
+		skills,
+		contextFiles,
 		extraTools: [],
 		getApiKeyAndHeaders: async () => ({ apiKey: "fixture-key" }),
 	});
@@ -62,7 +68,8 @@ async function main(): Promise<void> {
 			async close(): Promise<void> {},
 		},
 		session,
-		skills: [],
+		skills,
+		contextFiles,
 		modelRef,
 		provider: modelRef.split(":", 1)[0] ?? "openai",
 		skipInitialScreenshot: true,

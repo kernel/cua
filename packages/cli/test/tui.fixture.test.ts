@@ -44,12 +44,38 @@ suite("TUI ptywright scenarios", () => {
 		ctx.onTestFinished(() => session.close());
 
 		await waitForFixtureReady(session);
+
+		// The pi-styled preamble renders the "cua v<version>" logo and a
+		// key-hint row reflecting cua's real bindings.
+		const preamble = session.snapshot();
+		assert.match(preamble.visible, /cua v/);
+		assert.match(preamble.visible, /to interrupt/);
+		assert.match(preamble.visible, /for commands/);
+
 		session.line("say hi");
 		await session.waitForVisible("fixture response", { timeoutMs: WAIT_MS });
 
 		const snapshot = session.snapshot();
 		assert.match(snapshot.visible, /say hi/);
 		assert.match(snapshot.visible, /fixture response/);
+
+		await exitFixture(session);
+	});
+
+	test("renders [Context] and [Skills] sections and no [Extensions]", async (ctx) => {
+		const { spawnFixture, exitFixture, waitForFixtureReady } = await loadPtywrightHelpers();
+		const session = spawnFixture("resources.json");
+		ctx.onTestFinished(() => session.close());
+
+		await waitForFixtureReady(session);
+
+		const snapshot = session.snapshot();
+		assert.match(snapshot.visible, /\[Context\]/);
+		assert.match(snapshot.visible, /AGENTS\.md/);
+		assert.match(snapshot.visible, /\[Skills\]/);
+		assert.match(snapshot.visible, /deploy-skill/);
+		assert.match(snapshot.visible, /review-skill/);
+		assert.doesNotMatch(snapshot.visible, /\[Extensions\]/);
 
 		await exitFixture(session);
 	});

@@ -135,14 +135,19 @@ For named sessions, the exact transcript path is in
 [Session transcripts section in the top-level README](../../README.md#session-transcripts)
 for the JSONL schema and `jq` analysis examples.
 
-## Skills
+## Skills and context
 
-`cua` follows the cross-agent
-[`~/.agents/skills/`](https://agentskills.io) standard. Discovery
-defaults:
+`cua` resolves skills and context files through pi's resource loader
+(the same loader pi's own TUI uses), so the discovery set matches pi.
+Skills load from:
 
-- `~/.agents/skills/` (user-global)
+- `~/.agents/skills/` (user-global, the cross-agent
+  [`~/.agents/skills/`](https://agentskills.io) standard)
 - `<cwd>/.agents/skills/` (project-local)
+- the pi agent dir (`~/.pi/agent/`)
+- pi-installed packages (`pi install …` records the package in pi's
+  settings and clones it under the agent dir; its bundled skills load
+  here too)
 
 Plus any explicit `--skill <path>` flags. Disable with `--no-skills`
 (`-ns`).
@@ -151,6 +156,14 @@ Each skill's `name`, `description`, and file `location` are added to
 the system prompt; the model uses the `read` tool to load a skill's
 full body when its description matches the task. Use `/skill:<name>`
 in a prompt to force-load a skill body inline.
+
+Context files (`AGENTS.md` / `CLAUDE.md`) discovered by the resource
+loader are appended to the system prompt and listed in the TUI's
+`[Context]` section.
+
+pi *extensions* are not executed by `cua`: extensions bind into pi's
+`AgentSession`, and `cua` drives the lower-level `AgentHarness`
+directly. Installed-package skills and context still load.
 
 ## Image protocol
 

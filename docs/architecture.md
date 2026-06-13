@@ -205,17 +205,22 @@ coding tools, then renders the result to text, JSONL, or pi-tui.
   `--resume`, `--session <ref>`, and the `cua-browser` custom entry.
 - `harness-named-sessions.ts` — persisted Kernel browser metadata for
   `cua session start|stop|list|show` and `-s <name>`.
-- `harness-skills.ts` — pi `loadSkills` over `~/.agents/skills`,
-  `<cwd>/.agents/skills`, and `--skill <path>`; `/skill:<name>`
-  expansion.
+- `harness-skills.ts` — skill and context discovery via pi's
+  `DefaultResourceLoader` (the loader pi's own TUI uses), so the set
+  includes pi-installed packages plus `~/.agents/skills`,
+  `<cwd>/.agents/skills`, the pi agent dir, and `--skill <path>`.
+  pi extensions are not loaded — cua drives the lower-level
+  `AgentHarness`, which cannot bind pi `AgentSession` extensions.
+  Also handles `/skill:<name>` expansion.
 - `action/` — constrained one-shot prompts (`open|click|type|press|observe|url|screenshot|do`)
   and a bounded harness-driven runner.
 - `print.ts` — single-shot `--print` text output.
 - `output/harness-jsonl.ts` — JSONL event sink for `-o jsonl`.
-- `tui/` — pi-tui 0.79 interactive front-end: `Markdown` message list,
-  `Image` screenshot widget, status line, telemetry footer, `Editor`
-  with autocomplete-backed slash commands (`/model`, `/thinking`,
-  `/compact`, `/skill:<name>`).
+- `tui/` — pi-tui 0.79 interactive front-end styled with pi's theme
+  system: `Markdown` message list, `Image` screenshot widget, status
+  line, telemetry footer, `Editor` with autocomplete-backed slash
+  commands (`/model`, `/thinking`, `/compact`, `/skill:<name>`), and a
+  startup preamble with `[Context]` and `[Skills]` sections.
 
 ### `@onkernel/ptywright`
 
@@ -258,16 +263,18 @@ The CLI's `buildCuaHarness` in `packages/cli/src/harness.ts`:
    `@onkernel/cua-ai`.
 2. Wires `JsonlSessionRepo` and a `Session` for transcript persistence
    and resume.
-3. Loads pi skills from `~/.agents/skills`, `<cwd>/.agents/skills`, and
-   any `--skill <path>` flags and exposes them via `resources.skills`.
+3. Discovers skills and context files through pi's
+   `DefaultResourceLoader` (installed packages, `~/.agents/skills`,
+   `<cwd>/.agents/skills`, the pi agent dir, and `--skill <path>`) and
+   exposes the skills via `resources.skills`.
 4. Provides `extraTools` from `createCodingTools(cwd)`
    (`@earendil-works/pi-coding-agent`) for bash/read/edit/write/grep/find/ls.
 5. Resolves the API key via `requireCuaEnvApiKeyForModel(ref)` and
    spreads any `<PROVIDER>_BASE_URL` env override onto the model object.
 6. Composes the `systemPrompt` callback from
-   `resolveCuaRuntimeSpec(model).defaultSystemPrompt` plus
-   `formatSkillsForSystemPrompt(resources.skills)` so it stays correct
-   across `setModel()`.
+   `resolveCuaRuntimeSpec(model).defaultSystemPrompt`,
+   `formatSkillsForSystemPrompt(resources.skills)`, and the loaded
+   context files so it stays correct across `setModel()`.
 
 ## Component map
 
@@ -289,7 +296,7 @@ flowchart LR
   aiPkg --> piAi
   harness --> coding["bash/read/edit/write/... (pi-coding-agent)"]
   harness --> sessions["JsonlSessionRepo (re-exported from cua-agent)"]
-  harness --> skillsMod["loadSkills (re-exported from cua-agent)"]
+  harness --> skillsMod["DefaultResourceLoader (pi-coding-agent): skills + context"]
   cli --> tui["cli/src/tui/main.ts (pi-tui)"]
   cli --> jsonl["cli/src/output/harness-jsonl.ts"]
   pty["ptywright (dev/test only)"] --> tui

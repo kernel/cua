@@ -58,8 +58,10 @@ Options:
       --session <ref>            Resume a specific session: path | partial id | latest
       --session-dir <dir>        Override the sessions directory
       --no-session               Don't persist this session to disk
-      --skill <path>             Load a skill file or directory (repeatable).
-                                 Defaults: ~/.agents/skills/, <cwd>/.agents/skills/
+      --skill <path>             Load an extra skill file or directory (repeatable).
+                                 Skills also load from ~/.agents/skills/,
+                                 <cwd>/.agents/skills/, the pi agent dir
+                                 (~/.pi/agent/), and pi-installed packages.
   -ns, --no-skills               Disable skill discovery entirely
       --debug-tui                Enable TUI render diagnostics for manual repros
   -v, --verbose                  Verbose progress output to stderr
