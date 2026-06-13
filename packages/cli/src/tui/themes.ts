@@ -1,60 +1,52 @@
-import type {
-	EditorTheme,
-	ImageTheme,
-	MarkdownTheme,
-	SelectListTheme,
-} from "@earendil-works/pi-tui";
+import type { EditorTheme, ImageTheme } from "@earendil-works/pi-tui";
+import { getMarkdownTheme, getSelectListTheme, Theme } from "@earendil-works/pi-coding-agent";
 
-const RESET = "\x1b[0m";
+/**
+ * cua's TUI styling rides on pi's theme system so it matches pi's own TUI.
+ * `initTheme()` must run once at TUI startup (see `tui/main.ts`) before any of
+ * these helpers are used.
+ *
+ * pi exports the `Theme` class and the markdown/select-list theme getters, but
+ * not the live theme instance behind `theme.fg(...)`. That instance is published
+ * on a `Symbol.for` global key (pi's cross-realm contract for its own `theme`
+ * proxy), so we read it back here to colorize text with the active palette.
+ */
+const THEME_KEY = Symbol.for("@earendil-works/pi-coding-agent:theme");
 
-const ansi = {
-	dim: (text: string) => `\x1b[2m${text}${RESET}`,
-	bold: (text: string) => `\x1b[1m${text}${RESET}`,
-	italic: (text: string) => `\x1b[3m${text}${RESET}`,
-	underline: (text: string) => `\x1b[4m${text}${RESET}`,
-	strikethrough: (text: string) => `\x1b[9m${text}${RESET}`,
-	cyan: (text: string) => `\x1b[36m${text}${RESET}`,
-	green: (text: string) => `\x1b[32m${text}${RESET}`,
-	yellow: (text: string) => `\x1b[33m${text}${RESET}`,
-	red: (text: string) => `\x1b[31m${text}${RESET}`,
-	gray: (text: string) => `\x1b[90m${text}${RESET}`,
-	blue: (text: string) => `\x1b[34m${text}${RESET}`,
-	lightBlue: (text: string) => `\x1b[38;2;129;162;190m${text}${RESET}`,
-	magenta: (text: string) => `\x1b[35m${text}${RESET}`,
+function activeTheme(): Theme {
+	const instance = (globalThis as Record<symbol, unknown>)[THEME_KEY];
+	if (!(instance instanceof Theme)) {
+		throw new Error("pi theme not initialized; call initTheme() before rendering the TUI");
+	}
+	return instance;
+}
+
+/**
+ * The small palette cua's components reach for, mapped onto pi theme colors so
+ * existing call sites keep working while picking up pi's palette.
+ */
+export const colors = {
+	dim: (text: string) => activeTheme().fg("dim", text),
+	bold: (text: string) => activeTheme().bold(text),
+	accent: (text: string) => activeTheme().fg("accent", text),
+	muted: (text: string) => activeTheme().fg("muted", text),
+	heading: (text: string) => activeTheme().fg("mdHeading", text),
+	success: (text: string) => activeTheme().fg("success", text),
+	error: (text: string) => activeTheme().fg("error", text),
+	warning: (text: string) => activeTheme().fg("warning", text),
 };
 
-export const colors = ansi;
+export { getMarkdownTheme };
 
-export const selectListTheme: SelectListTheme = {
-	selectedPrefix: (text) => ansi.cyan(text),
-	selectedText: (text) => ansi.cyan(text),
-	description: (text) => ansi.dim(text),
-	scrollInfo: (text) => ansi.dim(text),
-	noMatch: (text) => ansi.dim(text),
-};
+/** pi has no exported editor theme; compose one from its select-list theme. */
+export function getEditorTheme(): EditorTheme {
+	return {
+		borderColor: (text) => activeTheme().fg("borderAccent", text),
+		selectList: getSelectListTheme(),
+	};
+}
 
-export const editorTheme: EditorTheme = {
-	borderColor: (text) => ansi.lightBlue(text),
-	selectList: selectListTheme,
-};
-
+/** pi has no image theme; only the text fallback color is cua-specific. */
 export const imageTheme: ImageTheme = {
-	fallbackColor: (text) => ansi.dim(text),
-};
-
-export const markdownTheme: MarkdownTheme = {
-	heading: (text) => ansi.bold(text),
-	link: (text) => ansi.cyan(text),
-	linkUrl: (text) => ansi.dim(text),
-	code: (text) => ansi.magenta(text),
-	codeBlock: (text) => text,
-	codeBlockBorder: (text) => ansi.dim(text),
-	quote: (text) => ansi.dim(text),
-	quoteBorder: (text) => ansi.dim(text),
-	hr: (text) => ansi.dim(text),
-	listBullet: (text) => ansi.cyan(text),
-	bold: (text) => ansi.bold(text),
-	italic: (text) => ansi.italic(text),
-	strikethrough: (text) => ansi.strikethrough(text),
-	underline: (text) => ansi.underline(text),
+	fallbackColor: (text) => activeTheme().fg("dim", text),
 };

@@ -20,9 +20,12 @@ import {
 	TUI,
 	TUI_KEYBINDINGS,
 } from "@earendil-works/pi-tui";
+import { initTheme } from "@earendil-works/pi-coding-agent";
+import { homedir } from "node:os";
 import type { ImageContent, Model } from "@onkernel/cua-ai";
 import { captureScreenshot, type CuaBrowserHandle } from "../harness-browser";
 import { resolveCuaModelRef } from "../harness-models";
+import type { ContextFile } from "../harness-skills";
 import { openTuiDebugLog } from "./debug-log";
 import { applyAndSummarizeImageProtocol } from "./diagnostics";
 import { type AssistantBuffer, MessageList } from "./message-list";
@@ -30,7 +33,8 @@ import { ScreenshotWidget } from "./screenshot-widget";
 import { buildAutocompleteProvider, parseSlashCommand } from "./slash-commands";
 import { StatusLine } from "./status-line";
 import { TelemetryFooter } from "./telemetry-footer";
-import { colors, editorTheme } from "./themes";
+import { colors, getEditorTheme } from "./themes";
+import { cuaVersion } from "./version";
 
 export interface InteractiveOptions {
 	cwd: string;
@@ -38,6 +42,8 @@ export interface InteractiveOptions {
 	browserHandle: CuaBrowserHandle;
 	session: Session;
 	skills?: Skill[];
+	/** Loaded context files (AGENTS.md, …) shown in the `[Context]` section. */
+	contextFiles?: ContextFile[];
 	/** CUA model ref currently active. Used for the status line and `/model` default. */
 	modelRef: string;
 	provider: string;
@@ -61,6 +67,9 @@ export interface InteractiveOptions {
  * directly via `harness.subscribe()`.
  */
 export async function runInteractive(opts: InteractiveOptions): Promise<number> {
+	// pi's `theme` singleton throws until initialized; do this before any
+	// component or theme helper runs.
+	initTheme();
 	// Apply image protocol override BEFORE constructing TUI components so
 	// the Image component sees the resolved capabilities on its first render.
 	const { summary: capsSummary, overridden } = applyAndSummarizeImageProtocol(opts.imageProtocol);
@@ -94,7 +103,7 @@ export async function runInteractive(opts: InteractiveOptions): Promise<number> 
 	const _keybindings = new KeybindingsManager(TUI_KEYBINDINGS);
 	void _keybindings;
 
-	const editor = new Editor(tui, editorTheme);
+	const editor = new Editor(tui, getEditorTheme());
 	editor.setAutocompleteProvider(buildAutocompleteProvider(opts.cwd, opts.skills ?? []));
 	const messages = new MessageList();
 	const screenshot = new ScreenshotWidget();
@@ -113,7 +122,9 @@ export async function runInteractive(opts: InteractiveOptions): Promise<number> 
 	});
 
 	const header = new Container();
-	header.addChild(new Text(colors.bold("cua") + colors.dim(" — kernel-cloud-browser computer-use agent"), 0, 0));
+	const logo = colors.bold(colors.accent("cua")) + colors.dim(` v${cuaVersion()}`);
+	header.addChild(new Text(logo, 0, 0));
+	header.addChild(new Text(keyHintRow(), 0, 0));
 	const capsHint = overridden
 		? colors.dim(capsSummary)
 		: colors.dim(capsSummary + " · set CUA_IMAGE_PROTOCOL=kitty|iterm2 to force inline images");
@@ -123,8 +134,13 @@ export async function runInteractive(opts: InteractiveOptions): Promise<number> 
 	}
 	header.addChild(new Text("", 0, 0));
 
+	const contextSection = buildContextSection(opts.contextFiles ?? []);
 	const skillSection = buildSkillSection(opts.skills ?? []);
 	tui.addChild(header);
+	if (contextSection) {
+		tui.addChild(contextSection);
+		tui.addChild(new Spacer(1));
+	}
 	if (skillSection) {
 		tui.addChild(skillSection);
 		tui.addChild(new Spacer(1));
@@ -228,14 +244,14 @@ export async function runInteractive(opts: InteractiveOptions): Promise<number> 
 					  }
 					| undefined;
 				const isError = !!event.isError;
-				let summary = isError ? colors.red("error") : colors.green("ok");
+				let summary = isError ? colors.error("error") : colors.success("ok");
 				if (!isError && result?.content) {
 					const imgs = result.content.filter((c) => c?.type === "image");
 					if (imgs.length > 0) summary += colors.dim(` · ${imgs.length} screenshot${imgs.length > 1 ? "s" : ""}`);
 					const lastImg = imgs[imgs.length - 1];
 					if (lastImg?.data) screenshot.update(lastImg.data, lastImg.mimeType ?? "image/png");
 				}
-				if (isError && result?.details?.error) summary = colors.red(result.details.error);
+				if (isError && result?.details?.error) summary = colors.error(result.details.error);
 				messages.addToolResult(event.toolName, !isError, summary);
 				debug?.log("tool_execution_end", {
 					toolName: event.toolName,
@@ -511,9 +527,39 @@ async function refreshContextTokens(session: Session): Promise<number> {
 	return estimateContextTokens(context.messages).tokens;
 }
 
+function keyHintRow(): string {
+	const hint = (keys: string, label: string) => colors.bold(keys) + colors.dim(` ${label}`);
+	return [
+		hint("esc/ctrl+c", "to interrupt"),
+		hint("ctrl+c/ctrl+d", "to exit"),
+		hint("/", "for commands"),
+	].join(colors.muted(" · "));
+}
+
+function sectionLabel(name: string): string {
+	return colors.heading(`[${name}]`);
+}
+
+function buildContextSection(contextFiles: ContextFile[]): Container | undefined {
+	if (contextFiles.length === 0) return undefined;
+	const paths = contextFiles.map((file) => displayPath(file.path)).join(", ");
+	const container = new Container();
+	container.addChild(new Text(sectionLabel("Context") + "\n" + colors.dim(`  ${paths}`), 0, 0));
+	return container;
+}
+
 function buildSkillSection(skills: Skill[]): Container | undefined {
 	if (skills.length === 0) return undefined;
+	const names = skills
+		.map((s) => s.name)
+		.sort((a, b) => a.localeCompare(b))
+		.join(", ");
 	const container = new Container();
-	container.addChild(new Text(colors.blue("[Skills]") + "\n" + skills.map((s) => s.name).join(", "), 0, 0));
+	container.addChild(new Text(sectionLabel("Skills") + "\n" + colors.dim(`  ${names}`), 0, 0));
 	return container;
+}
+
+function displayPath(path: string): string {
+	const home = homedir();
+	return path.startsWith(home) ? `~${path.slice(home.length)}` : path;
 }

@@ -18,6 +18,7 @@ import {
 } from "@onkernel/cua-ai";
 import type Kernel from "@onkernel/sdk";
 import { createCodingTools } from "@earendil-works/pi-coding-agent";
+import type { ContextFile } from "./harness-skills";
 
 /** Options for {@link buildCuaHarness}. */
 export interface BuildCuaHarnessOptions {
@@ -27,6 +28,8 @@ export interface BuildCuaHarnessOptions {
 	session: Session;
 	model: CuaModelRef;
 	skills?: Skill[];
+	/** Context files (AGENTS.md, CLAUDE.md, …) appended to the system prompt. */
+	contextFiles?: ContextFile[];
 	thinkingLevel?: ThinkingLevel;
 	/** Override the default coding-tools extraTools (bash/read/edit/write/grep/find/ls). */
 	extraTools?: CuaAgentHarnessOptions["extraTools"];
@@ -45,6 +48,7 @@ export interface BuildCuaHarnessOptions {
  */
 export function buildCuaHarness(opts: BuildCuaHarnessOptions): CuaAgentHarness {
 	const skills = opts.skills ?? [];
+	const contextFiles = opts.contextFiles ?? [];
 	const extraTools = opts.extraTools ?? createCodingTools(opts.cwd);
 	const model: CuaModelRef | Model<Api> = opts.modelBaseUrl
 		? { ...getCuaModel(opts.model), baseUrl: opts.modelBaseUrl }
@@ -60,7 +64,7 @@ export function buildCuaHarness(opts: BuildCuaHarnessOptions): CuaAgentHarness {
 		thinkingLevel: opts.thinkingLevel,
 		systemPrompt: ({ model: activeModel, resources }) => {
 			const runtime = resolveCuaRuntimeSpec(activeModel);
-			return composeSystemPrompt(runtime.defaultSystemPrompt, resources.skills ?? []);
+			return composeSystemPrompt(runtime.defaultSystemPrompt, resources.skills ?? [], contextFiles);
 		},
 		getApiKeyAndHeaders:
 			opts.getApiKeyAndHeaders ??
@@ -71,8 +75,19 @@ export function buildCuaHarness(opts: BuildCuaHarnessOptions): CuaAgentHarness {
 	});
 }
 
-function composeSystemPrompt(base: string, skills: Skill[]): string {
+function composeSystemPrompt(base: string, skills: Skill[], contextFiles: ContextFile[]): string {
+	const sections = [base.trim()];
 	const skillBlock = formatSkillsForSystemPrompt(skills).trim();
-	if (!skillBlock) return base;
-	return `${base.trim()}\n\n${skillBlock}\n`;
+	if (skillBlock) sections.push(skillBlock);
+	const contextBlock = formatContextFiles(contextFiles);
+	if (contextBlock) sections.push(contextBlock);
+	return `${sections.join("\n\n")}\n`;
+}
+
+function formatContextFiles(contextFiles: ContextFile[]): string {
+	const blocks = contextFiles
+		.filter((file) => file.content.trim().length > 0)
+		.map((file) => `## ${file.path}\n\n${file.content.trim()}`);
+	if (blocks.length === 0) return "";
+	return `# Context\n\n${blocks.join("\n\n")}`;
 }

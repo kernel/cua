@@ -74,6 +74,33 @@ describe("buildCuaHarness", () => {
 		expect(capturedSystemPrompt).toContain(skillBlock);
 	});
 
+	it("injects loaded context files into the system prompt", async () => {
+		provider = registerScriptedProvider("openai-responses", [
+			{ steps: [{ type: "text", text: "ok" }] },
+		]);
+		const cwd = mkdtempSync(join(tmpdir(), "cua-cli-harness-"));
+		const kernel = createFakeKernelEnvironment();
+		const session = await new InMemorySessionRepo().create();
+		const harness = buildCuaHarness({
+			cwd,
+			client: kernel.client,
+			browser: kernel.browser,
+			session,
+			model: "openai:gpt-5.5",
+			contextFiles: [{ path: join(cwd, "AGENTS.md"), content: "Always prefer tabs over spaces." }],
+			extraTools: [],
+			getApiKeyAndHeaders: async () => ({ apiKey: "test-key" }),
+		});
+		let capturedSystemPrompt: string | undefined;
+		harness.on("before_agent_start", (event) => {
+			capturedSystemPrompt = event.systemPrompt;
+			return undefined;
+		});
+		await harness.prompt("hi");
+		expect(capturedSystemPrompt).toContain("Always prefer tabs over spaces.");
+		expect(capturedSystemPrompt).toContain(join(cwd, "AGENTS.md"));
+	});
+
 	it("delivers the first prompt with an image attached via harness.prompt({ images })", async () => {
 		provider = registerScriptedProvider("openai-responses", [
 			{ steps: [{ type: "text", text: "done" }] },

@@ -1,5 +1,5 @@
 import { Container, Markdown, Text } from "@earendil-works/pi-tui";
-import { colors, markdownTheme } from "./themes";
+import { colors, getMarkdownTheme } from "./themes";
 
 /**
  * Append-only chat log of user prompts, assistant text, tool-call summaries,
@@ -20,20 +20,20 @@ export class MessageList extends Container {
 
 	addToolCall(name: string, args: unknown): void {
 		const summary = formatToolCall(name, args);
-		this.appendBlock([colors.cyan("· ") + colors.dim(name) + " " + summary]);
+		this.appendBlock([colors.accent("· ") + colors.dim(name) + " " + summary]);
 	}
 
 	addToolResult(name: string, ok: boolean, summary: string): void {
-		const icon = ok ? colors.green("✓") : colors.red("✗");
+		const icon = ok ? colors.success("✓") : colors.error("✗");
 		this.appendBlock([`  ${icon} ${colors.dim(name)} ${summary}`]);
 	}
 
 	addNotice(text: string): void {
-		this.appendBlock([colors.yellow("· ") + colors.dim(text)]);
+		this.appendBlock([colors.warning("· ") + colors.dim(text)]);
 	}
 
 	addError(text: string): void {
-		this.appendBlock([colors.red("error ") + text]);
+		this.appendBlock([colors.error("error ") + text]);
 	}
 
 	private appendBlock(lines: string[]): void {
@@ -51,8 +51,8 @@ export class AssistantBuffer extends Container {
 
 	constructor() {
 		super();
-		this.addChild(new Text(colors.green("assistant"), 0, 0));
-		this.body = new Markdown("", 0, 0, markdownTheme);
+		this.addChild(new Text(colors.success("assistant"), 0, 0));
+		this.body = new Markdown("", 0, 0, getMarkdownTheme());
 		this.addChild(this.body);
 	}
 
