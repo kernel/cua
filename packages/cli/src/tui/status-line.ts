@@ -36,7 +36,7 @@ export class StatusLine extends Text {
 		if (this.state.currentUrl) parts.push(colors.dim("url ") + truncate(this.state.currentUrl, 50));
 		if (this.state.tokens !== undefined) parts.push(colors.dim("tokens ") + this.state.tokens.toLocaleString());
 		if (this.state.cost !== undefined) parts.push(colors.dim("$") + this.state.cost.toFixed(3));
-		if (this.state.working) parts.push(colors.yellow(`⏳ ${this.state.working}`));
+		if (this.state.working) parts.push(colors.warning(`⏳ ${this.state.working}`));
 		this.setText(parts.join(sep));
 	}
 }
