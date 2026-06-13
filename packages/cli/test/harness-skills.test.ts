@@ -85,6 +85,20 @@ describe("discoverCuaSkills", () => {
 		expect(result.skills).toHaveLength(0);
 	});
 
+	it("discovers a project-local skill from <cwd>/.agents/skills", async () => {
+		// Project settings stay untrusted, so pi's trusted project scan is off.
+		// The project skills dir must still be discovered (via additionalSkillPaths)
+		// without enabling untrusted `.pi/` extensions.
+		writeSkill(join(cwd, ".agents", "skills", "lint"), "lint", "Run the linter.", "Run the lint workflow.");
+
+		const env = new NodeExecutionEnv({ cwd });
+		const result = await discoverCuaSkills({ cwd, env, agentDir });
+
+		const lint = result.skills.find((s) => s.name === "lint");
+		expect(lint, "project-local skill should be discovered").toBeDefined();
+		expect(lint?.content).toContain("Run the lint workflow.");
+	});
+
 	it("loads skills from an explicit --skill path", async () => {
 		const extraDir = mkdtempSync(join(tmpdir(), "cua-extra-skill-"));
 		writeSkill(join(extraDir, "deploy"), "deploy", "Ship the build.", "Run the deploy steps.");

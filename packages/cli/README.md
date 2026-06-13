@@ -159,7 +159,9 @@ in a prompt to force-load a skill body inline.
 
 Context files (`AGENTS.md` / `CLAUDE.md`) discovered by the resource
 loader are appended to the system prompt and listed in the TUI's
-`[Context]` section.
+`[Context]` section. `--no-skills` disables skill discovery only;
+context files still load, since they describe the project rather than
+add agent capabilities.
 
 pi *extensions* are not executed by `cua`: extensions bind into pi's
 `AgentSession`, and `cua` drives the lower-level `AgentHarness`

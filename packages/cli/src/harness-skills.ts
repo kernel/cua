@@ -4,7 +4,7 @@ import {
 	getAgentDir,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 
 export interface DiscoverSkillsOptions {
 	cwd: string;
@@ -25,7 +25,6 @@ export interface ContextFile {
 export interface DiscoverSkillsResult {
 	skills: Skill[];
 	contextFiles: ContextFile[];
-	sources: string[];
 	diagnostics: SkillDiagnostic[];
 }
 
@@ -48,11 +47,18 @@ export async function discoverCuaSkills(opts: DiscoverSkillsOptions): Promise<Di
 	const extras = (opts.extraPaths ?? []).filter((p) => p && p.trim().length > 0);
 	const agentDir = opts.agentDir ?? getAgentDir();
 	const settingsManager = SettingsManager.create(opts.cwd, agentDir, { projectTrusted: false });
+	// Project-local `<cwd>/.agents/skills` is loaded explicitly rather than via
+	// pi's trusted project scan. That scan only runs when the project is trusted
+	// (which would mean prompting the user and binding untrusted `.pi/`
+	// extensions); `additionalSkillPaths` loads the directory unconditionally and
+	// never binds extensions, so project skills work without a trust prompt.
+	const projectSkillDir = join(opts.cwd, ".agents", "skills");
+	const additionalSkillPaths = [...extras, projectSkillDir];
 	const loader = new DefaultResourceLoader({
 		cwd: opts.cwd,
 		agentDir,
 		settingsManager,
-		additionalSkillPaths: extras,
+		additionalSkillPaths,
 		noSkills: opts.disabled === true,
 		noExtensions: true,
 		noPromptTemplates: true,
@@ -80,11 +86,11 @@ export async function discoverCuaSkills(opts: DiscoverSkillsOptions): Promise<Di
 	const discoveredPaths = new Set(piSkills.map((s) => s.filePath));
 	const skillDirs = [...new Set(piSkills.map((s) => dirname(s.filePath)))];
 	if (skillDirs.length === 0) {
-		return { skills: [], contextFiles, sources: [], diagnostics: [] };
+		return { skills: [], contextFiles, diagnostics: [] };
 	}
 	const loaded = await loadSkills(opts.env, skillDirs);
 	const skills = dedupeByFilePath(loaded.skills.filter((s) => discoveredPaths.has(s.filePath)));
-	return { skills, contextFiles, sources: skillDirs, diagnostics: loaded.diagnostics };
+	return { skills, contextFiles, diagnostics: loaded.diagnostics };
 }
 
 function dedupeByFilePath(skills: Skill[]): Skill[] {
