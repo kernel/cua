@@ -43,7 +43,7 @@ import {
 	readMetadataFromFile,
 	resolveSessionRef,
 } from "./harness-sessions";
-import { discoverCuaSkills } from "./harness-skills";
+import { type ContextFile, discoverCuaSkills } from "./harness-skills";
 import { runPrint } from "./print";
 
 const MODELS_HELP = `cua models — list supported -m/--model values
@@ -341,6 +341,7 @@ interface HarnessRuntime {
 	resolved: ResolvedSession | undefined;
 	session: Session;
 	skills: Skill[];
+	contextFiles: ContextFile[];
 	harness: ReturnType<typeof buildCuaHarness>;
 	provider: string;
 	modelRef: CuaModelRef;
@@ -363,7 +364,7 @@ async function setupHarnessRuntime(
 	const auth = resolveAuth(flags);
 	const cwd = process.cwd();
 	const env = new NodeExecutionEnv({ cwd });
-	const { skills } = await discoverCuaSkills({
+	const { skills, contextFiles } = await discoverCuaSkills({
 		cwd,
 		env,
 		extraPaths: flags.skillPaths,
@@ -410,6 +411,7 @@ async function setupHarnessRuntime(
 		session,
 		model: auth.modelRef,
 		skills,
+		contextFiles,
 		thinkingLevel,
 		modelBaseUrl: baseUrlOverride,
 	});
@@ -419,6 +421,7 @@ async function setupHarnessRuntime(
 		resolved,
 		session,
 		skills,
+		contextFiles,
 		harness,
 		provider,
 		modelRef: auth.modelRef,
@@ -506,6 +509,7 @@ export async function runInteractiveCommand(
 			browserHandle: runtime.handle,
 			session: runtime.session,
 			skills: runtime.skills,
+			contextFiles: runtime.contextFiles,
 			modelRef: runtime.modelRef,
 			provider: runtime.provider,
 			initialPrompt: initialPrompt || undefined,
