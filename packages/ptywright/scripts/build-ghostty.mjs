@@ -23,10 +23,14 @@ if (version !== requiredVersion) {
 mkdirSync(config.zigCacheDir, { recursive: true });
 mkdirSync(config.zigGlobalCacheDir, { recursive: true });
 
+// Pin the version explicitly: ghostty otherwise derives it from git, and since
+// the extracted source has no .git, discovery walks up into the host repo and
+// panics when HEAD is on a non-vX.Y.Z tag (e.g. a cua-cli/vX.Y.Z release tag).
 run([
 	zig,
 	"build",
 	"-Demit-lib-vt=true",
+	`-Dversion-string=${config.upstream.version}`,
 	"--cache-dir",
 	config.zigCacheDir,
 	"--global-cache-dir",
