@@ -297,10 +297,22 @@ export const CuaNavigationSchema = Type.Object(
 	{ additionalProperties: false },
 );
 
+export const CuaPlaywrightSchema = Type.Object(
+	{
+		code: Type.String({
+			description:
+				"Playwright/TypeScript to run against the live browser. `page`, `context`, and `browser` are in scope; end with a `return` to send a JSON-serializable value back. Example: \"await page.goto('https://example.com'); return await page.title();\"",
+		}),
+		timeout_sec: Type.Optional(Type.Number({ description: "Maximum execution time in seconds. Defaults to 60." })),
+	},
+	{ additionalProperties: false },
+);
+
 export interface CuaBatchInput {
 	actions: CuaAction[];
 }
 export type CuaNavigationInput = Static<typeof CuaNavigationSchema>;
+export type CuaPlaywrightInput = Static<typeof CuaPlaywrightSchema>;
 
 /** Tool schema plus execution adapter for a browser computer-use tool. */
 export interface CuaToolExecutorSpec {
@@ -317,6 +329,7 @@ export interface CuaToolExecutorSpec {
  */
 export const CUA_BATCH_TOOL_NAME = "computer_batch";
 export const CUA_NAVIGATION_TOOL_NAME = "computer_use_extra";
+export const CUA_PLAYWRIGHT_TOOL_NAME = "playwright_execute";
 
 export const CUA_BATCH_TOOL_DESCRIPTION = [
 	"Execute multiple computer actions in sequence, including ordered read steps like url(), cursor_position(), and screenshot().",
@@ -325,6 +338,12 @@ export const CUA_BATCH_TOOL_DESCRIPTION = [
 ].join("\n");
 
 export const CUA_NAVIGATION_TOOL_DESCRIPTION = "High-level browser navigation helpers for goto, back, forward, and url.";
+
+export const CUA_PLAYWRIGHT_TOOL_DESCRIPTION = [
+	"Run Playwright/TypeScript directly against the live browser session for steps that are awkward as raw pointer/keyboard actions: precise DOM reads, form fills, data extraction, and waiting on selectors.",
+	"`page`, `context`, and `browser` are in scope and the code may `return` a JSON-serializable value, which comes back as the result.",
+	"Capture page state with a follow-up screenshot action rather than calling page.screenshot() inside the code.",
+].join("\n");
 
 export interface ComputerToolsOptions {
 	actions?: readonly CuaActionType[];
@@ -422,6 +441,14 @@ export function createCuaNavigationToolDefinition(): Tool {
 		name: CUA_NAVIGATION_TOOL_NAME,
 		description: CUA_NAVIGATION_TOOL_DESCRIPTION,
 		parameters: CuaNavigationSchema,
+	};
+}
+
+export function createCuaPlaywrightToolDefinition(): Tool {
+	return {
+		name: CUA_PLAYWRIGHT_TOOL_NAME,
+		description: CUA_PLAYWRIGHT_TOOL_DESCRIPTION,
+		parameters: CuaPlaywrightSchema,
 	};
 }
 

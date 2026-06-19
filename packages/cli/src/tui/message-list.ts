@@ -86,6 +86,8 @@ function formatToolCall(name: string, args: unknown): string {
 			if (action === "goto" && typeof obj.url === "string") return `goto(${obj.url})`;
 			return action;
 		}
+		case "playwright_execute":
+			return colors.dim(typeof obj.code === "string" ? truncate(obj.code.replace(/\s+/g, " ").trim(), 80) : "");
 		case "bash":
 			return colors.dim(typeof obj.command === "string" ? truncate(obj.command, 80) : "");
 		case "read":

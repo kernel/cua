@@ -85,6 +85,14 @@ export class InternalComputerTranslator {
 		return { x: Math.trunc(pos.x), y: Math.trunc(pos.y) };
 	}
 
+	async executePlaywright(code: string, timeoutSec?: number): Promise<PlaywrightExecutionResult> {
+		const timeout = typeof timeoutSec === "number" && Number.isFinite(timeoutSec) && timeoutSec > 0 ? Math.trunc(timeoutSec) : undefined;
+		return this.client.browsers.playwright.execute(this.sessionId, {
+			code,
+			...(timeout !== undefined ? { timeout_sec: timeout } : {}),
+		});
+	}
+
 	async executeBatch(actions: CuaAction[]): Promise<BatchExecutionResult> {
 		const result: BatchExecutionResult = { readResults: [] };
 		const pending: KernelBatchAction[] = [];
@@ -227,6 +235,9 @@ export class InternalComputerTranslator {
 
 type KernelBatchAction =
 	Parameters<Kernel["browsers"]["computer"]["batch"]>[1]["actions"][number];
+
+export type PlaywrightExecutionResult =
+	Awaited<ReturnType<Kernel["browsers"]["playwright"]["execute"]>>;
 
 const CLICK_BUTTONS: ReadonlySet<string> = new Set<CuaMouseButton>(["left", "right", "middle", "back", "forward"]);
 const DRAG_BUTTONS: ReadonlySet<string> = new Set<CuaDragMouseButton>(["left", "right", "middle"]);

@@ -144,6 +144,23 @@ describe("CuaAgent", () => {
 		]);
 	});
 
+	it("synthesizes a playwright_execute tool when requested", () => {
+		const runtime = resolveCuaRuntimeSpec("openai:gpt-5.5");
+		const agent = new CuaAgent({
+			browser,
+			client,
+			playwright: true,
+			initialState: {
+				model: "openai:gpt-5.5",
+			},
+		});
+
+		expect(agent.state.tools.map((tool) => tool.name)).toEqual([
+			...runtime.toolExecutors.map((tool) => tool.definition.name),
+			"playwright_execute",
+		]);
+	});
+
 	it("refreshes CUA runtime state when state.model changes", () => {
 		const runtime = resolveCuaRuntimeSpec("google:gemini-3-flash-preview");
 		const agent = new CuaAgent({

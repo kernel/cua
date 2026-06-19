@@ -45,6 +45,8 @@ Options:
       --profile-no-save-changes  Do not persist changes back to the profile
       --browser-timeout <s>      Browser inactivity timeout in seconds (default 300)
       --max-steps <n>            Max turns for action subcommands (default 3)
+      --playwright               Add the playwright_execute tool so the model can run
+                                 Playwright code against the browser session
       --out <file|->             Output file for screenshot subcommand
   -o, --output <fmt>             Output format for --print: text (default) | jsonl
       --jsonl-include-deltas     Include assistant_text_delta events (default off)
@@ -98,6 +100,7 @@ interface CliFlags {
 	debugTui: boolean;
 	jsonlIncludeDeltas: boolean;
 	jsonlIncludeImages: boolean;
+	playwright: boolean;
 	model?: string;
 	thinking?: string;
 	browserProfile?: string;
@@ -146,6 +149,7 @@ function parseCliArgs(argv: string[]): CliFlags {
 				output: { type: "string", short: "o" },
 				"jsonl-include-deltas": { type: "boolean", default: false },
 				"jsonl-include-images": { type: "boolean", default: false },
+				playwright: { type: "boolean", default: false },
 			},
 			allowPositionals: true,
 			strict: true,
@@ -192,6 +196,7 @@ function parseCliArgs(argv: string[]): CliFlags {
 		output: parsed.values.output as string | undefined,
 		jsonlIncludeDeltas: !!parsed.values["jsonl-include-deltas"],
 		jsonlIncludeImages: !!parsed.values["jsonl-include-images"],
+		playwright: !!parsed.values.playwright,
 		positionals: parsed.positionals,
 	};
 }
@@ -207,6 +212,7 @@ function toHarnessFlags(flags: CliFlags): HarnessCliFlags {
 		debugTui: flags.debugTui,
 		jsonlIncludeDeltas: flags.jsonlIncludeDeltas,
 		jsonlIncludeImages: flags.jsonlIncludeImages,
+		playwright: flags.playwright,
 		model: flags.model,
 		thinking: flags.thinking,
 		browserProfile: flags.browserProfile,

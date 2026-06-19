@@ -31,6 +31,8 @@ export interface BuildCuaHarnessOptions {
 	/** Context files (AGENTS.md, CLAUDE.md, …) appended to the system prompt. */
 	contextFiles?: ContextFile[];
 	thinkingLevel?: ThinkingLevel;
+	/** Expose the playwright_execute tool that runs Playwright code against the browser session. */
+	playwright?: boolean;
 	/** Override the default coding-tools extraTools (bash/read/edit/write/grep/find/ls). */
 	extraTools?: CuaAgentHarnessOptions["extraTools"];
 	/** Override env-var API-key resolution (mainly for tests). */
@@ -60,6 +62,7 @@ export function buildCuaHarness(opts: BuildCuaHarnessOptions): CuaAgentHarness {
 		browser: opts.browser,
 		client: opts.client,
 		extraTools,
+		playwright: opts.playwright,
 		resources: { skills },
 		thinkingLevel: opts.thinkingLevel,
 		systemPrompt: ({ model: activeModel, resources }) => {

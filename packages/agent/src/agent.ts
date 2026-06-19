@@ -12,6 +12,7 @@ import {
 import {
 	type Api,
 	CUA_NAVIGATION_TOOL_NAME,
+	CUA_PLAYWRIGHT_TOOL_NAME,
 	type CuaModelRef,
 	type CuaRuntimeSpec,
 	type CuaSimpleStreamOptions,
@@ -66,6 +67,8 @@ export type CuaAgentOptions = Omit<AgentOptions, "initialState"> & {
 	extraTools?: AgentTool[];
 	/** Expose a helper for browser navigation and URL reads. */
 	computerUseExtra?: boolean;
+	/** Expose a tool that runs Playwright code against the browser session. */
+	playwright?: boolean;
 };
 
 /**
@@ -89,6 +92,8 @@ export type CuaAgentHarnessOptions<
 	extraTools?: AgentTool[];
 	/** Expose a helper for browser navigation and URL reads. */
 	computerUseExtra?: boolean;
+	/** Expose a tool that runs Playwright code against the browser session. */
+	playwright?: boolean;
 	/** Optional payload hook composed after the provider-specific CUA payload hook. */
 	onPayload?: SimpleStreamOptions["onPayload"];
 };
@@ -110,6 +115,7 @@ class CuaRuntimeController {
 			model: CuaRuntimeInput;
 			extraTools?: AgentTool[];
 			computerUseExtra?: boolean;
+			playwright?: boolean;
 			onPayload?: SimpleStreamOptions["onPayload"];
 		},
 	) {
@@ -136,6 +142,7 @@ class CuaRuntimeController {
 				{
 					toolExecutors: this.runtimeSpec.toolExecutors,
 					computerUseExtra: this.options.computerUseExtra,
+					playwright: this.options.playwright,
 				},
 				this.translator,
 			),
@@ -159,6 +166,7 @@ class CuaRuntimeController {
 		return [
 			...(this.options.extraTools ?? []).map((tool) => tool.name),
 			...(this.options.computerUseExtra ? [CUA_NAVIGATION_TOOL_NAME] : []),
+			...(this.options.playwright ? [CUA_PLAYWRIGHT_TOOL_NAME] : []),
 		];
 	}
 
@@ -203,6 +211,7 @@ export class CuaAgent extends Agent {
 			prepareNextTurn,
 			extraTools,
 			computerUseExtra,
+			playwright,
 			...agentOptions
 		} = options;
 		const runtime = new CuaRuntimeController({
@@ -211,6 +220,7 @@ export class CuaAgent extends Agent {
 			model: initialState.model,
 			extraTools,
 			computerUseExtra,
+			playwright,
 			onPayload,
 		});
 		const wrappedStreamFn: StreamFn = (model, context, streamOptions) => {
@@ -326,6 +336,7 @@ export class CuaAgentHarness<
 			model,
 			extraTools,
 			computerUseExtra,
+			playwright,
 			systemPrompt,
 			getApiKeyAndHeaders,
 			onPayload,
@@ -338,6 +349,7 @@ export class CuaAgentHarness<
 			model,
 			extraTools,
 			computerUseExtra,
+			playwright,
 			onPayload,
 		});
 		const resolvedTools = runtime.tools();

@@ -2,15 +2,18 @@ import type Kernel from "@onkernel/sdk";
 import type { ImageContent, TextContent, Tool } from "@earendil-works/pi-ai";
 import {
 	CUA_NAVIGATION_TOOL_NAME,
+	CUA_PLAYWRIGHT_TOOL_NAME,
 	createCuaNavigationToolDefinition,
+	createCuaPlaywrightToolDefinition,
 	type ComputerToolCoordinateSystem,
 	type CuaBatchInput,
 	type CuaNavigationInput,
+	type CuaPlaywrightInput,
 	type CuaScreenshotSpec,
 	type CuaToolExecutorSpec,
 	type TSchema,
 } from "@onkernel/cua-ai";
-import { InternalComputerTranslator, type KernelBrowser } from "./translator/translator";
+import { InternalComputerTranslator, type KernelBrowser, type PlaywrightExecutionResult } from "./translator/translator";
 import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
 
 export interface ComputerToolOptions {
@@ -20,6 +23,7 @@ export interface ComputerToolOptions {
 	coordinateSystem?: ComputerToolCoordinateSystem;
 	screenshot?: CuaScreenshotSpec;
 	computerUseExtra?: boolean;
+	playwright?: boolean;
 }
 
 type ToolContent = Array<TextContent | ImageContent>;
@@ -35,12 +39,19 @@ export interface NavigationDetails {
 	url?: string;
 }
 
+export interface PlaywrightDetails {
+	success: boolean;
+	statusText: string;
+}
+
 type BatchTool = AgentTool<TSchema, BatchDetails>;
 type NavigationTool = AgentTool<TSchema, NavigationDetails>;
+type PlaywrightTool = AgentTool<TSchema, PlaywrightDetails>;
 type ActionTool = AgentTool<TSchema, BatchDetails>;
-export type CuaExecutorTool = BatchTool | NavigationTool | ActionTool;
+export type CuaExecutorTool = BatchTool | NavigationTool | PlaywrightTool | ActionTool;
 type NavigationExecutorSpec = { kind: "navigation"; definition: Tool };
-type ComputerExecutorSpec = CuaToolExecutorSpec | NavigationExecutorSpec;
+type PlaywrightExecutorSpec = { kind: "playwright"; definition: Tool };
+type ComputerExecutorSpec = CuaToolExecutorSpec | NavigationExecutorSpec | PlaywrightExecutorSpec;
 
 export function createCuaComputerTools(args: ComputerToolOptions): CuaExecutorTool[] {
 	return buildCuaComputerTools(args, new InternalComputerTranslator(args));
@@ -48,18 +59,20 @@ export function createCuaComputerTools(args: ComputerToolOptions): CuaExecutorTo
 
 /** Build executor tools against an existing translator (internal; not part of the package surface). */
 export function buildCuaComputerTools(
-	args: Pick<ComputerToolOptions, "toolExecutors" | "computerUseExtra">,
+	args: Pick<ComputerToolOptions, "toolExecutors" | "computerUseExtra" | "playwright">,
 	translator: InternalComputerTranslator,
 ): CuaExecutorTool[] {
-	return withNavigationTool(args).map((executor) => createExecutorTool(executor, translator));
+	return withExtraTools(args).map((executor) => createExecutorTool(executor, translator));
 }
 
-function withNavigationTool(args: Pick<ComputerToolOptions, "toolExecutors" | "computerUseExtra">): ComputerExecutorSpec[] {
+function withExtraTools(args: Pick<ComputerToolOptions, "toolExecutors" | "computerUseExtra" | "playwright">): ComputerExecutorSpec[] {
 	const executors: ComputerExecutorSpec[] = [...args.toolExecutors];
 	const existing = new Set(executors.map((executor) => executor.definition.name));
 	if (args.computerUseExtra && !existing.has(CUA_NAVIGATION_TOOL_NAME)) {
-		const definition = createCuaNavigationToolDefinition();
-		executors.push({ kind: "navigation", definition });
+		executors.push({ kind: "navigation", definition: createCuaNavigationToolDefinition() });
+	}
+	if (args.playwright && !existing.has(CUA_PLAYWRIGHT_TOOL_NAME)) {
+		executors.push({ kind: "playwright", definition: createCuaPlaywrightToolDefinition() });
 	}
 	return executors;
 }
@@ -74,6 +87,19 @@ function createExecutorTool(executor: ComputerExecutorSpec, translator: Internal
 			parameters: definition.parameters,
 			async execute(_toolCallId: string, params: unknown): Promise<AgentToolResult<NavigationDetails>> {
 				return executeNavigationTool(translator, asNavigationInput(params));
+			},
+		};
+		return tool;
+	}
+	if (isPlaywrightExecutor(executor)) {
+		const tool: PlaywrightTool = {
+			name: definition.name,
+			label: definition.name,
+			description: definition.description,
+			parameters: definition.parameters,
+			executionMode: "sequential",
+			async execute(_toolCallId: string, params: unknown): Promise<AgentToolResult<PlaywrightDetails>> {
+				return executePlaywrightTool(translator, asPlaywrightInput(params));
 			},
 		};
 		return tool;
@@ -93,6 +119,10 @@ function createExecutorTool(executor: ComputerExecutorSpec, translator: Internal
 
 function isNavigationExecutor(executor: ComputerExecutorSpec): executor is NavigationExecutorSpec {
 	return "kind" in executor && executor.kind === "navigation";
+}
+
+function isPlaywrightExecutor(executor: ComputerExecutorSpec): executor is PlaywrightExecutorSpec {
+	return "kind" in executor && executor.kind === "playwright";
 }
 
 async function executeBatchTool(translator: InternalComputerTranslator, params: CuaBatchInput): Promise<AgentToolResult<BatchDetails>> {
@@ -149,6 +179,41 @@ async function executeNavigationTool(translator: InternalComputerTranslator, par
 	}
 }
 
+async function executePlaywrightTool(translator: InternalComputerTranslator, params: CuaPlaywrightInput): Promise<AgentToolResult<PlaywrightDetails>> {
+	let execution: PlaywrightExecutionResult;
+	try {
+		execution = await translator.executePlaywright(params.code, params.timeout_sec);
+	} catch (err) {
+		throw new Error(`playwright_execute failed: ${errorMessage(err)}`, { cause: err });
+	}
+
+	const content: ToolContent = [];
+	if (execution.result !== undefined) {
+		content.push({ type: "text", text: `result: ${formatPlaywrightResult(execution.result)}` });
+	}
+	if (execution.stdout?.trim()) {
+		content.push({ type: "text", text: `stdout:\n${execution.stdout.trimEnd()}` });
+	}
+	if (execution.stderr?.trim()) {
+		content.push({ type: "text", text: `stderr:\n${execution.stderr.trimEnd()}` });
+	}
+	if (!execution.success) {
+		content.push({ type: "text", text: `error: ${execution.error ?? "playwright execution reported failure"}` });
+	}
+
+	const statusText = execution.success ? "Playwright executed successfully." : `Playwright execution failed: ${execution.error ?? "unknown error"}`;
+	if (content.length === 0) content.push({ type: "text", text: statusText });
+
+	const screenshot = await translator.screenshot();
+	content.push({ type: "image", data: screenshot.data.toString("base64"), mimeType: screenshot.mimeType });
+
+	return { content, details: { success: execution.success, statusText } };
+}
+
+function formatPlaywrightResult(result: unknown): string {
+	return typeof result === "string" ? result : JSON.stringify(result);
+}
+
 function errorMessage(err: unknown): string {
 	return err instanceof Error ? err.message : String(err);
 }
@@ -162,4 +227,11 @@ function asNavigationInput(value: unknown): CuaNavigationInput {
 		return value as CuaNavigationInput;
 	}
 	throw new Error("invalid computer_use_extra parameters");
+}
+
+function asPlaywrightInput(value: unknown): CuaPlaywrightInput {
+	if (value && typeof value === "object" && typeof (value as { code?: unknown }).code === "string") {
+		return value as CuaPlaywrightInput;
+	}
+	throw new Error("invalid playwright_execute parameters");
 }

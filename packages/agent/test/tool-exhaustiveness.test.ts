@@ -85,4 +85,59 @@ describe("Cua tool executor coverage", () => {
 		]);
 		expect(result.content.at(-1)).toMatchObject({ type: "image", mimeType: "image/png" });
 	});
+
+	it("runs the playwright_execute tool and appends a screenshot", async () => {
+		const calls: Array<{ id: string; body: { code: string; timeout_sec?: number } }> = [];
+		const runtime = resolveCuaRuntimeSpec("openai:gpt-5.5");
+		const tools = createCuaComputerTools({
+			browser,
+			client: {
+				browsers: {
+					playwright: {
+						execute: async (id: string, body: { code: string; timeout_sec?: number }) => {
+							calls.push({ id, body });
+							return { success: true, result: "Example Domain", stdout: "logged\n", stderr: "" };
+						},
+					},
+					computer: { captureScreenshot: async () => new Response(tinyPng) },
+				},
+			} as unknown as Kernel,
+			toolExecutors: runtime.toolExecutors,
+			playwright: true,
+		});
+		const playwright = tools.find((tool) => tool.name === "playwright_execute");
+		expect(playwright).toBeDefined();
+
+		const result = await playwright!.execute("call_1", { code: "return await page.title();", timeout_sec: 30 });
+
+		expect(calls).toEqual([{ id: "browser_123", body: { code: "return await page.title();", timeout_sec: 30 } }]);
+		expect(result.content[0]).toMatchObject({ type: "text", text: "result: Example Domain" });
+		expect(result.content.some((block) => block.type === "text" && block.text === "stdout:\nlogged")).toBe(true);
+		expect(result.content.at(-1)).toMatchObject({ type: "image", mimeType: "image/png" });
+		expect(result.details).toMatchObject({ success: true });
+	});
+
+	it("surfaces playwright_execute failures as tool content without throwing", async () => {
+		const runtime = resolveCuaRuntimeSpec("openai:gpt-5.5");
+		const tools = createCuaComputerTools({
+			browser,
+			client: {
+				browsers: {
+					playwright: { execute: async () => ({ success: false, error: "boom", stderr: "stack" }) },
+					computer: { captureScreenshot: async () => new Response(tinyPng) },
+				},
+			} as unknown as Kernel,
+			toolExecutors: runtime.toolExecutors,
+			playwright: true,
+		});
+		const playwright = tools.find((tool) => tool.name === "playwright_execute");
+		expect(playwright).toBeDefined();
+
+		const result = await playwright!.execute("call_1", { code: "await page.click('#missing')" });
+
+		expect(result.content.some((block) => block.type === "text" && block.text.includes("error: boom"))).toBe(true);
+		expect(result.content.some((block) => block.type === "text" && block.text === "stderr:\nstack")).toBe(true);
+		expect(result.content.at(-1)).toMatchObject({ type: "image", mimeType: "image/png" });
+		expect(result.details).toMatchObject({ success: false });
+	});
 });
