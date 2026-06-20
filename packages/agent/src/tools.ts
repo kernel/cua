@@ -39,6 +39,21 @@ export interface NavigationDetails {
 	url?: string;
 }
 
+/**
+ * Structured details for a `playwright_execute` tool result. Library
+ * consumers can read these directly instead of re-parsing the model-facing
+ * tool content blocks.
+ *
+ * - `success` — whether the Playwright code itself completed without error.
+ *   A `false` value means the code threw or the SDK reported failure; in
+ *   that case the failure is also surfaced as tool content for the model.
+ * - `statusText` — short human-readable status (success or failure summary).
+ * - `result` — present only when the code returned a JSON-serializable value.
+ * - `stdout`/`stderr` — present only when the daemon captured output on that
+ *   stream during execution.
+ * - `error` — present only when `success` is `false`; the error message from
+ *   the daemon.
+ */
 export interface PlaywrightDetails {
 	success: boolean;
 	statusText: string;
