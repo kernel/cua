@@ -98,6 +98,8 @@ Both classes mirror pi constructor shapes and behavior, with minimal additions:
 - CUA model refs (`"provider:model"`) accepted where pi expects a concrete model
 - `extraTools` to add your own pi tools alongside the built-in browser tools
 - `computerUseExtra: true` to let the model use a small navigation helper
+- `playwright: true` to let the model run Playwright/TypeScript against the
+  live browser session
 
 If auth callbacks are omitted, both classes default to CUA env var conventions:
 - OpenAI: `OPENAI_API_KEY`
@@ -123,6 +125,18 @@ navigation — some models can click and type but have no direct way to open a
 URL or go back. `computerUseExtra: true` adds `computer_use_extra`, a
 provider-neutral escape hatch exposing `goto`, `back`, `forward`, and `url`
 so navigation works uniformly regardless of which model is driving.
+
+Some steps are awkward as raw pointer/keyboard actions: precise DOM reads,
+form fills, data extraction, or waiting on a specific selector.
+`playwright: true` adds `playwright_execute`, which runs Playwright/TypeScript
+directly against the live browser session. `page`, `context`, and `browser`
+are in scope and the code may `return` a JSON-serializable value. Each call
+runs in a fresh JS context (locals don't persist across calls) but the
+browser session does carry over. A fresh screenshot is appended after every
+call so the loop stays coherent. Playwright-level failures come back as tool
+content (so the model can adapt) rather than thrown errors. Tested against
+Anthropic and OpenAI computer-use models; CUA-specialized providers
+(`tzafon`, `yutori`) may not emit calls for non-native tools.
 
 ### Model Switching
 
