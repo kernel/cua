@@ -134,9 +134,9 @@ are in scope and the code may `return` a JSON-serializable value. Each call
 runs in a fresh JS context (locals don't persist across calls) but the
 browser session does carry over. A fresh screenshot is appended after every
 call so the loop stays coherent. Playwright-level failures come back as tool
-content (so the model can adapt) rather than thrown errors. Tested against
-Anthropic and OpenAI computer-use models; CUA-specialized providers
-(`tzafon`, `yutori`) may not emit calls for non-native tools.
+content (so the model can adapt) rather than thrown errors. Verified e2e
+against Anthropic, Tzafon, and Yutori CUA models; OpenAI and Google are
+unit-tested.
 
 ### Model Switching
 
