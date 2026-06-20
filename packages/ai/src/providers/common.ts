@@ -342,6 +342,7 @@ export const CUA_NAVIGATION_TOOL_DESCRIPTION = "High-level browser navigation he
 export const CUA_PLAYWRIGHT_TOOL_DESCRIPTION = [
 	"Run Playwright/TypeScript directly against the live browser session for steps that are awkward as raw pointer/keyboard actions: precise DOM reads, form fills, data extraction, and waiting on selectors.",
 	"`page`, `context`, and `browser` are in scope and the code may `return` a JSON-serializable value, which comes back as the result.",
+	"Each call runs in a fresh JS context — local variables do not persist across calls, but the browser session does (navigation, cookies, DOM state carry over via `page`/`context`/`browser`).",
 	"Capture page state with a follow-up screenshot action rather than calling page.screenshot() inside the code.",
 ].join("\n");
 
