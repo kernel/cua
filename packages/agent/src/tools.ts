@@ -13,7 +13,7 @@ import {
 	type CuaToolExecutorSpec,
 	type TSchema,
 } from "@onkernel/cua-ai";
-import { InternalComputerTranslator, type KernelBrowser, type PlaywrightExecutionResult } from "./translator/translator";
+import { InternalComputerTranslator, type KernelBrowser } from "./translator/translator";
 import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
 
 export interface ComputerToolOptions {
@@ -184,39 +184,38 @@ async function executeNavigationTool(translator: InternalComputerTranslator, par
 }
 
 async function executePlaywrightTool(translator: InternalComputerTranslator, params: CuaPlaywrightInput): Promise<AgentToolResult<PlaywrightDetails>> {
-	let execution: PlaywrightExecutionResult;
 	try {
-		execution = await translator.executePlaywright(params.code, params.timeout_sec);
+		const execution = await translator.executePlaywright(params.code, params.timeout_sec);
+
+		const content: ToolContent = [];
+		if (execution.result !== undefined) {
+			content.push({ type: "text", text: `result: ${formatPlaywrightResult(execution.result)}` });
+		}
+		if (execution.stdout?.trim()) {
+			content.push({ type: "text", text: `stdout:\n${execution.stdout.trimEnd()}` });
+		}
+		if (execution.stderr?.trim()) {
+			content.push({ type: "text", text: `stderr:\n${execution.stderr.trimEnd()}` });
+		}
+		if (!execution.success) {
+			content.push({ type: "text", text: `error: ${execution.error ?? "playwright execution reported failure"}` });
+		}
+
+		const statusText = execution.success ? "Playwright executed successfully." : `Playwright execution failed: ${execution.error ?? "unknown error"}`;
+		if (content.length === 0) content.push({ type: "text", text: statusText });
+
+		const screenshot = await translator.screenshot();
+		content.push({ type: "image", data: screenshot.data.toString("base64"), mimeType: screenshot.mimeType });
+
+		const details: PlaywrightDetails = { success: execution.success, statusText };
+		if (execution.result !== undefined) details.result = execution.result;
+		if (execution.stdout) details.stdout = execution.stdout;
+		if (execution.stderr) details.stderr = execution.stderr;
+		if (execution.error) details.error = execution.error;
+		return { content, details };
 	} catch (err) {
 		throw new Error(`playwright_execute failed: ${errorMessage(err)}`, { cause: err });
 	}
-
-	const content: ToolContent = [];
-	if (execution.result !== undefined) {
-		content.push({ type: "text", text: `result: ${formatPlaywrightResult(execution.result)}` });
-	}
-	if (execution.stdout?.trim()) {
-		content.push({ type: "text", text: `stdout:\n${execution.stdout.trimEnd()}` });
-	}
-	if (execution.stderr?.trim()) {
-		content.push({ type: "text", text: `stderr:\n${execution.stderr.trimEnd()}` });
-	}
-	if (!execution.success) {
-		content.push({ type: "text", text: `error: ${execution.error ?? "playwright execution reported failure"}` });
-	}
-
-	const statusText = execution.success ? "Playwright executed successfully." : `Playwright execution failed: ${execution.error ?? "unknown error"}`;
-	if (content.length === 0) content.push({ type: "text", text: statusText });
-
-	const screenshot = await translator.screenshot();
-	content.push({ type: "image", data: screenshot.data.toString("base64"), mimeType: screenshot.mimeType });
-
-	const details: PlaywrightDetails = { success: execution.success, statusText };
-	if (execution.result !== undefined) details.result = execution.result;
-	if (execution.stdout) details.stdout = execution.stdout;
-	if (execution.stderr) details.stderr = execution.stderr;
-	if (execution.error) details.error = execution.error;
-	return { content, details };
 }
 
 function formatPlaywrightResult(result: unknown): string {
