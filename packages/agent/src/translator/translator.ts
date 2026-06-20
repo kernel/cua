@@ -87,7 +87,7 @@ export class InternalComputerTranslator {
 
 	async executePlaywright(code: string, timeoutSec?: number): Promise<PlaywrightExecutionResult> {
 		const timeout =
-			typeof timeoutSec === "number" && Number.isFinite(timeoutSec) && timeoutSec > 0
+			timeoutSec !== undefined && timeoutSec > 0
 				? Math.min(Math.trunc(timeoutSec), PLAYWRIGHT_MAX_TIMEOUT_SEC)
 				: undefined;
 		return this.client.browsers.playwright.execute(this.sessionId, {

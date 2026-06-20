@@ -220,12 +220,7 @@ async function executePlaywrightTool(translator: InternalComputerTranslator, par
 }
 
 function formatPlaywrightResult(result: unknown): string {
-	if (typeof result === "string") return result;
-	try {
-		return JSON.stringify(result);
-	} catch {
-		return String(result);
-	}
+	return typeof result === "string" ? result : JSON.stringify(result);
 }
 
 function errorMessage(err: unknown): string {
