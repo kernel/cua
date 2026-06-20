@@ -86,7 +86,10 @@ export class InternalComputerTranslator {
 	}
 
 	async executePlaywright(code: string, timeoutSec?: number): Promise<PlaywrightExecutionResult> {
-		const timeout = typeof timeoutSec === "number" && Number.isFinite(timeoutSec) && timeoutSec > 0 ? Math.trunc(timeoutSec) : undefined;
+		const timeout =
+			typeof timeoutSec === "number" && Number.isFinite(timeoutSec) && timeoutSec > 0
+				? Math.min(Math.trunc(timeoutSec), PLAYWRIGHT_MAX_TIMEOUT_SEC)
+				: undefined;
 		return this.client.browsers.playwright.execute(this.sessionId, {
 			code,
 			...(timeout !== undefined ? { timeout_sec: timeout } : {}),
@@ -238,6 +241,8 @@ type KernelBatchAction =
 
 export type PlaywrightExecutionResult =
 	Awaited<ReturnType<Kernel["browsers"]["playwright"]["execute"]>>;
+
+const PLAYWRIGHT_MAX_TIMEOUT_SEC = 300;
 
 const CLICK_BUTTONS: ReadonlySet<string> = new Set<CuaMouseButton>(["left", "right", "middle", "back", "forward"]);
 const DRAG_BUTTONS: ReadonlySet<string> = new Set<CuaDragMouseButton>(["left", "right", "middle"]);
