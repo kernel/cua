@@ -42,6 +42,10 @@ export interface NavigationDetails {
 export interface PlaywrightDetails {
 	success: boolean;
 	statusText: string;
+	result?: unknown;
+	stdout?: string;
+	stderr?: string;
+	error?: string;
 }
 
 type BatchTool = AgentTool<TSchema, BatchDetails>;
@@ -207,11 +211,21 @@ async function executePlaywrightTool(translator: InternalComputerTranslator, par
 	const screenshot = await translator.screenshot();
 	content.push({ type: "image", data: screenshot.data.toString("base64"), mimeType: screenshot.mimeType });
 
-	return { content, details: { success: execution.success, statusText } };
+	const details: PlaywrightDetails = { success: execution.success, statusText };
+	if (execution.result !== undefined) details.result = execution.result;
+	if (execution.stdout) details.stdout = execution.stdout;
+	if (execution.stderr) details.stderr = execution.stderr;
+	if (execution.error) details.error = execution.error;
+	return { content, details };
 }
 
 function formatPlaywrightResult(result: unknown): string {
-	return typeof result === "string" ? result : JSON.stringify(result);
+	if (typeof result === "string") return result;
+	try {
+		return JSON.stringify(result);
+	} catch {
+		return String(result);
+	}
 }
 
 function errorMessage(err: unknown): string {

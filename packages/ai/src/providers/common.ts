@@ -303,7 +303,7 @@ export const CuaPlaywrightSchema = Type.Object(
 			description:
 				"Playwright/TypeScript to run against the live browser. `page`, `context`, and `browser` are in scope; end with a `return` to send a JSON-serializable value back. Example: \"await page.goto('https://example.com'); return await page.title();\"",
 		}),
-		timeout_sec: Type.Optional(Type.Number({ description: "Maximum execution time in seconds. Defaults to 60." })),
+		timeout_sec: Type.Optional(Type.Number({ description: "Optional execution timeout in seconds." })),
 	},
 	{ additionalProperties: false },
 );
