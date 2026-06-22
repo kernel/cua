@@ -7,21 +7,18 @@ interactive front-end and to
 [`pi-coding-agent`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent)'s
 coding tools for workspace access.
 
-## Install (from the monorepo)
+## Install
 
 ```bash
-# from the repo root:
-npm install
-# run directly from source via tsx (no global install required):
-npx tsx packages/cli/src/cli.ts --help
+# global install (puts `cua` on your PATH):
+npm install -g @onkernel/cua-cli
+cua --help
 
-# optional: pin a shell function in your rc so `cua` works from any cwd
-# while preserving the caller's directory (so `--out`, transcript
-# bucketing, and `.agents/skills` discovery use the directory you
-# invoked from):
-#   CUA_REPO=/absolute/path/to/cua
-#   cua() { "$CUA_REPO/node_modules/.bin/tsx" "$CUA_REPO/packages/cli/src/cli.ts" "$@"; }
+# or run a one-off without installing:
+npx @onkernel/cua-cli --help
 ```
+
+Requires Node >= 22.19.0.
 
 ## Usage
 
