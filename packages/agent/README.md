@@ -132,9 +132,10 @@ form fills, data extraction, or waiting on a specific selector.
 directly against the live browser session. `page`, `context`, and `browser`
 are in scope and the code may `return` a JSON-serializable value. Each call
 runs in a fresh JS context (locals don't persist across calls) but the
-browser session does carry over. A fresh screenshot is appended after every
-call so the loop stays coherent. Playwright-level failures come back as tool
-content (so the model can adapt) rather than thrown errors. Verified e2e
+browser session does carry over. No screenshot is returned automatically;
+request one on a follow-up turn when the model needs to see the page.
+Playwright-level failures come back as tool content (so the model can adapt)
+rather than thrown errors. Verified e2e
 against Anthropic, Tzafon, and Yutori CUA models; OpenAI and Google are
 unit-tested.
 

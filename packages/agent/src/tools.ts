@@ -49,8 +49,8 @@ export interface NavigationDetails {
  *   that case the failure is also surfaced as tool content for the model.
  * - `statusText` — short human-readable status (success or failure summary).
  * - `result` — present only when the code returned a JSON-serializable value.
- * - `stdout`/`stderr` — present only when the daemon captured output on that
- *   stream during execution.
+ * - `stdout`/`stderr` — raw daemon output, present whenever the daemon
+ *   reported a non-empty value on that stream (may be whitespace-only).
  * - `error` — present only when `success` is `false`; the error message from
  *   the daemon.
  */
@@ -218,9 +218,6 @@ async function executePlaywrightTool(translator: InternalComputerTranslator, par
 
 		const statusText = execution.success ? "Playwright executed successfully." : `Playwright execution failed: ${execution.error ?? "unknown error"}`;
 		if (content.length === 0) content.push({ type: "text", text: statusText });
-
-		const screenshot = await translator.screenshot();
-		content.push({ type: "image", data: screenshot.data.toString("base64"), mimeType: screenshot.mimeType });
 
 		const details: PlaywrightDetails = { success: execution.success, statusText };
 		if (execution.result !== undefined) details.result = execution.result;
