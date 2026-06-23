@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.4 - 2026-06-23
+
+- Add an opt-in `playwright` option to `CuaAgent` and `CuaAgentHarness` that
+  exposes a `playwright_execute` tool, running Playwright/TypeScript against
+  the live browser session via the Kernel SDK. Results, stdout, and stderr
+  come back as tool content; SDK-reported failures surface as content rather
+  than throwing. Adds the `PlaywrightDetails` export.
+
 ## 0.3.3 - 2026-06-12
 
 - The action translator now consumes the canonical `CuaAction` union with an
