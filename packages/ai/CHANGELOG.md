@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1 - 2026-06-23
+
+- Add the `playwright_execute` tool definition: `CuaPlaywrightSchema`,
+  `CUA_PLAYWRIGHT_TOOL_NAME`, `CUA_PLAYWRIGHT_TOOL_DESCRIPTION`,
+  `createCuaPlaywrightToolDefinition()`, and the `CuaPlaywrightInput` type.
+
 ## 0.3.0 - 2026-06-12
 
 - Add `CuaSimpleStreamOptions`: pi-ai `SimpleStreamOptions` plus the
