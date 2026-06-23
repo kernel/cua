@@ -8,6 +8,7 @@ export type {
 	ComputerToolOptions,
 	CuaExecutorTool,
 	NavigationDetails,
+	PlaywrightDetails,
 } from "./tools";
 export { CuaAgent, CuaAgentHarness } from "./agent";
 export type { CuaAgentHarnessOptions, CuaAgentOptions, CuaAgentState } from "./agent";

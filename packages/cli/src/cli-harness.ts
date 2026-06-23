@@ -176,6 +176,7 @@ export interface HarnessCliFlags {
 	debugTui: boolean;
 	jsonlIncludeDeltas: boolean;
 	jsonlIncludeImages: boolean;
+	playwright: boolean;
 	model?: string;
 	thinking?: string;
 	browserProfile?: string;
@@ -413,6 +414,7 @@ async function setupHarnessRuntime(
 		skills,
 		contextFiles,
 		thinkingLevel,
+		playwright: flags.playwright,
 		modelBaseUrl: baseUrlOverride,
 	});
 

@@ -309,12 +309,15 @@ definitions and executors; it is forwarded to the provider module's
 - `createCuaNavigationToolDefinition()`, `CuaNavigationSchema`,
   `CUA_NAVIGATION_TOOL_NAME` (`"computer_use_extra"`),
   `CUA_NAVIGATION_TOOL_DESCRIPTION`
+- `createCuaPlaywrightToolDefinition()`, `CuaPlaywrightSchema`,
+  `CUA_PLAYWRIGHT_TOOL_NAME` (`"playwright_execute"`),
+  `CUA_PLAYWRIGHT_TOOL_DESCRIPTION`
 - `canonicalToolCallName(action)`, `canonicalToolCallArguments(action)` — map
   a normalized `CuaAction` back to its tool-call name/arguments
 - `normalizeGotoUrl(value)` — prefix bare hostnames with `https://`
 - Types: `CuaAction` (plus the 16 per-action interfaces), `CuaActionType`,
   `CuaMouseButton`, `CuaDragMouseButton`, `CuaBatchInput`,
-  `CuaNavigationInput`, `CuaToolExecutorSpec`, `ComputerToolsOptions`,
+  `CuaNavigationInput`, `CuaPlaywrightInput`, `CuaToolExecutorSpec`, `ComputerToolsOptions`,
   `ComputerToolCoordinateSystem`
 
 ### Provider registration

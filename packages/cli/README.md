@@ -99,6 +99,16 @@ Configuration is by environment variable. There is no config file.
 Use `--thinking <level>` (`off | minimal | low | medium | high | xhigh`,
 default `low`) for providers that support reasoning effort.
 
+## Playwright escape hatch
+
+Pass `--playwright` to expose the `playwright_execute` tool, letting the
+model run Playwright/TypeScript directly against the live browser session
+for steps that are awkward as raw pointer/keyboard actions (precise DOM
+reads, form fills, data extraction, waiting on selectors). `page`,
+`context`, and `browser` are in scope; the code may `return` a
+JSON-serializable value. Off by default. Verified e2e with Anthropic,
+Tzafon, and Yutori CUA models.
+
 ## Output formats
 
 `--print` defaults to streaming text. Pass `-o jsonl` for one
