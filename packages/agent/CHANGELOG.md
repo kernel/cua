@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.5 - 2026-06-24
+
+- Update the `@onkernel/cua-ai` dependency to 0.3.2, adding computer-use
+  support for the `gemini-3.5-flash` Google model.
+
 ## 0.3.4 - 2026-06-23
 
 - Add an opt-in `playwright` option to `CuaAgent` and `CuaAgentHarness` that

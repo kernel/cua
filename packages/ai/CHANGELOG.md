@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.2 - 2026-06-24
+
+- Add computer-use support for the `gemini-3.5-flash` Google model.
+
 ## 0.3.1 - 2026-06-23
 
 - Add the `playwright_execute` tool definition: `CuaPlaywrightSchema`,
