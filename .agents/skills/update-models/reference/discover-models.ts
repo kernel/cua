@@ -49,6 +49,7 @@ const YUTORI_DOC_MODELS = [
 	"n1-20260203",
 ];
 const GEMINI_DOC_COMPUTER_USE_MODELS = [
+	"gemini-3.5-flash",
 	"gemini-3-flash-preview",
 	"gemini-2.5-computer-use-preview-10-2025",
 ];

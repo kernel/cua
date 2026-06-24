@@ -49,6 +49,7 @@ Exact IDs:
 
 - `gemini-3-flash-preview`
 - `gemini-3.1-flash-lite`
+- `gemini-3.5-flash`
 
 `gemini-2.5-computer-use-preview-10-2025` is deliberately not annotated: it
 rejects the standard function declarations this package sends and requires
