@@ -1,0 +1,26 @@
+{
+  "name": "@onkernel/cua-bench",
+  "version": "0.0.0",
+  "description": "Benchmark runner for CUA models on Kernel cloud browsers",
+  "license": "MIT",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": {
+      "types": "./dist-tsc/index.d.ts",
+      "source": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "spike": "NODE_OPTIONS=--conditions=source tsx src/spike.ts",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@onkernel/cua-agent": "*",
+    "@onkernel/cua-ai": "*",
+    "@onkernel/sdk": "0.49.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0"
+  }
+}
