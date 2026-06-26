@@ -1,4 +1,3 @@
-export { runTask, type RunTaskOptions } from "./runTask";
 export { runOne, modelSlug } from "./runOne";
 export { loadTasks } from "./tasks";
 export { aggregate } from "./aggregate";
@@ -15,8 +14,6 @@ export type {
 	ModelSummary,
 	Om2wResult,
 	Om2wTask,
-	Task,
 	TaskMetrics,
-	TaskResult,
 	TokenTotals,
 } from "./types";

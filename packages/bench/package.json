@@ -12,7 +12,6 @@
     }
   },
   "scripts": {
-    "spike": "NODE_OPTIONS=--conditions=source tsx src/spike.ts",
     "bench": "NODE_OPTIONS=--conditions=source tsx src/benchmark.ts",
     "aggregate": "NODE_OPTIONS=--conditions=source tsx src/aggregate.ts",
     "typecheck": "tsc -b"
