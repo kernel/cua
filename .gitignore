@@ -11,4 +11,3 @@ packages/*/dist-tsc/
 packages/*/*.tsbuildinfo
 packages/*/native/build/
 packages/ptywright/.cache/
-packages/bench/.cache/
