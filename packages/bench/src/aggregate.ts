@@ -7,6 +7,11 @@ import type { ModelSummary, TaskMetrics } from "./types";
  * the `metrics.json` sidecars; accuracy comes from an optional WebJudge output
  * (`<model>/webjudge.jsonl`, one `{task_id, predicted_label}` per line) written
  * by `scripts/run-webjudge.sh`. Accuracy is null until that file exists.
+ *
+ * The accuracy denominator is every task the model attempted — completed runs
+ * plus tasks that exhausted their retries without producing a trajectory — so a
+ * task the model can never finish counts as a failure rather than silently
+ * dropping out of the rate.
  */
 export async function aggregate(outDir: string): Promise<ModelSummary[]> {
 	const summaries: ModelSummary[] = [];
@@ -18,15 +23,17 @@ export async function aggregate(outDir: string): Promise<ModelSummary[]> {
 		const metrics = await readMetrics(modelDir);
 		if (metrics.length === 0) continue;
 
+		const failed = await countExhaustedTasks(modelDir);
+		const attempted = metrics.length + failed;
 		const judged = await readJudgements(join(modelDir, "webjudge.jsonl"));
 		const costs = metrics.map((m) => m.costUsd).filter((c): c is number => c !== null);
 		const passed = judged ? metrics.filter((m) => judged.get(m.task_id) === true).length : null;
 
 		summaries.push({
 			model: metrics[0]!.model,
-			tasks: metrics.length,
+			tasks: attempted,
 			passed,
-			accuracyPct: judged ? round((passed! / judged.size) * 100, 1) : null,
+			accuracyPct: judged ? round((passed! / attempted) * 100, 1) : null,
 			avgCostUsd: costs.length ? round(sum(costs) / costs.length, 4) : null,
 			avgSpeedSec: round(sum(metrics.map((m) => m.wallClockMs)) / metrics.length / 1000, 1),
 		});
@@ -48,6 +55,20 @@ async function readMetrics(modelDir: string): Promise<TaskMetrics[]> {
 		}
 	}
 	return out;
+}
+
+/** Count tasks that recorded retry attempts but never produced a trajectory — permanent failures. */
+async function countExhaustedTasks(modelDir: string): Promise<number> {
+	let count = 0;
+	for (const entry of await readdir(modelDir, { withFileTypes: true })) {
+		if (!entry.isDirectory()) continue;
+		const taskDir = join(modelDir, entry.name);
+		const hasMetrics = await readFile(join(taskDir, "metrics.json"), "utf8").then(() => true).catch(() => false);
+		if (hasMetrics) continue;
+		const hasAttempts = await readFile(join(taskDir, "attempts"), "utf8").then(() => true).catch(() => false);
+		if (hasAttempts) count++;
+	}
+	return count;
 }
 
 async function readJudgements(path: string): Promise<Map<string, boolean> | undefined> {

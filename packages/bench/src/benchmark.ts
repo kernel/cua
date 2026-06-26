@@ -1,5 +1,5 @@
 import type { CuaModelRef } from "@onkernel/cua-ai";
-import { access } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createKernelClient, DEFAULT_BROWSER_SETTINGS } from "./browser";
 import { runPool } from "./pool";
@@ -11,6 +11,14 @@ const DEFAULT_MODELS: CuaModelRef[] = [
 	"openai:gpt-5.5",
 	"google:gemini-3-flash-preview",
 ];
+
+/**
+ * How many times a task may error before it's treated as a permanent failure
+ * for that model and stops being retried. Some tasks fail deterministically
+ * (e.g. a model whose trajectory grows past the provider's max request size),
+ * so without a cap a resumable run would retry them forever.
+ */
+const MAX_ATTEMPTS = 3;
 
 interface Options {
 	tasksPath: string;
@@ -59,6 +67,19 @@ async function exists(path: string): Promise<boolean> {
 	}
 }
 
+async function readAttempts(taskDir: string): Promise<number> {
+	try {
+		return Number.parseInt(await readFile(join(taskDir, "attempts"), "utf8"), 10) || 0;
+	} catch {
+		return 0;
+	}
+}
+
+async function recordAttempt(taskDir: string, count: number): Promise<void> {
+	await mkdir(taskDir, { recursive: true });
+	await writeFile(join(taskDir, "attempts"), String(count));
+}
+
 async function main(): Promise<void> {
 	const opts = parseArgs(process.argv.slice(2));
 	const client = createKernelClient();
@@ -71,10 +92,16 @@ async function main(): Promise<void> {
 		let done = 0;
 		let failed = 0;
 		let skipped = 0;
+		let exhausted = 0;
 		await runPool(tasks, opts.concurrency, async (task) => {
 			const taskDir = join(opts.outDir, slug, task.task_id);
 			if (await exists(join(taskDir, "result.json"))) {
 				skipped++;
+				return;
+			}
+			const attempts = await readAttempts(taskDir);
+			if (attempts >= MAX_ATTEMPTS) {
+				exhausted++;
 				return;
 			}
 			try {
@@ -82,11 +109,12 @@ async function main(): Promise<void> {
 				done++;
 				console.log(`[bench] ${slug} ${task.task_id} ok steps=${m.steps} ${(m.wallClockMs / 1000).toFixed(1)}s`);
 			} catch (err) {
+				await recordAttempt(taskDir, attempts + 1);
 				failed++;
-				console.error(`[bench] ${slug} ${task.task_id} FAILED: ${(err as Error).message}`);
+				console.error(`[bench] ${slug} ${task.task_id} FAILED (attempt ${attempts + 1}/${MAX_ATTEMPTS}): ${(err as Error).message}`);
 			}
 		});
-		console.log(`[bench] ${slug}: done=${done} skipped=${skipped} failed=${failed}`);
+		console.log(`[bench] ${slug}: done=${done} skipped=${skipped} failed=${failed} exhausted=${exhausted}`);
 	}
 
 	console.log(`[bench] complete — results in ${opts.outDir}/`);
