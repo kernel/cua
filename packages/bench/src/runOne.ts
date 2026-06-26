@@ -72,6 +72,13 @@ export async function runOne(
 		await handle.close();
 	}
 
+	if (stopReason === "error" || stopReason === "aborted") {
+		// Throw instead of persisting: result.json is the resume sentinel, so writing
+		// one for a failed run would bake an empty trajectory into the scored set and
+		// permanently skip the retry.
+		throw new Error(errorMessage ?? `agent stopped with ${stopReason}`);
+	}
+
 	const wallClockMs = Date.now() - startedAt;
 	const metrics: TaskMetrics = {
 		task_id: task.task_id,
