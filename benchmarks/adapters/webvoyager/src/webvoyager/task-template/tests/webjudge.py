@@ -17,6 +17,7 @@ import base64
 import json
 import os
 import re
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -74,8 +75,8 @@ def _last_shots(k: int) -> list[Path]:
     return shots[-k:]
 
 
-def _call_anthropic(payload: dict, api_key: str) -> str:
-    """POST the Messages payload and return the concatenated text content."""
+def _post(payload: dict, api_key: str) -> str:
+    """POST one Messages payload and return the concatenated text content."""
     request = urllib.request.Request(
         ANTHROPIC_URL,
         data=json.dumps(payload).encode(),
@@ -89,6 +90,23 @@ def _call_anthropic(payload: dict, api_key: str) -> str:
     with urllib.request.urlopen(request) as response:  # noqa: S310 (pinned API host)
         body = json.loads(response.read().decode())
     return "".join(part.get("text", "") for part in body.get("content", []))
+
+
+def _call_anthropic(payload: dict, api_key: str) -> str:
+    """Call the judge, dropping ``temperature`` if the model rejects it.
+
+    Newer Anthropic models (e.g. claude-opus-4-8) reject the ``temperature``
+    parameter with a 400; on that specific error, retry once without it so the
+    same judge code works across model generations.
+    """
+    try:
+        return _post(payload, api_key)
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode(errors="replace") if exc.code == 400 else ""
+        if exc.code == 400 and "temperature" in detail and "temperature" in payload:
+            retry = {k: v for k, v in payload.items() if k != "temperature"}
+            return _post(retry, api_key)
+        raise
 
 
 def main() -> None:
@@ -129,8 +147,17 @@ def main() -> None:
         "system": SYSTEM_PROMPT,
         "messages": [{"role": "user", "content": blocks}],
     }
-    verdict = _call_anthropic(payload, os.getenv("ANTHROPIC_API_KEY", ""))
 
+    error = None
+    try:
+        verdict = _call_anthropic(payload, os.getenv("ANTHROPIC_API_KEY", ""))
+    except urllib.error.HTTPError as exc:
+        verdict, error = "", f"HTTP {exc.code}: {exc.read().decode(errors='replace')[:500]}"
+    except OSError as exc:  # connection reset / DNS / timeout
+        verdict, error = "", f"{type(exc).__name__}: {exc}"
+
+    # A judge call that errors fails closed to 0 (recorded in grading_details), so a
+    # transient API hiccup never crashes the verifier into a missing-reward trial.
     reward = 0 if "NOT SUCCESS" in verdict else (1 if "SUCCESS" in verdict else 0)
     reward_path.write_text(str(reward))
     (VERIFIER_DIR / "grading_details.json").write_text(
@@ -141,6 +168,7 @@ def main() -> None:
                 "n_images": len(shots),
                 "answer": answer,
                 "model": model,
+                "error": error,
             },
             indent=2,
         )

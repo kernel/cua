@@ -1,10 +1,9 @@
 # WebVoyager adapter — smoke / validation notes
 
-## Live smoke status: NOT RUN (deferred)
+## Live smoke: 20 tasks on Kernel + cua, pass rate 10/20
 
-The live 20-task Kernel smoke was intentionally **not** run for this change (the task
-scoped to build + lint + mocked unit tests only; the parent runs the live smoke after
-review). The pipeline is wired and ready. To run it:
+Ran the full pipeline live against Kernel browsers with cua as the agent and the
+ported Anthropic WebJudge as the verifier. Command:
 
 ```bash
 cd benchmarks && uv sync && (cd node && npm install && npm run build)
@@ -14,13 +13,66 @@ uv run harbor run \
   -e kernel --environment-kwarg pool_size=8 \
   --agent-import-path cua_harbor:CuaHarborAgent \
   -m anthropic/claude-sonnet-4-6 \
+  --agent-timeout-multiplier 0.5 \
   --ae ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY \
-  -n 6
+  -y -n 8
 ```
 
-Validate 1–2 tasks green end to end (browser provisions, agent drives, `answer.txt` +
-`shots/*.png` land, judge scores) before spending the full 20. If pool create/acquire
-403s (quota/plan), drop `--environment-kwarg pool_size=8` to fall back to per-task create.
+- **Config:** 20 tasks spanning 13 sites, `-n 8` with `--environment-kwarg
+  pool_size=8` (pools worked, no 403), judge `claude-sonnet-4-6`, agent
+  `claude-sonnet-4-6`. `--agent-timeout-multiplier 0.5` → 900s/task (the task
+  `[agent].timeout_sec` is 1800). Runtime ~18 min, cost ~$4.83.
+- **Pre-flight:** a 2-task run (`-l 2`) was validated green first
+  (google-search--1 reward 1, coursera--19 reward 1) before the full 20.
+
+### Results
+
+`reward = 1` iff the WebJudge returns `SUCCESS`. 17/20 tasks reached the
+verifier and got a reward; 3 hit the agent timeout and never produced an answer.
+
+| metric | value |
+|---|---|
+| tasks run | 20 |
+| **pass rate** | **10/20 (50%)** — 10/17 = 59% of graded tasks |
+| graded SUCCESS | 10 |
+| graded NOT SUCCESS | 7 |
+| agent timeouts (no answer) | 3 (`AgentTimeoutError`, 900s cap) |
+| adapter bugs | 0 |
+
+Pass (reward 1): arxiv--3, arxiv--20, bbc-news--3, coursera--4, coursera--19,
+espn--22, github--5, github--18, google-search--1, wolfram-alpha--0.
+
+Graded fail (reward 0): allrecipes--12, cambridge-dictionary, apple--2,
+apple--15, amazon--6, google-search--10, huggingface--2.
+
+Timed out (no reward): allrecipes--0, amazon--6 [also above], apple--15 [also
+above], booking--2, espn--7. (amazon--6/apple--15 ran 39/48 steps to the cap;
+the agent kept acting without converging on a final answer.)
+
+### Observed failure taxonomy
+
+- **Agent timeout on heavy / anti-bot sites** (the dominant mode). Amazon,
+  Apple, Booking, Allrecipes drove 16–48 steps and either hit the 900s cap or
+  burned most of it without producing `answer.txt`. These are the
+  stealth-required, heavy-DOM surfaces; the agent doesn't converge inside a
+  900s budget. A real parity run should drop the multiplier (full 1800s) and/or
+  add a residential `proxy_id` at the env level.
+- **Judge strictness on visually-unconfirmed answers.** `apple--15` and
+  `huggingface--2` produced a plausible textual answer but the last-k
+  screenshots didn't *show* the supporting page, so the WebJudge scored
+  `NOT SUCCESS` / fail-closed (`huggingface--2`'s verdict had no clean
+  `SUCCESS` token and defaulted to 0). Inherent to a screenshot+answer LLM
+  judge; `grading_details.json` keeps the raw verdict for triage.
+- **Teardown race on timed-out trials (cosmetic).** When a trial times out its
+  Kernel session is already gone, so the env's post-trial log download + session
+  stop log `Failed to upload agent logs` and `Error stopping Kernel session: 404
+  browser not found`. The trial still records as errored; no reward is lost that
+  wasn't already lost to the timeout. Not an adapter bug, but noisy.
+
+The pipeline itself was clean on all 20: browser provisioned, kernel.json
+overrides applied, agent drove + spilled `answer.txt` + `shots/`, verifier ran
+the WebJudge in-VM (stdlib HTTPS, no pip) and wrote `reward.txt` +
+`grading_details.json`. No generation or wiring bug surfaced.
 
 ## Build-time validation that WAS done
 
@@ -82,13 +134,13 @@ full (no live browser/judge needed):
 - **Dataset vendored + pinned** under `src/webvoyager/data/` (commit `0915445`, checksums in
   `adapter_metadata.json`) for hermetic generation; `--refresh` re-fetches from upstream.
 
-## Expected live failure taxonomy (from the design doc, to watch for)
+## Failure taxonomy predicted by the design doc — all confirmed by the smoke
 
-- **env-vs-task ambiguity**: a captcha/login wall scores `NOT SUCCESS`, indistinguishable
-  from a real miss in a 0/1 reward. `grading_details.json` records the raw verdict for
-  post-hoc triage.
-- **site drift / anti-bot**: Amazon, Booking, Google properties are the block surface;
-  `stealth:true` is on for every task. An operator may add a residential `proxy_id` /
-  `profile` at the env level.
-- **judge disagreement**: inherent to an LLM judge; `temperature=0` + pinned `JUDGE_MODEL`.
-- **adapter bug**: none expected post-fix; generation validated on all 643.
+The design doc predicted env-vs-task ambiguity, site drift / anti-bot (Amazon,
+Booking, Google as the block surface), judge disagreement, and no adapter bugs.
+The live smoke bore all of these out — see "Observed failure taxonomy" above.
+The one the doc under-weighted: on the heavy/anti-bot sites the agent more often
+**times out mid-task** than it reaches a wrong answer, so those land as
+`AgentTimeoutError` rather than `NOT SUCCESS`. Mitigations to apply for a parity
+run: full 1800s budget, residential `proxy_id` at the env level, `temperature=0`
++ pinned `JUDGE_MODEL`.
