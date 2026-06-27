@@ -46,14 +46,24 @@ export function judgeModel(ref: string): JudgeModel {
     throw new Error(`no API key in the environment for judge provider "${provider}"`);
   }
 
+  // OpenAI reasoning backbones (o4-mini, o3, …) don't accept `temperature` and
+  // reject a reasoning effort of "none" (pi-ai's default when the level is
+  // unset) — they require low/medium/high. "medium" is OpenAI's own o4-mini
+  // default, the setting the published WebJudge agreement numbers are
+  // calibrated to. Every other backbone keeps deterministic scoring
+  // (temperature 0) with no forced thinking.
+  const baseOptions = { apiKey, maxTokens: MAX_OUTPUT_TOKENS };
+  const options =
+    model.reasoning && provider === "openai"
+      ? { ...baseOptions, reasoning: "medium" as const }
+      : { ...baseOptions, temperature: 0 };
+
   return {
     async complete(systemPrompt, content) {
       const res = await completeSimple(
         model,
         { systemPrompt, messages: [{ role: "user", content, timestamp: Date.now() }] },
-        // WebJudge wants deterministic scoring (temperature 0); pi-ai drops the
-        // field for backbones that reject it.
-        { apiKey, temperature: 0, maxTokens: MAX_OUTPUT_TOKENS },
+        options,
       );
       // pi-ai surfaces provider errors as a message with stopReason "error"
       // rather than throwing. Raise it so the grading failure is logged to the
