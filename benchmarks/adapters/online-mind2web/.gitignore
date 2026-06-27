@@ -1,0 +1,17 @@
+# Generated task dirs + caches (never committed)
+.tasks/
+jobs/
+trials/
+dataset/
+*.cache/
+
+# Python
+__pycache__/
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Node judge bin build artifacts
+judge/dist/
+judge/node_modules/

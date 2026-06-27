@@ -1,0 +1,28 @@
+[project]
+name = "harbor-online-mind2web-adapter"
+version = "0.1.0"
+description = "Harbor adapter for Online-Mind2Web (Kernel env + cua agent, WebJudge grader)"
+readme = "README.md"
+authors = [{ name = "Kernel" }]
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+online-mind2web = "online_mind2web.main:main"
+
+[build-system]
+requires = ["uv_build>=0.9.18,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "online_mind2web"
+module-root = "src"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.ruff]
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
