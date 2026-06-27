@@ -1,4 +1,14 @@
-import { Type, type Api, type Model, type SimpleStreamOptions, type Static, type TSchema, type Tool } from "@earendil-works/pi-ai";
+import {
+	Type,
+	type Api,
+	type AssistantMessage,
+	type Message,
+	type Model,
+	type SimpleStreamOptions,
+	type Static,
+	type TSchema,
+	type Tool,
+} from "@earendil-works/pi-ai";
 import type { CuaModelRef, CuaProvider } from "../models";
 
 export const CUA_ACTION_TYPES = [
@@ -483,6 +493,52 @@ export type CuaPayloadHook = (payload: unknown, model: Model<Api>, context?: Cua
  */
 export interface CuaSimpleStreamOptions extends SimpleStreamOptions {
 	keepToolNames?: readonly string[];
+}
+
+/** Environment variable that disables server-side `previous_response_id` threading when truthy. */
+export const CUA_DISABLE_RESPONSE_THREADING_ENV_VAR = "CUA_DISABLE_RESPONSE_THREADING";
+
+/** Per-call control over `previous_response_id` threading for Responses API providers. */
+export interface ResponseThreadingOptions {
+	/** Force full-history replay for this request, overriding the environment default. */
+	disableResponseThreading?: boolean;
+}
+
+/**
+ * Whether a Responses API provider should thread requests with
+ * `previous_response_id` + delta input instead of replaying the full message
+ * history. Threading is on by default and disabled by an explicit option or a
+ * truthy {@link CUA_DISABLE_RESPONSE_THREADING_ENV_VAR}.
+ */
+export function responseThreadingEnabled(options?: ResponseThreadingOptions): boolean {
+	if (options?.disableResponseThreading) return false;
+	const flag = process.env[CUA_DISABLE_RESPONSE_THREADING_ENV_VAR];
+	return !(flag && flag !== "0" && flag.toLowerCase() !== "false");
+}
+
+/** Result of {@link responseThreadingDelta}: the chaining id and the messages to send this turn. */
+export interface ResponseThreadingDelta {
+	/** Most recent assistant `responseId`, or undefined when no prior turn carries one. */
+	previousResponseId?: string;
+	/** Messages to send: those after the latest assistant `responseId`, or all messages when none. */
+	deltaMessages: Message[];
+}
+
+/**
+ * Derive the `previous_response_id` continuation from a message history.
+ *
+ * Scans for the most recent assistant message carrying a `responseId` and
+ * returns it alongside the messages that follow it (the turn's delta). When no
+ * assistant message carries a `responseId`, returns every message and no id.
+ */
+export function responseThreadingDelta(messages: readonly Message[]): ResponseThreadingDelta {
+	for (let index = messages.length - 1; index >= 0; index -= 1) {
+		const message = messages[index]!;
+		if (message.role === "assistant" && (message as AssistantMessage).responseId) {
+			return { previousResponseId: (message as AssistantMessage).responseId, deltaMessages: messages.slice(index + 1) };
+		}
+	}
+	return { deltaMessages: [...messages] };
 }
 
 /**
