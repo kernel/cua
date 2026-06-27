@@ -33,7 +33,7 @@ export async function gradeWithWebJudge({
   );
 
   const kept = scored.filter((r) => r.score >= scoreThreshold).slice(0, P.MAX_IMAGE);
-  const keptThoughts = kept.map((r) => r.thought).filter((t) => t !== "").slice(0, P.MAX_IMAGE);
+  const keptThoughts = kept.map((r) => r.thought);
   const actions = trajectory.steps.map((s) => s.action);
 
   const finalContent: JudgeContent = [

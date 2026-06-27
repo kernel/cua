@@ -61,6 +61,7 @@ function writeReward(path: string, reward: 0 | 1): void {
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
+  let rewardWritten = false;
   try {
     const task = loadTask(args.task);
     const trajectory = loadTrajectory({
@@ -76,6 +77,7 @@ async function main(): Promise<void> {
       scoreThreshold: args.scoreThreshold,
     });
     writeReward(args.rewardOut, result.success ? 1 : 0);
+    rewardWritten = true;
     if (args.detailsOut) {
       mkdirSync(dirname(args.detailsOut), { recursive: true });
       writeFileSync(
@@ -91,7 +93,7 @@ async function main(): Promise<void> {
     // Never leave the reward file empty: a grading failure is a 0, and the
     // error is surfaced on stderr for the verifier log.
     console.error(err instanceof Error ? (err.stack ?? err.message) : String(err));
-    writeReward(args.rewardOut, 0);
+    if (!rewardWritten) writeReward(args.rewardOut, 0);
   }
 }
 

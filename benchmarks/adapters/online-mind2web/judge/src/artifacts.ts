@@ -50,9 +50,10 @@ function actionString(name: string, args: unknown): string {
  * `assistant` lines carrying `tool_calls: [{id, name, arguments}]` and
  * `tool_result` lines carrying `{call_id, shots: ["shots/shot-N.png"]}`. Each
  * spilled screenshot becomes one step whose action is the tool call that
- * produced it; the bytes are read from disk into base64 for the judge. The
- * final answer comes from `answer.txt` (the grading channel), falling back to
- * the `final` record.
+ * produced it; when no screenshot exists, a step is still kept so action
+ * history remains complete. Screenshot bytes are read from disk into base64 for
+ * the judge. The final answer comes from `answer.txt` (the grading channel),
+ * falling back to the `final` record.
  */
 export function loadTrajectory(opts: {
   runJsonlPath: string;
@@ -83,14 +84,22 @@ export function loadTrajectory(opts: {
         }
       } else if (rec.t === "tool_result") {
         const action = callActions.get(String(rec.call_id)) ?? "tool_result";
+        let pushedStep = false;
         for (const rel of (rec.shots as string[]) ?? []) {
           const abs = isAbsolute(rel) ? rel : join(baseDir, rel);
           if (!existsSync(abs)) continue;
+          pushedStep = true;
           steps.push({
             index: steps.length,
             action,
             screenshotBase64: readFileSync(abs).toString("base64"),
             screenshotMimeType: mimeForPath(rel),
+          });
+        }
+        if (!pushedStep) {
+          steps.push({
+            index: steps.length,
+            action,
           });
         }
       } else if (rec.t === "final" && !finalAnswer) {
