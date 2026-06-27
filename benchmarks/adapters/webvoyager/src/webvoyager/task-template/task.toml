@@ -20,7 +20,7 @@ timeout_sec = 600.0
 [verifier.env]
 ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"
 JUDGE_MODEL = "${WEBVOYAGER_JUDGE_MODEL:-claude-sonnet-4-5}"
-MAX_IMAGES = "${WEBVOYAGER_MAX_IMAGES:-3}"
+MAX_IMAGES = "${WEBVOYAGER_MAX_IMAGES:-15}"
 
 [agent]
 timeout_sec = 1800.0

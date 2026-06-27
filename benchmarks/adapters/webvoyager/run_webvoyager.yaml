@@ -13,7 +13,8 @@
 # The judge model is pinned via [verifier.env] in each task.toml
 # (JUDGE_MODEL=claude-sonnet-4-5, override with WEBVOYAGER_JUDGE_MODEL); the verifier
 # reads ANTHROPIC_API_KEY from the host. MAX_IMAGES (last-k screenshots sent to the
-# judge) defaults to 3; override with WEBVOYAGER_MAX_IMAGES=1 to match the paper.
+# judge) defaults to 15, matching the canonical auto_eval.py invocation; override with
+# WEBVOYAGER_MAX_IMAGES.
 tasks_path: adapters/webvoyager/.tasks
 environment: kernel
 environment_kwargs:

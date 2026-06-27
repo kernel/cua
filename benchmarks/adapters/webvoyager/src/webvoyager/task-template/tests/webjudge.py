@@ -116,7 +116,7 @@ def main() -> None:
     ground_truth = json.loads(GROUND_TRUTH.read_text())
     task = ground_truth["task"]
     answer = ANSWER_FILE.read_text().strip() if ANSWER_FILE.exists() else ""
-    k = int(os.getenv("MAX_IMAGES", "3"))
+    k = int(os.getenv("MAX_IMAGES", "15"))
     shots = _last_shots(k)
 
     if not answer and not shots:

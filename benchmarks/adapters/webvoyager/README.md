@@ -67,4 +67,4 @@ and writes a single `0|1` reward to `/logs/verifier/reward.txt` plus a `grading_
 |---|---|---|
 | `ANTHROPIC_API_KEY` | `${ANTHROPIC_API_KEY}` | resolved from the host at exec time |
 | `JUDGE_MODEL` | `claude-sonnet-4-5` | vision judge model (`WEBVOYAGER_JUDGE_MODEL` to override) |
-| `MAX_IMAGES` | `3` | last-k screenshots sent to the judge (`WEBVOYAGER_MAX_IMAGES`; set `1` to match the paper) |
+| `MAX_IMAGES` | `15` | last-k screenshots sent to the judge (`WEBVOYAGER_MAX_IMAGES`; `15` matches the canonical `auto_eval.py` invocation) |
