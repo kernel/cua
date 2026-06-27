@@ -24,6 +24,7 @@ import { initTheme } from "@earendil-works/pi-coding-agent";
 import { homedir } from "node:os";
 import type { ImageContent, Model } from "@onkernel/cua-ai";
 import { captureScreenshot, type CuaBrowserHandle } from "../harness-browser";
+import type { HarnessExtensionHost } from "../extensions/host";
 import { resolveCuaModelRef } from "../harness-models";
 import type { ContextFile } from "../harness-skills";
 import { openTuiDebugLog } from "./debug-log";
@@ -58,6 +59,8 @@ export interface InteractiveOptions {
 	transcriptPath?: string;
 	/** Enable extra TUI render diagnostics for manual repros. */
 	debugTui?: boolean;
+	/** Loaded pi-extension host for /reload. Absent in fixture/headless and --no-extensions/untrusted paths, so /reload no-ops with a notice. */
+	host?: HarnessExtensionHost;
 }
 
 /**
@@ -311,6 +314,11 @@ export async function runInteractive(opts: InteractiveOptions): Promise<number> 
 				await applyCompactCommand(opts, messages);
 				return;
 			}
+			if (parsed?.command === "reload") {
+				await applyReloadCommand(opts, messages);
+				requestRender("reload");
+				return;
+			}
 			if (parsed?.command === "skill") {
 				const skill = (opts.skills ?? []).find((s) => s.name === parsed.name);
 				if (!skill) {
@@ -517,6 +525,27 @@ async function applyCompactCommand(opts: InteractiveOptions, messages: MessageLi
 		// The `session_compact` harness event posts the final
 		// "compacted N tokens" notice; emitting it here too would duplicate.
 		await opts.harness.compact();
+	} catch (err) {
+		messages.addError((err as Error).message);
+	}
+}
+
+export async function applyReloadCommand(opts: InteractiveOptions, messages: MessageList): Promise<void> {
+	if (!opts.host) {
+		messages.addNotice("extensions are disabled");
+		return;
+	}
+	messages.addNotice("reloading extensions…");
+	try {
+		// reload() emits no harness event, so this helper is the only source of
+		// feedback; surface loadErrors so a broken edited extension isn't silently
+		// dropped with its tool missing.
+		await opts.host.reload();
+		if (opts.host.loadErrors.length > 0) {
+			for (const { path, error } of opts.host.loadErrors) messages.addError(`${path}: ${error}`);
+		} else {
+			messages.addNotice("extensions reloaded");
+		}
 	} catch (err) {
 		messages.addError((err as Error).message);
 	}
