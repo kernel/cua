@@ -33,27 +33,30 @@ verifier and got a reward; 3 hit the agent timeout and never produced an answer.
 | metric | value |
 |---|---|
 | tasks run | 20 |
-| **pass rate** | **10/20 (50%)** — 10/17 = 59% of graded tasks |
+| **pass rate** | **10/20 (Mean 0.500)** — 10/17 = 59% of graded tasks |
 | graded SUCCESS | 10 |
 | graded NOT SUCCESS | 7 |
-| agent timeouts (no answer) | 3 (`AgentTimeoutError`, 900s cap) |
+| exceptions | 5 (4 `AgentTimeoutError` + 1 `AddTestsDirError`) |
 | adapter bugs | 0 |
 
-Pass (reward 1): arxiv--3, arxiv--20, bbc-news--3, coursera--4, coursera--19,
-espn--22, github--5, github--18, google-search--1, wolfram-alpha--0.
+Harbor's headline is `Mean 0.500` over 20 tasks (17 graded + the verifier did
+not run on the 5 exception trials). Pass (reward 1): arxiv--3, arxiv--20,
+bbc-news--3, coursera--4, coursera--19, espn--22, github--5, github--18,
+google-search--1, wolfram-alpha--0.
 
 Graded fail (reward 0): allrecipes--12, cambridge-dictionary, apple--2,
 apple--15, amazon--6, google-search--10, huggingface--2.
 
-Timed out (no reward): allrecipes--0, amazon--6 [also above], apple--15 [also
-above], booking--2, espn--7. (amazon--6/apple--15 ran 39/48 steps to the cap;
-the agent kept acting without converging on a final answer.)
+Exceptions (no reward): the 4 `AgentTimeoutError` were the heaviest sites
+(allrecipes--0, booking--2, plus two that drove 39/48 steps to the 900s cap
+without converging on a final answer); 1 `AddTestsDirError` was a one-off env
+setup failure on a single trial.
 
 ### Observed failure taxonomy
 
-- **Agent timeout on heavy / anti-bot sites** (the dominant mode). Amazon,
-  Apple, Booking, Allrecipes drove 16–48 steps and either hit the 900s cap or
-  burned most of it without producing `answer.txt`. These are the
+- **Agent timeout on heavy / anti-bot sites** (the dominant exception mode).
+  Amazon, Apple, Booking, Allrecipes drove 16–48 steps and either hit the 900s
+  cap or burned most of it without producing `answer.txt`. These are the
   stealth-required, heavy-DOM surfaces; the agent doesn't converge inside a
   900s budget. A real parity run should drop the multiplier (full 1800s) and/or
   add a residential `proxy_id` at the env level.
@@ -63,6 +66,8 @@ the agent kept acting without converging on a final answer.)
   `NOT SUCCESS` / fail-closed (`huggingface--2`'s verdict had no clean
   `SUCCESS` token and defaulted to 0). Inherent to a screenshot+answer LLM
   judge; `grading_details.json` keeps the raw verdict for triage.
+- **One-off env error (`AddTestsDirError`).** A single trial failed during the
+  env's tests-dir setup. Not reproduced on the other 19; noted, not chased.
 - **Teardown race on timed-out trials (cosmetic).** When a trial times out its
   Kernel session is already gone, so the env's post-trial log download + session
   stop log `Failed to upload agent logs` and `Error stopping Kernel session: 404
