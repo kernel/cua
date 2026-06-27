@@ -13,7 +13,7 @@ node /tests/judge.js \
   --run /logs/agent/run.jsonl \
   --answer /logs/agent/answer.txt \
   --shots /logs/agent \
-  --judge-model "${JUDGE_MODEL:-anthropic:claude-opus-4-8}" \
+  --judge-model "${JUDGE_MODEL:-openai:o4-mini}" \
   --score-threshold "${SCORE_THRESHOLD:-3}" \
   --reward-out /logs/verifier/reward.txt \
   --details-out /logs/verifier/grading_details.json

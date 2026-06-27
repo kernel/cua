@@ -14,18 +14,23 @@ Our WebJudge is a TypeScript re-port bundled as a self-contained `judge.js`
 **Verdict: the WebJudge core is a faithful port.** The three system prompts, the
 user-text templates, key-point extraction, per-image 1–5 scoring, the
 `score_threshold` keep-filter, `MAX_IMAGE = 50`, and the `Status:` verdict parse
-are all reproduced verbatim or behaviorally-identically. The differences that
-matter are: (1) **the screenshots are sent as PNG, not JPEG** — upstream
-re-encodes every image to JPEG before the judge sees it; (2) **the judge model
-is Anthropic opus, not OpenAI o4-mini** — a deliberate Kernel choice that moves
-us off the published parity baseline; (3) `max_tokens` is 1024 vs upstream's 512.
-None of these change the *pipeline*; (1) and (2) change the *inputs the judge
-scores*, so they bear on numeric parity. Details below.
+are all reproduced verbatim or behaviorally-identically. The judge backbone now
+defaults to **OpenAI o4-mini**, the published WebJudge model, so we sit on the
+leaderboard-parity baseline. The remaining differences are: (1) **the screenshots
+are sent as PNG, not JPEG** — upstream re-encodes every image to JPEG before the
+judge sees it; (2) `max_tokens` is 1024 vs upstream's 512. Neither changes the
+*pipeline*; (1) changes the *bytes the judge scores*, so it bears on decimal
+numeric parity. Anthropic (opus/sonnet) stays wired as a configurable,
+non-canonical cheaper alternative. Details below.
 
 ### Parity pass — applied vs skipped (2026-06-27)
 
-A follow-up parity pass reviewed the three "minor" items in §2. Outcome:
-
+- **Applied — §2.2 default judge → OpenAI o4-mini.** The judge backbone now
+  defaults to `openai:o4-mini`, the published WebJudge model (~85.7% human
+  agreement), putting us on the leaderboard-parity baseline. `model.ts` gained a
+  dependency-free OpenAI Chat Completions client (vision `image_url` +
+  `detail: high`, o-series `max_completion_tokens` + no `temperature`);
+  Anthropic stays wired as a configurable, non-canonical alternative.
 - **Applied — §2.5 carry `level` → `[metadata].difficulty`.** The hardcoded
   `difficulty = "hard"` mislabeled 221/300 live rows (live `level` split:
   medium 141, easy 80, hard 79). The adapter now threads the row's `level` into
@@ -33,14 +38,17 @@ A follow-up parity pass reviewed the three "minor" items in §2. Outcome:
   when absent. Metadata only — does not touch grading or selection.
 - **Skipped — §2.1 JPEG re-encode.** Requires an image codec (RGBA→RGB +
   JPEG) inside the judge, which conflicts with the deliberate self-contained,
-  dependency-free in-VM bundle, and buys no decimal parity while the judge model
-  is opus rather than the o4-mini/gpt-4o the published numbers are calibrated to
-  (§2.2). Not warranted now; revisit only alongside an OpenAI judge branch.
+  dependency-free in-VM bundle. Now that the judge is o4-mini this is the last
+  input-bytes gap on the parity path (PNG vs upstream's JPEG); still deferred —
+  it needs a codec in the bundle and rarely flips a coarse 1–5 / success
+  verdict — but revisit it first if decimal parity against a published number is
+  required.
 - **Skipped (documented, no behavior change) — §2.3 `max_tokens`.** Left at
   1024 with a code comment explaining the headroom: lowering to upstream's 512
-  risks truncating the verbose opus judge's per-image reasoning before the
-  `Score`/`Status:` line the parsers key on — a regression against the judge we
-  actually ship, with no parity payoff (opus ≠ o4-mini).
+  risks truncating a verbose per-image description before the `Score`/`Status:`
+  line the parsers key on. 1024 only matters when a response exceeds 512 tokens,
+  so it cannot truncate where upstream wouldn't — a safe superset, not a parity
+  risk.
 
 ---
 
@@ -103,13 +111,14 @@ original lossless PNG, not a JPEG-compressed, alpha-flattened copy.
 Impact: the bytes the model scores differ (JPEG artifacts + RGBA flatten vs
 clean PNG). For a 1–5 "is this screenshot relevant" score and a coarse
 success/failure verdict this rarely flips an outcome, so this is **minor**, not a
-fidelity-bug — but it is a real divergence in judge input and is worth matching
-if we want to reproduce a published number to the decimal. Suggested change: in
-the artifacts loader, re-encode each screenshot to JPEG (RGBA→RGB) before
-base64, mirroring `encode_image`, and send `image/jpeg`. (Anthropic accepts
-`image/jpeg`; there is no `detail` field to set.)
+fidelity-bug — but with the judge now on o4-mini it is the *last* remaining input
+divergence on the parity path, so it is the first thing to match if we want to
+reproduce a published number to the decimal. Suggested change: in the artifacts
+loader, re-encode each screenshot to JPEG (RGBA→RGB) before base64, mirroring
+`encode_image`, and send `image/jpeg`. Our OpenAI client already sends
+`detail: high`, matching upstream; only the encoding differs.
 
-### 2.2 Judge backbone is Anthropic opus, not OpenAI o4-mini — `intentional-keep` (with a parity caveat)
+### 2.2 Judge backbone defaults to OpenAI o4-mini — `matched` (Anthropic configurable)
 
 Upstream's documented recommendation is **o4-mini** ("please use o4-mini as the
 backbone for automatic evaluation"; 85.7% human agreement, 3.8% success-rate
@@ -117,28 +126,37 @@ gap — README), `run.py` defaults to **gpt-4o**, and the shipped example result
 use **gpt-4o-mini**. The judge is always an OpenAI chat model via `OpenaiEngine`
 (`utils.py`).
 
-Ours uses `anthropic:claude-opus-4-8` (`task.toml:24`, `model.ts`), and
-`model.ts` *only* wires the Anthropic provider — passing an `openai:...`
-`JUDGE_MODEL` throws (`model.ts:39-43`). This is the deliberate Kernel
-adaptation: a self-contained `fetch`-only bundle that runs in the browser VM with
-no `npm install` and no OpenAI SDK, billed on the Anthropic key already present.
-**Do not revert the Anthropic judge** — it is the point of the in-VM bundle.
+Ours now defaults to `openai:o4-mini` (`task.toml`, `judge.ts`). `model.ts`
+dispatches on the `JUDGE_MODEL` provider prefix (`judgeModel`): `openai:` →
+`openaiJudgeModel` (Chat Completions over `fetch`, `OPENAI_API_KEY`),
+`anthropic:` → `anthropicJudgeModel` (Messages, `ANTHROPIC_API_KEY`). The OpenAI
+client is dependency-free (stdlib `fetch`, no OpenAI SDK), so the in-VM bundle
+property is preserved. It handles the o-series reasoning quirks: o4-mini rejects
+`temperature` (omitted for o-series, like the opus 400-bug in §2.4) and uses
+`max_completion_tokens` instead of `max_tokens`; screenshots are sent as vision
+`image_url` data-URLs with `detail: high`, matching upstream's `encode_image`
+call shape.
 
-Parity caveat (document, don't revert): published Online-Mind2Web success rates
-are calibrated to o4-mini/gpt-4o judges. An opus judge is a *different grader*
-and will land at a different success rate, so our number is only comparable to a
-baseline we recompute with the same judge — not to the paper's o4-mini column.
-If decimal parity against the published o4-mini number is ever required, add an
-OpenAI branch to `model.ts` (same `JudgeModel` interface, OpenAI
-`/v1/chat/completions` with `image_url`+`detail:high`) and set
-`JUDGE_MODEL=openai:o4-mini`; keep Anthropic as the default. Tracking this as a
-parity *option*, not a bug.
+This puts us on the published parity baseline: o4-mini is the grader the
+~85.7%-agreement numbers are calibrated to, so a recomputed success rate is
+directly comparable to the Online-Mind2Web leaderboard's o4-mini column (modulo
+the PNG-vs-JPEG input gap, §2.1).
+
+Anthropic (`anthropic:claude-sonnet-4-6`, `anthropic:claude-opus-4-8`) remains
+wired as a configurable, **non-canonical** cheaper alternative — switch by
+setting `JUDGE_MODEL` only (both keys flow through `[verifier.env]`). An
+opus/sonnet judge is a *different grader* and will land at a different success
+rate, so a number graded by it is not comparable to the published o4-mini
+column. **WebJudge-7B** (open weights, `osunlp/WebJudge-7B`) is a future cheaper
+option but needs GPU hosting and so is not wired into the dependency-free in-VM
+bundle.
 
 ### 2.3 `max_tokens` 1024 vs upstream 512 — `minor` (kept, documented)
 
 Upstream calls `model.generate(..., max_new_tokens=512)` for all three stages
 (key points, per-image, final — `utils.py` `generate` default, used everywhere).
-Ours sends `max_tokens: 1024` on every Anthropic call (`model.ts`).
+Ours sends `1024` on every call — `max_completion_tokens` for o-series,
+`max_tokens` otherwise (`MAX_OUTPUT_TOKENS`, `model.ts`).
 
 Impact: only matters if a response would exceed 512 tokens. The final verdict is
 `Thoughts: <reasoning>\nStatus: <success|failure>`; a long "Thoughts" could in
@@ -148,22 +166,29 @@ parser then reads as failure (`split("status:")[1]` → IndexError → 0). Ours 
 success where upstream scores failure. Small and asymmetric; **minor**.
 
 **Resolution: keep 1024, document the headroom (done — `model.ts` comment).**
-The opus judge is verbose: `JUDGE_IMAGE_SYSTEM` asks for "a detailed description
-of the image…" before the `Score`, so a 512 cap could truncate that stage too
-and silently zero a relevant screenshot. The smoke ran green at 1024 across 20
-live trials; dropping to 512 to match a budget calibrated for the terser
-o4-mini/gpt-4o graders would risk regressing the judge we ship for no parity
-gain (the judge model already diverges, §2.2). Deviation documented in code.
+`JUDGE_IMAGE_SYSTEM` asks for "a detailed description of the image…" before the
+`Score`, so a 512 cap could truncate that stage and silently zero a relevant
+screenshot. 1024 is a safe superset of 512 — it cannot truncate where upstream
+wouldn't — so it carries no parity risk against the o4-mini default while giving
+the more verbose Anthropic path headroom too. Deviation documented in code.
 
 ### 2.4 `temperature` handling — `intentional-keep`
 
 Upstream hardcodes `temperature=0` for deterministic grading (`utils.py`
-`OpenaiEngine.generate`). Ours also wants `temperature: 0`, but newer Anthropic
-models (opus-4-8) reject the field with HTTP 400; `model.ts:73-80` sends
-`temperature: 0` first and retries **once without it** on a 400 whose body
-mentions `temperature`. This is required for the chosen judge to run at all (it
-was a smoke-surfaced bug, SMOKE.md) and preserves determinism for models that
-accept it. Keep.
+`OpenaiEngine.generate`). Ours also wants `temperature: 0` but handles two model
+families that reject it:
+
+- **OpenAI o-series (default o4-mini):** reasoning models reject `temperature`
+  outright, so the client omits it for any `o\d`-prefixed name (and uses
+  `max_completion_tokens`). Determinism still holds — o-series scoring is
+  effectively greedy at the default.
+- **Anthropic (configurable):** newer models (opus-4-8) reject the field with
+  HTTP 400; the client sends `temperature: 0` first and retries **once without
+  it** on a 400 whose body mentions `temperature` (a smoke-surfaced bug,
+  SMOKE.md), preserving `temperature: 0` for models that accept it.
+
+Both paths converge on upstream's intent (deterministic grading) within each
+provider's constraints. Keep.
 
 ### 2.5 `difficulty` hardcoded; upstream `level` ignored — `minor` (metadata only) — FIXED
 
@@ -241,27 +266,28 @@ Fidelity check against upstream's `last_actions` / `images_path`:
 
 ## 5. Suggested changes (priority order)
 
-1. **(minor — skipped) JPEG-encode screenshots before the judge** to match
-   `encode_image` exactly (RGBA→RGB, `format="JPEG"`, `image/jpeg`). Closes the
-   last input-bytes gap with upstream, but needs an image codec in the
-   dependency-free in-VM bundle and buys no decimal parity while the judge is
-   opus (§2.2). Deferred — pair with item 4 if/when a published number is
-   targeted. — `artifacts.ts` (`loadTrajectory`) / `webjudge.ts` image blocks.
-2. **(minor — kept, documented) `max_tokens`** left at 1024 with a comment
-   justifying the headroom; 512 would risk truncating the verbose opus judge.
-   — `model.ts`. *(Done.)*
-3. **(minor — done) Carry `level` → `[metadata].difficulty`** instead of
+1. **(parity — done) Default judge → OpenAI o4-mini** with a dependency-free
+   `fetch` client in `model.ts`, routed by the `JUDGE_MODEL` provider prefix;
+   Anthropic stays configurable. Puts a recomputed success rate on the published
+   o4-mini baseline. — `model.ts` + `judge.ts` + `task.toml`. *(Done.)*
+2. **(minor — skipped) JPEG-encode screenshots before the judge** to match
+   `encode_image` exactly (RGBA→RGB, `format="JPEG"`, `image/jpeg`). Now the last
+   input-bytes gap with upstream once the judge is o4-mini, but needs an image
+   codec in the dependency-free in-VM bundle. Deferred — do this first if/when
+   decimal parity against a published number is targeted. — `artifacts.ts`
+   (`loadTrajectory`) / `webjudge.ts` image blocks.
+3. **(minor — kept, documented) `max_tokens`** left at 1024 with a comment
+   justifying the headroom; 512 would risk truncating a verbose per-image
+   description, and 1024 is a safe superset. — `model.ts`. *(Done.)*
+4. **(minor — done) Carry `level` → `[metadata].difficulty`** instead of
    hardcoding `"hard"`. Metadata only; enables per-difficulty breakdowns.
    — `adapter.py` + `task.toml` + `task.json`. *(Done.)*
-4. **(parity option, not a revert) Optional OpenAI judge branch** in `model.ts`
-   so `JUDGE_MODEL=openai:o4-mini` reproduces the published baseline when
-   needed; Anthropic stays the default. The in-VM Anthropic bundle is the
-   intended design and must not be removed.
 
-Item 3 is applied; items 1 and 2 are deferred/documented (see the applied-vs-skipped
-note at the top); none are grading-correctness bugs. The WebJudge prompts, parsers,
-thresholds, `MAX_IMAGE`, and verdict logic — the parts that decide success/failure —
-already match the canonical source.
+Items 1, 3, and 4 are applied; item 2 is deferred/documented (see the
+applied-vs-skipped note at the top); none are grading-correctness bugs. The
+WebJudge prompts, parsers, thresholds, `MAX_IMAGE`, and verdict logic — the parts
+that decide success/failure — already match the canonical source, and the judge
+backbone now matches the published o4-mini recommendation.
 
 ## Source
 

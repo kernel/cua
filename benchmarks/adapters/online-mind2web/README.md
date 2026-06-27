@@ -19,7 +19,7 @@ adapters/online-mind2web/
     main.py                       CLI: --output-dir --limit --overwrite --task-ids
     task-template/                task.toml, instruction.md(+nourl), kernel.json, solve.sh, tests/test.sh
   judge/                          self-contained WebJudge Node bin (bundled, runs in-VM)
-    src/                          webjudge.ts + prompts.ts (recovered, tested) + model.ts (Anthropic) + judge.ts (CLI)
+    src/                          webjudge.ts + prompts.ts (recovered, tested) + model.ts (OpenAI default, Anthropic configurable) + judge.ts (CLI)
   tests/test_adapter.py           mocked adapter tests (no network)
 ```
 
@@ -42,9 +42,32 @@ Generated tasks land in `.tasks/` (gitignored).
 `tests/test.sh` runs the bundled `judge.js` inside the Kernel VM (which ships
 `node` + global `fetch`), reading the agent's artifacts under `/logs/agent`
 (`answer.txt`, `run.jsonl`, spilled `shots/*.png`), reconstructing the WebJudge
-trajectory, grading it against an Anthropic judge model, and writing a single
+trajectory, grading it against the configured judge model, and writing a single
 reward float to `/logs/verifier/reward.txt`. The judge model and score
 threshold are set in `[verifier.env]` (`JUDGE_MODEL`, `SCORE_THRESHOLD`).
+
+### Judge backbone
+
+The default `JUDGE_MODEL` is **`openai:o4-mini`** — the published WebJudge
+backbone (~85.7% human agreement), so a recomputed success rate is comparable to
+the Online-Mind2Web leaderboard. The judge bin parses the provider from the
+`JUDGE_MODEL` prefix and reads the matching key from the verifier env:
+
+- `openai:<model>` → `OPENAI_API_KEY`. o-series models (o4-mini, o3, …) reject
+  `temperature` and use `max_completion_tokens`; the client omits/swaps these
+  automatically. Screenshots are sent as vision `image_url` blocks with
+  `detail: high`.
+- `anthropic:<model>` → `ANTHROPIC_API_KEY`. Configurable, **non-canonical**
+  cheaper alternative (e.g. `anthropic:claude-sonnet-4-6` /
+  `anthropic:claude-opus-4-8`); an opus/sonnet judge is a *different grader* and
+  will not match the published o4-mini numbers (see `PARITY.md` §2.2).
+
+Both keys are passed through `[verifier.env]`, resolved from host env, so either
+provider works by changing only `JUDGE_MODEL`.
+
+[WebJudge-7B](https://huggingface.co/osunlp/WebJudge-7B) (open weights) is a
+future cheaper option but needs GPU hosting, so it is not wired into the
+dependency-free in-VM bundle.
 
 ## Run on Harbor
 
