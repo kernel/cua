@@ -138,7 +138,7 @@ class ClawbenchCuaAgent(CuaHarborAgent):
                     "--state-file",
                     str(state_file),
                 ],
-                env={**os.environ},
+                env=self._host_script_env(),
                 stdout=log,
                 stderr=subprocess.STDOUT,
             )
@@ -157,12 +157,26 @@ class ClawbenchCuaAgent(CuaHarborAgent):
         try:
             subprocess.call(
                 [sys.executable, str(_CLEANUP_EMAIL), str(state_file)],
-                env={**os.environ},
+                env=self._host_script_env(),
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
         except Exception as exc:
             self.logger.warning(f"clawbench: inbox cleanup failed: {exc}")
+
+    def _host_script_env(self) -> dict[str, str]:
+        """Env for host-side setup/teardown helpers.
+
+        ``prepare_task.py``/``cleanup_email.py`` select AgentMail strictly from
+        ``AGENTMAIL_API_KEY`` in subprocess env. Keep host env defaults, but let
+        ``--ae AGENTMAIL_API_KEY=...`` override so these scripts can provision and
+        tear down real inboxes.
+        """
+        child_env = {**os.environ}
+        api_key = self.extra_env.get("AGENTMAIL_API_KEY", "").strip()
+        if api_key:
+            child_env["AGENTMAIL_API_KEY"] = api_key
+        return child_env
 
     def _start_interceptor(
         self, environment, data_dir: Path

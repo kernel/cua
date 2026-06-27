@@ -230,12 +230,14 @@ def test_inline_my_info_noop_when_bundle_missing(tmp_path):
 
 def test_prepare_my_info_invokes_prepare_task(tmp_path, monkeypatch):
     agent = _make_agent(tmp_path)
+    agent._extra_env = {"AGENTMAIL_API_KEY": "am-key"}
     myinfo = tmp_path / "myinfo"
     state = tmp_path / "data" / "task-state.json"
     calls = {}
 
     def fake_call(cmd, env=None, **kw):
         calls["cmd"] = cmd
+        calls["env"] = env
         return 0
 
     monkeypatch.setattr("clawbench_adapter.agent.subprocess.call", fake_call)
@@ -245,14 +247,18 @@ def test_prepare_my_info_invokes_prepare_task(tmp_path, monkeypatch):
     assert calls["cmd"][1].endswith("prepare_task.py")
     assert str(myinfo / "my-info") in calls["cmd"]
     assert str(state) in calls["cmd"]
+    assert calls["env"]["AGENTMAIL_API_KEY"] == "am-key"
 
 
 def test_cleanup_my_info_noops_without_state(tmp_path, monkeypatch):
     agent = _make_agent(tmp_path)
+    agent._extra_env = {"AGENTMAIL_API_KEY": "am-key"}
     called = {"n": 0}
+    envs = []
 
     def fake_call(*a, **k):
         called["n"] += 1
+        envs.append(k.get("env"))
         return 0
 
     monkeypatch.setattr("clawbench_adapter.agent.subprocess.call", fake_call)
@@ -263,3 +269,4 @@ def test_cleanup_my_info_noops_without_state(tmp_path, monkeypatch):
     state.write_text('{"email": {"address": "a@agentmail.to"}}')
     agent._cleanup_my_info(state)
     assert called["n"] == 1  # state present -> cleanup_email.py invoked
+    assert envs[-1]["AGENTMAIL_API_KEY"] == "am-key"
