@@ -8,7 +8,55 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-JUDGE_SYSTEM = """You are a strict evaluator for a web-agent benchmark.
+# Two rubrics, both vendored verbatim from upstream. The public leaderboard
+# "Reward" column is the LENIENT rubric (runner/judge_llm.py, the default for
+# eval/rescore.py); the STRICT rubric (runner/judge.py) scores ~half and is the
+# other published column. Select via CLAWBENCH_JUDGE_RUBRIC=lenient|strict
+# (default lenient, so the emitted reward tracks the headline leaderboard).
+JUDGE_SYSTEM_LENIENT = """You are a lenient evaluator for a web-agent benchmark.
+
+A user gave a natural-language INSTRUCTION to an autonomous browser agent.
+The agent navigated a real website and finally produced a single HTTP request
+(URL + method + body) that we INTERCEPTED before it was sent to the server.
+
+You decide whether this intercepted request ALIGNS with the user's instruction.
+
+# Rubric (CRITICAL — read carefully)
+
+match = TRUE if there is NO EXPLICIT CONTRADICTION between the request and
+the instruction. The default verdict is TRUE.
+
+match = FALSE only if the request EXPLICITLY contradicts a field the user
+EXPLICITLY specified in the instruction. Examples of contradiction:
+- Instruction says "red shirt", request body shows "color: blue"
+- Instruction says "quantity 2", request body shows "qty: 5"
+- Instruction says "deliver to home", request body shows "deliver to work"
+- Instruction asks to enroll in CS50, request enrolls in CS61
+
+# What is NOT a contradiction (default to match = TRUE)
+
+- Instruction did not specify a field, request omits or has any value for it
+  → MATCH (the user did not constrain it)
+- Instruction said "3pm", request body has no time field at all
+  → MATCH (info absent, not contradicted)
+- PDF resume left blank where instruction did not require content
+  → MATCH
+- Cosmetic differences (timestamps, session IDs, affiliate codes, currency
+  symbols, formatting) → MATCH
+- Ambiguous wording where multiple interpretations work → MATCH
+- Agent picked a reasonable default for unspecified options → MATCH
+- Color, size, time, quantity not mentioned in instruction → MATCH
+
+# Output
+
+Reply with ONLY a single-line JSON object, no markdown fences, no extra prose:
+{"match": true|false, "reason": "<one short sentence>"}
+
+Default is true. Only return false when you can name a SPECIFIC explicit
+field from the instruction that the request EXPLICITLY contradicts.
+"""
+
+JUDGE_SYSTEM_STRICT = """You are a strict evaluator for a web-agent benchmark.
 
 A user gave a natural-language INSTRUCTION to an autonomous browser agent.
 The agent navigated a real website and finally produced a single HTTP request
@@ -19,14 +67,23 @@ fulfill the user's instruction.
 
 Rules:
 - Match = the request would do what the user asked (right item, right action,
-  right target, right quantity). Cosmetic differences are OK.
-- Mismatch = wrong item, wrong action, wrong target, wrong quantity, or missing
-  required field per instruction.
+  right target, right quantity). Cosmetic differences (timestamps, session IDs,
+  affiliate codes, etc.) are OK.
+- Mismatch = the request does the wrong thing (wrong item, wrong action,
+  wrong target, wrong quantity, missing required field per instruction).
 - If the request is ambiguous or only partially correct, mark as mismatch.
 
-Reply with ONLY a single-line JSON object:
+Reply with ONLY a single-line JSON object, no markdown fences, no extra prose:
 {"match": true|false, "reason": "<one short sentence>"}
 """
+
+JUDGE_SYSTEMS = {"lenient": JUDGE_SYSTEM_LENIENT, "strict": JUDGE_SYSTEM_STRICT}
+DEFAULT_RUBRIC = "lenient"
+
+
+def resolve_rubric(value: str | None = None) -> str:
+    rubric = (value or os.environ.get("CLAWBENCH_JUDGE_RUBRIC") or DEFAULT_RUBRIC).strip().lower()
+    return rubric if rubric in JUDGE_SYSTEMS else DEFAULT_RUBRIC
 
 
 def write_reward(
@@ -94,7 +151,10 @@ def build_user_msg(
     )
 
 
-def parse_verdict(text: str) -> tuple[bool | None, str]:
+def parse_verdict(text: str, rubric: str = DEFAULT_RUBRIC) -> tuple[bool | None, str]:
+    # On parse failure the lenient rubric defaults to match=True (judge_llm.py
+    # convention), the strict rubric to None (-> reward 0, judge.py convention).
+    fail_default = True if rubric == "lenient" else None
     text = (text or "").strip()
     if text.startswith("```"):
         text = text.strip("`")
@@ -105,9 +165,11 @@ def parse_verdict(text: str) -> tuple[bool | None, str]:
         end = text.rindex("}") + 1
         obj = json.loads(text[start:end])
         match = obj.get("match")
-        return (match if isinstance(match, bool) else None), str(obj.get("reason", ""))
+        return (match if isinstance(match, bool) else fail_default), str(
+            obj.get("reason", "")
+        )
     except (ValueError, json.JSONDecodeError):
-        return None, text[:200] or "unparseable judge response"
+        return fail_default, text[:200] or "unparseable judge response"
 
 
 def call_judge(
@@ -115,10 +177,12 @@ def call_judge(
     instruction: str,
     intercept: dict[str, Any],
     judge_context: dict[str, Any] | None,
+    rubric: str = DEFAULT_RUBRIC,
 ) -> dict[str, Any]:
     api_type = model_cfg["api_type"]
     model = model_cfg["model"]
     base_url = model_cfg["base_url"].rstrip("/")
+    system = JUDGE_SYSTEMS[rubric]
     user = build_user_msg(instruction, intercept, judge_context)
     if api_type == "openai-completions":
         resp = post_json(
@@ -127,7 +191,7 @@ def call_judge(
             {
                 "model": model,
                 "messages": [
-                    {"role": "system", "content": JUDGE_SYSTEM},
+                    {"role": "system", "content": system},
                     {"role": "user", "content": user},
                 ],
                 "max_tokens": 4096,
@@ -141,7 +205,7 @@ def call_judge(
             {"Authorization": f"Bearer {model_cfg['api_key']}"},
             {
                 "model": model,
-                "instructions": JUDGE_SYSTEM,
+                "instructions": system,
                 "input": user,
                 "max_output_tokens": 4096,
             },
@@ -164,7 +228,7 @@ def call_judge(
             {
                 "model": model,
                 "max_tokens": 4096,
-                "system": JUDGE_SYSTEM,
+                "system": system,
                 "messages": [{"role": "user", "content": user}],
             },
         )
@@ -175,9 +239,10 @@ def call_judge(
             "reason": f"unsupported judge api_type {api_type!r}",
             "raw": None,
             "error": "unsupported_api_type",
+            "rubric": rubric,
         }
-    match, reason = parse_verdict(raw)
-    return {"match": match, "reason": reason, "raw": raw, "error": None}
+    match, reason = parse_verdict(raw, rubric)
+    return {"match": match, "reason": reason, "raw": raw, "error": None, "rubric": rubric}
 
 
 def main() -> int:
@@ -219,6 +284,7 @@ def main() -> int:
         )
         return 0
 
+    rubric = resolve_rubric()
     cfg = {
         "base_url": os.environ.get("CLAWBENCH_JUDGE_BASE_URL", ""),
         "api_key": os.environ.get("CLAWBENCH_JUDGE_API_KEY", ""),
@@ -248,6 +314,7 @@ def main() -> int:
                 task.get("judge_context")
                 if isinstance(task.get("judge_context"), dict)
                 else None,
+                rubric,
             )
             break
         except Exception as exc:
@@ -263,6 +330,7 @@ def main() -> int:
                 "judge_match": None,
                 "reason": f"judge_call_failed: {last_error}",
                 "task_id": task_id,
+                "rubric": rubric,
             },
         )
         return 0
@@ -277,6 +345,7 @@ def main() -> int:
             "reason": judge_result.get("reason") or judge_result.get("error") or "",
             "task_id": task_id,
             "judge_model": cfg["model"],
+            "rubric": rubric,
         },
     )
     return 0

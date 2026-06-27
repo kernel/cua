@@ -117,6 +117,7 @@ def task_toml(
         'CLAWBENCH_JUDGE_API_KEY = "${CLAWBENCH_JUDGE_API_KEY}"',
         'CLAWBENCH_JUDGE_MODEL = "${CLAWBENCH_JUDGE_MODEL:-deepseek-v4-pro}"',
         'CLAWBENCH_JUDGE_API_TYPE = "${CLAWBENCH_JUDGE_API_TYPE:-openai-completions}"',
+        'CLAWBENCH_JUDGE_RUBRIC = "${CLAWBENCH_JUDGE_RUBRIC:-lenient}"',
         'AGENTMAIL_API_KEY = "${AGENTMAIL_API_KEY:-}"',
         "",
     ]
