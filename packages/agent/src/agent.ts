@@ -372,6 +372,10 @@ export class CuaAgentHarness<
 		});
 	}
 
+	getRuntimeTools(): AgentTool[] {
+		return this.runtime.tools();
+	}
+
 	/**
 	 * Mirror pi `AgentHarness.setModel()` while accepting CUA model refs.
 	 *

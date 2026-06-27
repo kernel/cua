@@ -20,6 +20,10 @@ import {
 	makeExtensionContextActions,
 } from "./seams";
 
+type RuntimeToolAwareHarness = AgentHarness & {
+	getRuntimeTools?: () => AgentTool[];
+};
+
 export interface HarnessExtensionHostOptions {
 	harness: AgentHarness;
 	/** The same `Session` the harness was constructed with; used for entry writes. */
@@ -122,6 +126,9 @@ export class HarnessExtensionHost {
 		await this.reapplyTools();
 		this.installBridge();
 		await this.runner?.emit({ type: "session_start", reason: "startup" });
+		if (await this.disposeIfShutdownRequested()) {
+			throw new Error("HarnessExtensionHost shut down during startup");
+		}
 	}
 
 	/**
@@ -224,9 +231,12 @@ export class HarnessExtensionHost {
 				this.runner,
 			);
 			const extensionNames = new Set(nextExtensionTools.map((tool) => tool.name));
-			const base = this.harness
-				.getTools()
-				.filter((tool) => !extensionNames.has(tool.name) && !priorExtensionNames.has(tool.name));
+			const { tools: runtimeBaseTools, authoritative } = this.getCurrentBaseTools();
+			const base = runtimeBaseTools.filter((tool) => {
+				if (extensionNames.has(tool.name)) return false;
+				if (authoritative) return true;
+				return !priorExtensionNames.has(tool.name);
+			});
 			const final = [...base, ...nextExtensionTools];
 			const finalNames = new Set(final.map((tool) => tool.name));
 			const activeNames = new Set(
@@ -246,6 +256,12 @@ export class HarnessExtensionHost {
 				this.applyingTools = false;
 			}
 		} while (this.reapplyQueued);
+	}
+
+	private getCurrentBaseTools(): { tools: AgentTool[]; authoritative: boolean } {
+		const runtimeTools = (this.harness as RuntimeToolAwareHarness).getRuntimeTools?.();
+		if (runtimeTools) return { tools: runtimeTools, authoritative: true };
+		return { tools: this.harness.getTools(), authoritative: false };
 	}
 
 	/**

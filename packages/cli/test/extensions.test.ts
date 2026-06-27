@@ -132,6 +132,47 @@ describe("HarnessExtensionHost", () => {
 		expect(toolNames).toContain("beta_tool");
 		expect(toolNames).not.toContain("alpha_tool");
 	});
+
+	it("restores colliding base tools when an extension stops registering them", async () => {
+		const extDir = mkdtempSync(join(tmpdir(), "cua-ext-"));
+		const extFile = join(extDir, "shadow.ts");
+		fx = await buildTestHarness({ turns: [{ steps: [{ type: "text", text: "ok" }] }] });
+		const collidingToolName = fx.harness.getTools()[0]?.name;
+		expect(collidingToolName).toBeDefined();
+		writeFileSync(extFile, makeToolExtension(collidingToolName!));
+
+		const created = new HarnessExtensionHost({
+			harness: fx.harness,
+			session: fx.session,
+			cwd: fx.cwd,
+			configuredPaths: [extDir],
+			agentDir: mkdtempSync(join(tmpdir(), "cua-agentdir-")),
+		});
+		host = created;
+		await created.load();
+
+		writeFileSync(extFile, makeNoopExtension());
+		await created.reload();
+
+		expect(fx.harness.getTools().map((tool) => tool.name)).toContain(collidingToolName);
+	});
+
+	it("fails startup when an extension requests shutdown during session_start", async () => {
+		const extDir = mkdtempSync(join(tmpdir(), "cua-ext-"));
+		const extFile = join(extDir, "shutdown.ts");
+		writeFileSync(extFile, makeShutdownOnStartupExtension());
+		fx = await buildTestHarness({ turns: [{ steps: [{ type: "text", text: "ok" }] }] });
+		const created = new HarnessExtensionHost({
+			harness: fx.harness,
+			session: fx.session,
+			cwd: fx.cwd,
+			configuredPaths: [extDir],
+			agentDir: mkdtempSync(join(tmpdir(), "cua-agentdir-")),
+		});
+		host = created;
+
+		await expect(created.load()).rejects.toThrow("HarnessExtensionHost shut down during startup");
+	});
 });
 
 /** A minimal, import-free extension that registers a single named tool. */
@@ -145,6 +186,19 @@ function makeToolExtension(toolName: string): string {
 		'    parameters: { type: "object", properties: {}, additionalProperties: false },',
 		'    async execute() { return { content: [{ type: "text", text: "ok" }], details: {} }; },',
 		"  });",
+		"}",
+		"",
+	].join("\n");
+}
+
+function makeNoopExtension(): string {
+	return ["export default function () {}", ""].join("\n");
+}
+
+function makeShutdownOnStartupExtension(): string {
+	return [
+		"export default function (pi) {",
+		'  pi.on("session_start", (_event, ctx) => ctx.shutdown());',
 		"}",
 		"",
 	].join("\n");
