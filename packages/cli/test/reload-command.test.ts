@@ -15,23 +15,39 @@ function setup(host: HarnessExtensionHost | undefined): {
 	messages: MessageList;
 	notices: string[];
 	errors: string[];
+	waitForIdle: ReturnType<typeof vi.fn>;
 } {
 	const messages = new MessageList();
 	const notices: string[] = [];
 	const errors: string[] = [];
+	const waitForIdle = vi.fn(async () => {});
 	vi.spyOn(messages, "addNotice").mockImplementation((text) => void notices.push(text));
 	vi.spyOn(messages, "addError").mockImplementation((text) => void errors.push(text));
-	return { opts: { host } as InteractiveOptions, messages, notices, errors };
+	return {
+		opts: {
+			host,
+			harness: { waitForIdle } as unknown as InteractiveOptions["harness"],
+		} as InteractiveOptions,
+		messages,
+		notices,
+		errors,
+		waitForIdle,
+	};
 }
 
 describe("applyReloadCommand (/reload glue)", () => {
 	it("invokes host.reload() and reports a clean reload", async () => {
 		const reload = vi.fn(async () => {});
-		const host = { reload, loadErrors: [] } as unknown as HarnessExtensionHost;
-		const { opts, messages, notices, errors } = setup(host);
+		const host = {
+			reload,
+			loadErrors: [],
+			isDisposed: () => false,
+		} as unknown as HarnessExtensionHost;
+		const { opts, messages, notices, errors, waitForIdle } = setup(host);
 
 		await applyReloadCommand(opts, messages);
 
+		expect(waitForIdle).toHaveBeenCalledTimes(1);
 		expect(reload).toHaveBeenCalledTimes(1);
 		expect(notices).toContain("extensions reloaded");
 		expect(errors).toHaveLength(0);
@@ -42,13 +58,34 @@ describe("applyReloadCommand (/reload glue)", () => {
 		const host = {
 			reload,
 			loadErrors: [{ path: "/ext/broken.ts", error: "boom" }],
+			isDisposed: () => false,
 		} as unknown as HarnessExtensionHost;
-		const { opts, messages, errors, notices } = setup(host);
+		const { opts, messages, errors, notices, waitForIdle } = setup(host);
+
+		await applyReloadCommand(opts, messages);
+
+		expect(waitForIdle).toHaveBeenCalledTimes(1);
+		expect(reload).toHaveBeenCalledTimes(1);
+		expect(errors).toContain("/ext/broken.ts: boom");
+		expect(notices).not.toContain("extensions reloaded");
+	});
+
+	it("reports disabled when reload disposes the host", async () => {
+		let disposed = false;
+		const reload = vi.fn(async () => {
+			disposed = true;
+		});
+		const host = {
+			reload,
+			loadErrors: [],
+			isDisposed: () => disposed,
+		} as unknown as HarnessExtensionHost;
+		const { opts, messages, notices } = setup(host);
 
 		await applyReloadCommand(opts, messages);
 
 		expect(reload).toHaveBeenCalledTimes(1);
-		expect(errors).toContain("/ext/broken.ts: boom");
+		expect(notices).toContain("extensions were shut down");
 		expect(notices).not.toContain("extensions reloaded");
 	});
 

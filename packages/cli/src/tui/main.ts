@@ -531,16 +531,25 @@ async function applyCompactCommand(opts: InteractiveOptions, messages: MessageLi
 }
 
 export async function applyReloadCommand(opts: InteractiveOptions, messages: MessageList): Promise<void> {
-	if (!opts.host) {
+	if (!opts.host || opts.host.isDisposed()) {
 		messages.addNotice("extensions are disabled");
 		return;
 	}
 	messages.addNotice("reloading extensions…");
 	try {
+		await opts.harness.waitForIdle();
+		if (opts.host.isDisposed()) {
+			messages.addNotice("extensions are disabled");
+			return;
+		}
 		// reload() emits no harness event, so this helper is the only source of
 		// feedback; surface loadErrors so a broken edited extension isn't silently
 		// dropped with its tool missing.
 		await opts.host.reload();
+		if (opts.host.isDisposed()) {
+			messages.addNotice("extensions were shut down");
+			return;
+		}
 		if (opts.host.loadErrors.length > 0) {
 			for (const { path, error } of opts.host.loadErrors) messages.addError(`${path}: ${error}`);
 		} else {

@@ -38,6 +38,7 @@ async function loadHost(): Promise<HarnessExtensionHost> {
 		session: fx.session,
 		cwd: fx.cwd,
 		configuredPaths: [makeExtensionDir()],
+		projectTrusted: true,
 		agentDir: mkdtempSync(join(tmpdir(), "cua-agentdir-")),
 	});
 	await created.load();
@@ -119,6 +120,7 @@ describe("HarnessExtensionHost", () => {
 			session: fx.session,
 			cwd: fx.cwd,
 			configuredPaths: [extDir],
+			projectTrusted: true,
 			agentDir: mkdtempSync(join(tmpdir(), "cua-agentdir-")),
 		});
 		host = created;

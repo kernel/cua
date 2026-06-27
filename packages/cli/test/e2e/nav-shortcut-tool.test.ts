@@ -85,6 +85,7 @@ describe("self-improve loop: navigation shortcut replaces a goto/click drill-dow
 			session: fx.session,
 			cwd: fx.cwd,
 			configuredPaths: [extDir],
+			projectTrusted: true,
 			agentDir: mkdtempSync(join(tmpdir(), "cua-agentdir-")),
 		});
 		await host.load();

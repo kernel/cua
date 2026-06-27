@@ -74,7 +74,7 @@ describe("loadHarnessExtensions", () => {
 		expect(fx.harness.getTools().map((t) => t.name)).not.toContain("loader_probe");
 	});
 
-	it("loads the implicit project <cwd>/.pi/extensions scan by default", async () => {
+	it("does not load the implicit project <cwd>/.pi/extensions scan when untrusted", async () => {
 		fx = await buildTestHarness({ turns: [{ steps: [{ type: "text", text: "ok" }] }] });
 		// Unique per run so the whole-harness tool assertion can't collide with
 		// another worker registering the same name under pool concurrency.
@@ -92,10 +92,10 @@ describe("loadHarnessExtensions", () => {
 		});
 
 		expect(host).toBeDefined();
-		expect(fx.harness.getTools().map((t) => t.name)).toContain(probe);
+		expect(fx.harness.getTools().map((t) => t.name)).not.toContain(probe);
 	});
 
-	it("loads project <cwd>/.agents/extensions by default", async () => {
+	it("does not load project <cwd>/.agents/extensions when untrusted", async () => {
 		fx = await buildTestHarness({ turns: [{ steps: [{ type: "text", text: "ok" }] }] });
 		const probe = `agents_probe_${randomUUID().replace(/-/g, "")}`;
 		const projectExtDir = join(fx.cwd, ".agents", "extensions");
@@ -111,6 +111,31 @@ describe("loadHarnessExtensions", () => {
 		});
 
 		expect(host).toBeDefined();
-		expect(fx.harness.getTools().map((t) => t.name)).toContain(probe);
+		expect(fx.harness.getTools().map((t) => t.name)).not.toContain(probe);
+	});
+
+	it("loads project-local extension directories with --trust-extensions", async () => {
+		fx = await buildTestHarness({ turns: [{ steps: [{ type: "text", text: "ok" }] }] });
+		const agentsProbe = `agents_probe_${randomUUID().replace(/-/g, "")}`;
+		const piProbe = `pi_probe_${randomUUID().replace(/-/g, "")}`;
+		const agentsExtDir = join(fx.cwd, ".agents", "extensions");
+		mkdirSync(agentsExtDir, { recursive: true });
+		writeFileSync(join(agentsExtDir, "agents-probe.ts"), makeToolExtension(agentsProbe));
+		const piExtDir = join(fx.cwd, ".pi", "extensions");
+		mkdirSync(piExtDir, { recursive: true });
+		writeFileSync(join(piExtDir, "pi-probe.ts"), makeToolExtension(piProbe));
+
+		host = await loadHarnessExtensions({
+			harness: fx.harness,
+			session: fx.session,
+			cwd: fx.cwd,
+			noExtensions: false,
+			trustExtensions: true,
+			agentDir: tempAgentDir(),
+		});
+
+		expect(host).toBeDefined();
+		expect(fx.harness.getTools().map((t) => t.name)).toContain(piProbe);
+		expect(fx.harness.getTools().map((t) => t.name)).toContain(agentsProbe);
 	});
 });

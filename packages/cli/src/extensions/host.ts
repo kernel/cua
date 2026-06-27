@@ -2,9 +2,12 @@ import type { AgentHarness, AgentTool, Session } from "@onkernel/cua-agent";
 import type { ImageContent } from "@onkernel/cua-ai";
 import {
 	AuthStorage,
+	DefaultResourceLoader,
 	discoverAndLoadExtensions,
 	ExtensionRunner,
+	getAgentDir,
 	ModelRegistry,
+	SettingsManager,
 	SessionManager,
 	wrapRegisteredTools,
 } from "@earendil-works/pi-coding-agent";
@@ -13,6 +16,7 @@ import type {
 	ExtensionCommandContextActions,
 	ExtensionContextActions,
 } from "@earendil-works/pi-coding-agent";
+import { isAbsolute, relative, resolve } from "node:path";
 import { installBridge, type BridgeState } from "./bridge";
 import {
 	makeExtensionActions,
@@ -27,6 +31,8 @@ export interface HarnessExtensionHostOptions {
 	cwd: string;
 	/** Extension paths passed straight to `discoverAndLoadExtensions`. */
 	configuredPaths: string[];
+	/** Whether project-local extension sources under `cwd` may be executed. */
+	projectTrusted: boolean;
 	/** Agent config dir searched for `extensions/`. Pass a temp dir to isolate from `~/.agents`. */
 	agentDir?: string;
 	/**
@@ -58,6 +64,7 @@ export class HarnessExtensionHost {
 	private readonly session: Session;
 	private readonly cwd: string;
 	private readonly configuredPaths: string[];
+	private readonly projectTrusted: boolean;
 	private readonly agentDir?: string;
 	private readonly initialScreenshot?: () => Promise<ImageContent[] | undefined>;
 	private readonly sessionManager: SessionManager;
@@ -95,6 +102,7 @@ export class HarnessExtensionHost {
 		this.session = options.session;
 		this.cwd = options.cwd;
 		this.configuredPaths = options.configuredPaths;
+		this.projectTrusted = options.projectTrusted;
 		this.agentDir = options.agentDir;
 		this.initialScreenshot = options.initialScreenshot;
 		this.sessionManager = SessionManager.inMemory(this.cwd);
@@ -111,6 +119,7 @@ export class HarnessExtensionHost {
 		});
 		this.contextActions = makeExtensionContextActions(this.harness, {
 			isIdle: () => this.bridgeState.isIdle,
+			isProjectTrusted: () => this.projectTrusted,
 			getSignal: () => undefined,
 			shutdown: () => this.requestShutdown(),
 		});
@@ -118,21 +127,30 @@ export class HarnessExtensionHost {
 	}
 
 	async load(): Promise<void> {
-		await this.buildRunner();
+		const { runner, loadErrors } = await this.buildRunner();
+		this.runner = runner;
+		this.loadErrors = loadErrors;
 		await this.reapplyTools();
 		this.installBridge();
 		await this.runner?.emit({ type: "session_start", reason: "startup" });
 	}
 
+	isDisposed(): boolean {
+		return this.disposed;
+	}
+
 	/**
-	 * Mirror `AgentSession.reload`: carry over flag values, tear down the old
-	 * runner's bridge, re-discover extensions from disk, build a fresh runner over
-	 * the same in-memory services, restore flags, rebind, re-apply tools, reinstall
-	 * the bridge, then emit `session_start`. No extension cache is cleared because
-	 * the loader imports each extension fresh from disk.
+	 * Mirror `AgentSession.reload`: carry over flag values, re-discover
+	 * extensions from disk, build a fresh runner over the same in-memory
+	 * services, restore flags, re-apply tools, swap bridges, then emit
+	 * `session_start`. No extension cache is cleared because the loader imports
+	 * each extension fresh from disk.
 	 */
 	async reload(): Promise<void> {
 		if (this.disposed) return;
+		const previousRunner = this.runner;
+		const previousLoadErrors = this.loadErrors;
+		const previousExtensionTools = this.extensionTools;
 		const flags = this.runner?.getFlagValues() ?? new Map<string, boolean | string>();
 		// `reloading` defers any `ctx.shutdown()` raised by an extension's
 		// session_shutdown handler so an unawaited dispose can't tear down the
@@ -140,19 +158,33 @@ export class HarnessExtensionHost {
 		// request before continuing.
 		this.reloading = true;
 		try {
-			await this.runner?.emit({ type: "session_shutdown", reason: "reload" });
+			await previousRunner?.emit({ type: "session_shutdown", reason: "reload" });
 			if (await this.disposeIfShutdownRequested()) return;
-			this.teardownBridge?.();
-			this.teardownBridge = undefined;
-
-			await this.buildRunner();
+			const { runner, loadErrors } = await this.buildRunner();
 			if (await this.disposeIfShutdownRequested()) return;
+			this.runner = runner;
+			this.loadErrors = loadErrors;
 			for (const [name, value] of flags) this.runner?.setFlagValue(name, value);
 
 			await this.reapplyTools();
 			if (await this.disposeIfShutdownRequested()) return;
+			this.teardownBridge?.();
+			this.teardownBridge = undefined;
 			this.installBridge();
 			await this.runner?.emit({ type: "session_start", reason: "reload" });
+		} catch (error) {
+			if (!this.disposed) {
+				this.runner = previousRunner;
+				this.loadErrors = previousLoadErrors;
+				this.extensionTools = previousExtensionTools;
+				try {
+					await this.reapplyTools();
+				} catch {
+					// Preserve the original reload error.
+				}
+				if (!this.teardownBridge && this.runner) this.installBridge();
+			}
+			throw error;
 		} finally {
 			this.reloading = false;
 		}
@@ -178,19 +210,44 @@ export class HarnessExtensionHost {
 		this.runner = undefined;
 	}
 
-	private async buildRunner(): Promise<void> {
-		const result = await discoverAndLoadExtensions(this.configuredPaths, this.cwd, this.agentDir);
-		this.loadErrors = result.errors;
-		this.runner = new ExtensionRunner(
+	private async buildRunner(): Promise<{
+		runner: ExtensionRunner;
+		loadErrors: Array<{ path: string; error: string }>;
+	}> {
+		const result = await this.discoverExtensions();
+		const runner = new ExtensionRunner(
 			result.extensions,
 			result.runtime,
 			this.cwd,
 			this.sessionManager,
 			this.modelRegistry,
 		);
-		this.runner.bindCore(this.actions, this.contextActions);
-		this.runner.bindCommandContext(this.commandActions);
-		this.runner.setUIContext(undefined, "print");
+		runner.bindCore(this.actions, this.contextActions);
+		runner.bindCommandContext(this.commandActions);
+		runner.setUIContext(undefined, "print");
+		return { runner, loadErrors: result.errors };
+	}
+
+	private async discoverExtensions() {
+		if (this.projectTrusted) {
+			return discoverAndLoadExtensions(this.configuredPaths, this.cwd, this.agentDir);
+		}
+		const agentDir = this.agentDir ?? getAgentDir();
+		const settingsManager = SettingsManager.create(this.cwd, agentDir, { projectTrusted: false });
+		const loader = new DefaultResourceLoader({
+			cwd: this.cwd,
+			agentDir,
+			settingsManager,
+			additionalExtensionPaths: this.configuredPaths
+				.map((path) => resolve(this.cwd, path))
+				.filter((path) => !isUnderPath(path, this.cwd)),
+			noSkills: true,
+			noPromptTemplates: true,
+			noThemes: true,
+			noContextFiles: true,
+		});
+		await loader.reload();
+		return loader.getExtensions();
 	}
 
 	/**
@@ -307,4 +364,9 @@ async function sessionHasPriorTurn(session: Session): Promise<boolean> {
 			entry.type === "message" &&
 			(entry.message.role === "user" || entry.message.role === "assistant"),
 	);
+}
+
+function isUnderPath(target: string, root: string): boolean {
+	const rel = relative(resolve(root), resolve(target));
+	return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
 }

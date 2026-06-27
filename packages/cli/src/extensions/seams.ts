@@ -98,7 +98,12 @@ export function makeExtensionActions(
 
 export function makeExtensionContextActions(
 	harness: AgentHarness,
-	state: { isIdle: () => boolean; getSignal: () => AbortSignal | undefined; shutdown: () => void },
+	state: {
+		isIdle: () => boolean;
+		isProjectTrusted: () => boolean;
+		getSignal: () => AbortSignal | undefined;
+		shutdown: () => void;
+	},
 ): ExtensionContextActions {
 	return {
 		getModel() {
@@ -107,9 +112,8 @@ export function makeExtensionContextActions(
 		isIdle() {
 			return state.isIdle();
 		},
-		// Headless host trusts its cwd; project-trust prompts are a TUI concern.
 		isProjectTrusted(): boolean {
-			return true;
+			return state.isProjectTrusted();
 		},
 		getSignal() {
 			return state.getSignal();

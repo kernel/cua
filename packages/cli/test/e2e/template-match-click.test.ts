@@ -98,6 +98,7 @@ describe("self-improve loop: template-match click replaces a scroll-and-hunt loo
 			session: fx.session,
 			cwd: fx.cwd,
 			configuredPaths: [extDir],
+			projectTrusted: true,
 			agentDir: mkdtempSync(join(tmpdir(), "cua-agentdir-")),
 		});
 		await host.load();

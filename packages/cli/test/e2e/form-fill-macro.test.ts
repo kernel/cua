@@ -90,6 +90,7 @@ describe("self-improve: form-fill macro", () => {
 			session: fx.session,
 			cwd: fx.cwd,
 			configuredPaths: [extDir],
+			projectTrusted: true,
 			agentDir: mkdtempSync(join(tmpdir(), "cua-agentdir-")),
 		});
 		await host.load();
