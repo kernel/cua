@@ -1,4 +1,5 @@
 import type { AgentHarness, AgentTool, Session } from "@onkernel/cua-agent";
+import type { ImageContent } from "@onkernel/cua-ai";
 import {
 	AuthStorage,
 	discoverAndLoadExtensions,
@@ -23,6 +24,8 @@ export interface HarnessExtensionHostOptions {
 	harness: AgentHarness;
 	/** The same `Session` the harness was constructed with; used for entry writes. */
 	session: Session;
+	/** Capture a screenshot attachment for first-turn user messages. */
+	initialScreenshot: () => Promise<ImageContent[] | undefined>;
 	cwd: string;
 	/** Extension paths passed straight to `discoverAndLoadExtensions`. */
 	configuredPaths: string[];
@@ -48,6 +51,7 @@ export interface HarnessExtensionHostOptions {
 export class HarnessExtensionHost {
 	private readonly harness: AgentHarness;
 	private readonly session: Session;
+	private readonly initialScreenshot: () => Promise<ImageContent[] | undefined>;
 	private readonly cwd: string;
 	private readonly configuredPaths: string[];
 	private readonly agentDir?: string;
@@ -66,6 +70,12 @@ export class HarnessExtensionHost {
 	private extensionTools: AgentTool[] = [];
 	/** Guards `harness.setTools` so a tools_update never re-enters reapply. */
 	private applyingTools = false;
+	/** Follow-up pass requested while `harness.setTools` is in flight. */
+	private reapplyQueued = false;
+	/** Marks reload critical sections where shutdown requests must not race. */
+	private reloading = false;
+	/** Sticky shutdown request raised by `ctx.shutdown()` or owner disposal. */
+	private shutdownRequested = false;
 	/** Guards `dispose` so `ctx.shutdown()` and an owner call don't double-tear-down. */
 	private disposed = false;
 	private sessionName: string | undefined;
@@ -76,6 +86,7 @@ export class HarnessExtensionHost {
 	constructor(options: HarnessExtensionHostOptions) {
 		this.harness = options.harness;
 		this.session = options.session;
+		this.initialScreenshot = options.initialScreenshot;
 		this.cwd = options.cwd;
 		this.configuredPaths = options.configuredPaths;
 		this.agentDir = options.agentDir;
@@ -84,6 +95,7 @@ export class HarnessExtensionHost {
 
 		this.actions = makeExtensionActions(this.harness, this.session, {
 			refreshTools: () => void this.reapplyTools(),
+			sendUserMessage: (text) => this.promptUserMessage(text),
 			getSessionName: () => this.sessionName,
 			setSessionName: (name) => {
 				this.sessionName = name;
@@ -112,17 +124,26 @@ export class HarnessExtensionHost {
 	 * the loader imports each extension fresh from disk.
 	 */
 	async reload(): Promise<void> {
+		if (this.disposed) return;
 		const flags = this.runner?.getFlagValues() ?? new Map<string, boolean | string>();
-		await this.runner?.emit({ type: "session_shutdown", reason: "reload" });
-		this.teardownBridge?.();
-		this.teardownBridge = undefined;
+		this.reloading = true;
+		try {
+			await this.runner?.emit({ type: "session_shutdown", reason: "reload" });
+			if (await this.disposeIfShutdownRequested()) return;
+			this.teardownBridge?.();
+			this.teardownBridge = undefined;
 
-		await this.buildRunner();
-		for (const [name, value] of flags) this.runner?.setFlagValue(name, value);
+			await this.buildRunner();
+			if (await this.disposeIfShutdownRequested()) return;
+			for (const [name, value] of flags) this.runner?.setFlagValue(name, value);
 
-		await this.reapplyTools();
-		this.installBridge();
-		await this.runner?.emit({ type: "session_start", reason: "reload" });
+			await this.reapplyTools();
+			if (await this.disposeIfShutdownRequested()) return;
+			this.installBridge();
+			await this.runner?.emit({ type: "session_start", reason: "reload" });
+		} finally {
+			this.reloading = false;
+		}
 	}
 
 	/**
@@ -135,6 +156,7 @@ export class HarnessExtensionHost {
 	 */
 	async dispose(): Promise<void> {
 		if (this.disposed) return;
+		this.shutdownRequested = true;
 		this.disposed = true;
 		this.teardownBridge?.();
 		this.teardownBridge = undefined;
@@ -159,28 +181,45 @@ export class HarnessExtensionHost {
 
 	/**
 	 * Rebuild the extension-tool union and apply it to the harness as the
-	 * authoritative tool list. Extension tools are de-duped by name (the harness
-	 * rejects duplicates) and kept active alongside the base tools. The
-	 * re-entrancy guard makes a stray `tools_update` subscriber safe; reapply is
-	 * only triggered from `load`/`reload`/`model_update`/`refreshTools`, none of
-	 * which run concurrently.
+	 * authoritative tool list. Existing active-tool choices are preserved for
+	 * both base and extension tools, while newly introduced extension tools start
+	 * active by default. A queued follow-up pass handles refresh requests that
+	 * arrive while `harness.setTools` is still in flight.
 	 */
 	private async reapplyTools(): Promise<void> {
-		if (!this.runner || this.applyingTools) return;
-		this.extensionTools = wrapRegisteredTools(this.runner.getAllRegisteredTools(), this.runner);
-		const extensionNames = new Set(this.extensionTools.map((tool) => tool.name));
-		const base = this.harness.getTools().filter((tool) => !extensionNames.has(tool.name));
-		const final = [...base, ...this.extensionTools];
-		const activeNames = [
-			...this.harness.getActiveTools().map((tool) => tool.name),
-			...extensionNames,
-		];
-		this.applyingTools = true;
-		try {
-			await this.harness.setTools(final, [...new Set(activeNames)]);
-		} finally {
-			this.applyingTools = false;
+		if (!this.runner) return;
+		if (this.applyingTools) {
+			this.reapplyQueued = true;
+			return;
 		}
+		do {
+			this.reapplyQueued = false;
+			if (!this.runner) return;
+
+			const previousExtensionNames = new Set(this.extensionTools.map((tool) => tool.name));
+			const nextExtensionTools = wrapRegisteredTools(this.runner.getAllRegisteredTools(), this.runner);
+			const extensionNames = new Set(nextExtensionTools.map((tool) => tool.name));
+			const base = this.harness.getTools().filter((tool) => !extensionNames.has(tool.name));
+			const final = [...base, ...nextExtensionTools];
+			const finalNames = new Set(final.map((tool) => tool.name));
+			const activeNames = new Set(
+				this.harness
+					.getActiveTools()
+					.map((tool) => tool.name)
+					.filter((name) => finalNames.has(name)),
+			);
+			for (const name of extensionNames) {
+				if (!previousExtensionNames.has(name)) activeNames.add(name);
+			}
+
+			this.extensionTools = nextExtensionTools;
+			this.applyingTools = true;
+			try {
+				await this.harness.setTools(final, [...activeNames]);
+			} finally {
+				this.applyingTools = false;
+			}
+		} while (this.reapplyQueued);
 	}
 
 	private installBridge(): void {
@@ -191,6 +230,35 @@ export class HarnessExtensionHost {
 	}
 
 	private requestShutdown(): void {
+		this.shutdownRequested = true;
+		if (this.reloading) return;
 		void this.dispose();
 	}
+
+	private async promptUserMessage(text: string): Promise<void> {
+		const images = await this.maybeInitialScreenshot();
+		await this.harness.prompt(text, images ? { images } : undefined);
+	}
+
+	private async maybeInitialScreenshot(): Promise<ImageContent[] | undefined> {
+		const hasPriorTurn = await sessionHasPriorTurn(this.session);
+		if (hasPriorTurn) return undefined;
+		return this.initialScreenshot();
+	}
+
+	private async disposeIfShutdownRequested(): Promise<boolean> {
+		if (!this.shutdownRequested && !this.disposed) return false;
+		await this.dispose();
+		return true;
+	}
+}
+
+async function sessionHasPriorTurn(session: Session): Promise<boolean> {
+	const entries = await session.getBranch();
+	for (const entry of entries) {
+		if (entry.type === "message" && (entry.message.role === "user" || entry.message.role === "assistant")) {
+			return true;
+		}
+	}
+	return false;
 }

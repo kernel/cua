@@ -19,6 +19,8 @@ import {
 export interface SeamHooks {
 	/** Re-apply the authoritative base+extension tool union to the harness. */
 	refreshTools: () => void;
+	/** Forward user text through the host's first-turn image attachment path. */
+	sendUserMessage: (text: string) => Promise<void>;
 	/** Synchronous mirror of the session name (kept because the action getter is sync). */
 	getSessionName: () => string | undefined;
 	/** Record the latest session name set through the action surface. */
@@ -41,7 +43,7 @@ export function makeExtensionActions(
 		},
 		sendUserMessage(content): void {
 			const text = typeof content === "string" ? content : textPartsOf(content);
-			void harness.prompt(text);
+			void hooks.sendUserMessage(text);
 		},
 		appendEntry(customType, data): void {
 			void session.appendCustomEntry(customType, data);

@@ -36,6 +36,7 @@ async function loadHost(): Promise<HarnessExtensionHost> {
 	const created = new HarnessExtensionHost({
 		harness: fx.harness,
 		session: fx.session,
+		initialScreenshot: async () => undefined,
 		cwd: fx.cwd,
 		configuredPaths: [makeExtensionDir()],
 		agentDir: mkdtempSync(join(tmpdir(), "cua-agentdir-")),
