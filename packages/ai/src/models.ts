@@ -6,7 +6,7 @@ import {
 } from "@earendil-works/pi-ai";
 
 /** Providers with curated computer-use model support. */
-export type CuaProvider = "openai" | "anthropic" | "google" | "tzafon" | "yutori";
+export type CuaProvider = "openai" | "anthropic" | "google" | "openrouter" | "tzafon" | "yutori";
 
 /** Provider-qualified model reference, e.g. `"openai:gpt-5.5"` or `"google:gemini-3-flash-preview"`. */
 export type CuaModelRef = `${CuaProvider}:${string}`;
@@ -23,7 +23,7 @@ export interface CuaModelInfo {
 }
 
 /** All providers this package curates computer-use models for. */
-export const CUA_PROVIDERS: readonly CuaProvider[] = ["openai", "anthropic", "google", "tzafon", "yutori"];
+export const CUA_PROVIDERS: readonly CuaProvider[] = ["openai", "anthropic", "google", "openrouter", "tzafon", "yutori"];
 
 /**
  * How a {@link CuaModelAnnotation} matches model ids.
@@ -80,6 +80,10 @@ export const CUA_MODEL_ANNOTATIONS: Record<CuaProvider, readonly CuaModelAnnotat
 		// gemini-3-pro-preview is intentionally absent: Google retired it and
 		// the API now returns 404 "model no longer available".
 	],
+	openrouter: [
+		{ match: { kind: "exact", id: "z-ai/glm-5v-turbo" }, source: "https://openrouter.ai/z-ai/glm-5v-turbo" },
+		{ match: { kind: "exact", id: "z-ai/glm-4.6v" }, source: "https://openrouter.ai/z-ai/glm-4.6v" },
+	],
 	tzafon: [
 		{ match: { kind: "exact", id: "tzafon.northstar-cua-fast" }, source: "https://huggingface.co/Tzafon/Northstar-CUA-Fast" },
 		{ match: { kind: "exact", id: "tzafon.northstar-cua-fast-1.6" }, source: "https://huggingface.co/Tzafon/Northstar-CUA-Fast" },
@@ -105,6 +109,7 @@ const CUA_MODEL_OVERRIDES: Record<CuaProvider, readonly Model<Api>[]> = {
 	],
 	anthropic: [],
 	google: [],
+	openrouter: [],
 	tzafon: [
 		cuaModel("tzafon", "tzafon.northstar-cua-fast", "Tzafon Northstar CUA Fast"),
 		cuaModel("tzafon", "tzafon.northstar-cua-fast-1.6", "Tzafon Northstar CUA Fast 1.6"),
@@ -254,6 +259,8 @@ function cuaModel(provider: CuaProvider, id: string, name: string): Model<Api> {
 			return { ...base, api: "anthropic-messages", baseUrl: "https://api.anthropic.com", contextWindow: 200_000, maxTokens: 64_000 } as Model<Api>;
 		case "google":
 			return { ...base, api: "google-generative-ai", baseUrl: "https://generativelanguage.googleapis.com/v1beta", contextWindow: 1_048_576, maxTokens: 65_536 } as Model<Api>;
+		case "openrouter":
+			return { ...base, api: "openai-completions", baseUrl: "https://openrouter.ai/api/v1", contextWindow: 128_000, maxTokens: 32_768 } as Model<Api>;
 		case "tzafon":
 			return { ...base, api: "tzafon-responses", baseUrl: "https://api.lightcone.ai", contextWindow: 128_000, maxTokens: 4_096 } as Model<Api>;
 		case "yutori":

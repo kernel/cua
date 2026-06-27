@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { anthropic, CUA_ACTION_TYPES, CUA_PROVIDERS, type CuaProvider, gemini, openai, tzafon, yutori } from "../src/index";
+import { anthropic, CUA_ACTION_TYPES, CUA_PROVIDERS, type CuaProvider, gemini, openai, openrouter, tzafon, yutori } from "../src/index";
 import type { CuaProviderModule } from "../src/providers/common";
 
 const MODULES: Record<CuaProvider, { providerModule: CuaProviderModule }> = {
 	openai,
 	anthropic,
 	google: gemini,
+	openrouter,
 	tzafon,
 	yutori,
 };
@@ -14,6 +15,7 @@ const NAMESPACES: Record<CuaProvider, { namespace: Record<string, unknown>; pref
 	openai: { namespace: openai, prefix: "OPENAI" },
 	anthropic: { namespace: anthropic, prefix: "ANTHROPIC" },
 	google: { namespace: gemini, prefix: "GEMINI" },
+	openrouter: { namespace: openrouter, prefix: "OPENROUTER" },
 	tzafon: { namespace: tzafon, prefix: "TZAFON" },
 	yutori: { namespace: yutori, prefix: "YUTORI" },
 };

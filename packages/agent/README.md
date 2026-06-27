@@ -105,6 +105,7 @@ If auth callbacks are omitted, both classes default to CUA env var conventions:
 - OpenAI: `OPENAI_API_KEY`
 - Anthropic: `ANTHROPIC_OAUTH_TOKEN` or `ANTHROPIC_API_KEY`
 - Gemini: `GOOGLE_API_KEY` or `GEMINI_API_KEY`
+- OpenRouter: `OPENROUTER_API_KEY`
 - Tzafon: `TZAFON_API_KEY`
 - Yutori: `YUTORI_API_KEY`
 

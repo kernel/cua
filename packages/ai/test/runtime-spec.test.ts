@@ -34,10 +34,12 @@ describe("resolveCuaRuntimeSpec", () => {
 	it("only sets payload middleware for providers that need it", () => {
 		const yutoriSpec = resolveCuaRuntimeSpec("yutori:n1.5-latest");
 		const openaiSpec = resolveCuaRuntimeSpec("openai:gpt-5.5");
+		const openrouterSpec = resolveCuaRuntimeSpec("openrouter:z-ai/glm-5v-turbo");
 		const tzafonSpec = resolveCuaRuntimeSpec("tzafon:tzafon.northstar-cua-fast");
 		const anthropicSpec = resolveCuaRuntimeSpec("anthropic:claude-opus-4-7");
 		expect(yutoriSpec.onPayload).toBeTypeOf("function");
 		expect(openaiSpec.onPayload).toBeTypeOf("function");
+		expect(openrouterSpec.onPayload).toBeUndefined();
 		expect(tzafonSpec.onPayload).toBeTypeOf("function");
 		expect(anthropicSpec.onPayload).toBeUndefined();
 	});

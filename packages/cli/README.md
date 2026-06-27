@@ -45,6 +45,8 @@ cua models -p openai
 cua --print --model openai:gpt-5.5 "..."
 cua --print --model anthropic:claude-opus-4-7 "..."
 cua --print --model google:gemini-3-flash-preview "..."
+cua --print --model openrouter:z-ai/glm-5v-turbo "..."
+cua --print --model tzafon:tzafon.northstar-cua-fast "..."
 cua --print --model yutori:n1.5-latest "..."
 
 # Named sessions (browser stays alive across calls):
@@ -67,8 +69,8 @@ cua --session abc12345                        # by id prefix
 
 Run `cua models` to list every supported `-m` / `--model` value and the
 provider it routes to. Filter by provider with `cua models -p openai`,
-`cua models -p anthropic`, `cua models -p google` (alias: `gemini`), or
-`cua models -p yutori`.
+`cua models -p anthropic`, `cua models -p google` (alias: `gemini`),
+`cua models -p openrouter`, `cua models -p tzafon`, or `cua models -p yutori`.
 
 `-m` / `--model` accepts a provider-qualified `provider:model` ref (e.g.
 `openai:gpt-5.5`) or a bare model id when it matches exactly one catalog
@@ -85,12 +87,14 @@ Configuration is by environment variable. There is no config file.
 | `ANTHROPIC_API_KEY`  | Anthropic API key (required when `-m anthropic:…`) |
 | `GOOGLE_API_KEY`     | Google API key (required when `-m google:…`)   |
 | `GEMINI_API_KEY`     | alias of `GOOGLE_API_KEY`                      |
+| `OPENROUTER_API_KEY` | OpenRouter API key (required when `-m openrouter:…`) |
 | `TZAFON_API_KEY`     | Tzafon API key (required when `-m tzafon:…`)   |
 | `YUTORI_API_KEY`     | Yutori API key (required when `-m yutori:…`)   |
 | `KERNEL_BASE_URL`    | override Kernel base URL                       |
 | `OPENAI_BASE_URL`    | override OpenAI base URL                       |
 | `ANTHROPIC_BASE_URL` | override Anthropic base URL                    |
 | `GOOGLE_BASE_URL`    | override Google base URL                       |
+| `OPENROUTER_BASE_URL` | override OpenRouter base URL                  |
 | `TZAFON_BASE_URL`    | override Tzafon base URL                       |
 | `YUTORI_BASE_URL`    | override Yutori base URL                       |
 | `XDG_DATA_HOME`      | sessions dir base (defaults to `~/.local/share`) |

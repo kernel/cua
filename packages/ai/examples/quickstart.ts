@@ -10,6 +10,7 @@ import {
 // Switch providers by setting CUA_MODEL (and the matching API key env var):
 //   anthropic:claude-opus-4-7        ANTHROPIC_API_KEY
 //   google:gemini-3-flash-preview    GOOGLE_API_KEY
+//   openrouter:z-ai/glm-5v-turbo     OPENROUTER_API_KEY
 //   tzafon:tzafon.northstar-cua-fast TZAFON_API_KEY
 //   yutori:n1.5-latest               YUTORI_API_KEY
 const modelRef = (process.env.CUA_MODEL ?? "openai:gpt-5.5") as CuaModelRef;

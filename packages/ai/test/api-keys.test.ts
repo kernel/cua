@@ -12,6 +12,7 @@ const ENV_KEYS = [
 	"ANTHROPIC_API_KEY",
 	"GOOGLE_API_KEY",
 	"GEMINI_API_KEY",
+	"OPENROUTER_API_KEY",
 	"TZAFON_API_KEY",
 	"YUTORI_API_KEY",
 ] as const;
@@ -29,12 +30,14 @@ afterEach(() => {
 describe("cua api key helpers", () => {
 	it("maps provider names to expected environment variables", () => {
 		expect(cuaApiKeyEnvVarsForProvider("openai")).toEqual(["OPENAI_API_KEY"]);
+		expect(cuaApiKeyEnvVarsForProvider("openrouter")).toEqual(["OPENROUTER_API_KEY"]);
 		expect(cuaApiKeyEnvVarsForProvider("google")).toEqual(["GOOGLE_API_KEY", "GEMINI_API_KEY"]);
 		expect(cuaApiKeyEnvVarsForProvider("gemini")).toEqual(["GOOGLE_API_KEY", "GEMINI_API_KEY"]);
 		expect(cuaApiKeyEnvVarsForProvider("unknown")).toEqual([]);
 	});
 
 	it("resolves provider api keys with fallback order", () => {
+		delete process.env.GOOGLE_API_KEY;
 		process.env.GEMINI_API_KEY = "gemini";
 		expect(getCuaEnvApiKey("google")).toBe("gemini");
 		process.env.GOOGLE_API_KEY = "google";

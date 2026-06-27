@@ -23,7 +23,7 @@ describe("CUA model refs", () => {
 
 	it("names the valid providers in the unsupported-provider error", () => {
 		expect(() => parseCuaModelRef("bogus:model")).toThrow(
-			'unsupported CUA provider "bogus" (expected one of: openai, anthropic, google, tzafon, yutori)',
+			'unsupported CUA provider "bogus" (expected one of: openai, anthropic, google, openrouter, tzafon, yutori)',
 		);
 	});
 
@@ -110,6 +110,20 @@ describe("CUA support annotations", () => {
 		expect(findCuaAnnotation("yutori", "n1.5-latest")).toBeDefined();
 		expect(findCuaAnnotation("tzafon", "tzafon.northstar-cua-fast")).toBeDefined();
 		expect(findCuaAnnotation("tzafon", "tzafon.northstar-cua-fast-1.6")).toBeDefined();
+		expect(findCuaAnnotation("openrouter", "z-ai/glm-5v-turbo")).toBeDefined();
+		expect(findCuaAnnotation("openrouter", "z-ai/glm-4.6v")).toBeDefined();
+	});
+
+	it("loads OpenRouter GLM-V models from pi-ai", () => {
+		const glm5v = getCuaModel("openrouter:z-ai/glm-5v-turbo");
+		expect(glm5v.provider).toBe("openrouter");
+		expect(glm5v.api).toBe("openai-completions");
+		expect(glm5v.input).toContain("image");
+
+		const glm46v = getCuaModel("openrouter:z-ai/glm-4.6v");
+		expect(glm46v.provider).toBe("openrouter");
+		expect(glm46v.api).toBe("openai-completions");
+		expect(glm46v.input).toContain("image");
 	});
 
 	it("no longer advertises the Gemini 2.5 computer-use preview", () => {
