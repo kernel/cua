@@ -21,6 +21,13 @@ def _default_output_dir() -> Path:
     return Path(__file__).resolve().parents[3] / ".tasks"
 
 
+def _non_negative_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("--limit/--num-tasks must be >= 0")
+    return parsed
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Generate Harbor tasks for the WebVoyager benchmark",
@@ -34,7 +41,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--limit",
         "--num-tasks",
-        type=int,
+        type=_non_negative_int,
         dest="limit",
         default=None,
         help="Generate only the first N tasks",

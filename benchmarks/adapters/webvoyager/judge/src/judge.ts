@@ -32,7 +32,15 @@ export interface Args {
   detailsOut?: string;
 }
 
-function parseArgs(argv: string[]): Args {
+function parsePositiveIntFlag(flag: string, value: string): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`--${flag} must be a positive integer`);
+  }
+  return parsed;
+}
+
+export function parseArgs(argv: string[]): Args {
   const flags = new Map<string, string>();
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -51,7 +59,7 @@ function parseArgs(argv: string[]): Args {
     answer: flags.get("answer") ?? "/logs/agent/answer.txt",
     shots: flags.get("shots") ?? "/logs/agent/shots",
     judgeModel: flags.get("judge-model") ?? "claude-sonnet-4-5",
-    maxImages: Number(flags.get("max-images") ?? "15"),
+    maxImages: parsePositiveIntFlag("max-images", flags.get("max-images") ?? "15"),
     rewardOut: required("reward-out"),
     detailsOut: flags.get("details-out"),
   };

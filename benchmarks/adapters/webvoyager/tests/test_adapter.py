@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
 import sys
@@ -14,6 +15,7 @@ SRC = Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(SRC))
 
 from webvoyager.adapter import WebVoyagerAdapter, _index_reference, _toml_escape  # noqa: E402
+from webvoyager.main import _non_negative_int  # noqa: E402
 
 
 @pytest.fixture
@@ -130,6 +132,18 @@ def test_limit_and_task_ids_select(tmp_path: Path) -> None:
     selected = adapter._select()
     ids = {t.source_id for t in selected}
     assert ids == {"Amazon--3", "Apple--1"}
+
+
+def test_negative_limit_rejected(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="limit must be >= 0"):
+        WebVoyagerAdapter(output_dir=tmp_path / "out", limit=-1)
+
+
+def test_limit_cli_parser_rejects_negative_values() -> None:
+    assert _non_negative_int("0") == 0
+    assert _non_negative_int("3") == 3
+    with pytest.raises(argparse.ArgumentTypeError, match="--limit/--num-tasks must be >= 0"):
+        _non_negative_int("-1")
 
 
 def test_overwrite_false_skips_existing(adapter: WebVoyagerAdapter) -> None:

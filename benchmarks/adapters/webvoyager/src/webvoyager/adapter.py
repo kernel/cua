@@ -100,6 +100,8 @@ class WebVoyagerAdapter:
         **kwargs: object,
     ):
         self.output_dir = Path(output_dir)
+        if limit is not None and limit < 0:
+            raise ValueError("limit must be >= 0")
         self.limit = limit
         self.overwrite = overwrite
         self.task_ids = task_ids

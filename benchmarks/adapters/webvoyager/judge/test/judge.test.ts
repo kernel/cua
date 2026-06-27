@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { Args } from "../src/judge.ts";
-import { run } from "../src/judge.ts";
+import { parseArgs, run } from "../src/judge.ts";
 import type { GradingDetails, JudgeContent, JudgeModel } from "../src/types.ts";
 
 /** A /logs/agent + /tests layout, plus the verifier output paths run() writes. */
@@ -45,6 +45,22 @@ function captureJudge(verdict: string): { make: () => JudgeModel; calls: JudgeCo
 function readDetails(args: Args): GradingDetails {
   return JSON.parse(readFileSync(args.detailsOut!, "utf8")) as GradingDetails;
 }
+
+describe("parseArgs", () => {
+  it("defaults max-images to 15", () => {
+    const args = parseArgs(["--reward-out", "/tmp/reward.txt"]);
+    expect(args.maxImages).toBe(15);
+  });
+
+  it.each(["0", "-1", "abc", "2.5", ""])(
+    "rejects invalid max-images value %s",
+    (raw) => {
+      expect(() =>
+        parseArgs(["--reward-out", "/tmp/reward.txt", "--max-images", raw])
+      ).toThrow("--max-images must be a positive integer");
+    }
+  );
+});
 
 describe("run", () => {
   it.each([
