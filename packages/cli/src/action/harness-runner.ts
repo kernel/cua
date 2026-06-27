@@ -140,21 +140,9 @@ export async function runAction(
 
 async function maybeInitialScreenshot(opts: HarnessRunOptions): Promise<ImageContent[] | undefined> {
 	if (opts.skipInitialScreenshot) return undefined;
-	const hasPriorTurn = await sessionHasPriorTurn(opts.session);
-	if (hasPriorTurn) return undefined;
 	const png = await captureScreenshot(opts.browserHandle.client, opts.browserHandle.browser.session_id);
 	if (!png) return undefined;
 	return [{ type: "image", data: png.toString("base64"), mimeType: "image/png" }];
-}
-
-async function sessionHasPriorTurn(session: Session): Promise<boolean> {
-	const entries = await session.getBranch();
-	for (const entry of entries) {
-		if (entry.type === "message" && (entry.message.role === "user" || entry.message.role === "assistant")) {
-			return true;
-		}
-	}
-	return false;
 }
 
 function textFromAssistant(message: AssistantMessage): string {

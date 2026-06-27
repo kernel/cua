@@ -45,7 +45,16 @@ export function makeExtensionActions(
 		},
 		sendUserMessage(content): void {
 			const text = typeof content === "string" ? content : textPartsOf(content);
-			void hooks.sendUserMessage(text);
+			void hooks.sendUserMessage(text).catch((error: unknown) => {
+				void session
+					.appendCustomMessageEntry(
+						"extension_error",
+						`sendUserMessage failed: ${errorMessage(error)}`,
+						true,
+						{ action: "sendUserMessage" },
+					)
+					.catch(() => {});
+			});
 		},
 		appendEntry(customType, data): void {
 			void session.appendCustomEntry(customType, data);
@@ -165,4 +174,10 @@ function textPartsOf(content: ReadonlyArray<{ type: string; text?: string }>): s
 		.filter((part) => part.type === "text" && typeof part.text === "string")
 		.map((part) => part.text ?? "")
 		.join("");
+}
+
+function errorMessage(error: unknown): string {
+	if (error instanceof Error && error.message.trim().length > 0) return error.message;
+	if (typeof error === "string" && error.trim().length > 0) return error;
+	return "unknown error";
 }
