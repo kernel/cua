@@ -1,7 +1,7 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { CuaAgentHarness, InMemorySessionRepo, NodeExecutionEnv } from "@onkernel/cua-agent";
-import { type CuaModelRef, requireCuaEnvApiKeyForModel } from "@onkernel/cua-ai";
+import { type CuaModelRef, type ImageContent, requireCuaEnvApiKeyForModel } from "@onkernel/cua-ai";
 import Kernel from "@onkernel/sdk";
 import { extractFinalAnswer } from "./answer.ts";
 import { attachAtifSink, writeFinalLine, writeUserLine } from "./sink.ts";
@@ -34,7 +34,8 @@ async function main(): Promise<void> {
   requireCuaEnvApiKeyForModel(model);
 
   const client = new Kernel({ apiKey: requireEnv("KERNEL_API_KEY") });
-  const browser = await client.browsers.retrieve(requireEnv("KERNEL_SESSION_ID"));
+  const kernelSessionId = requireEnv("KERNEL_SESSION_ID");
+  const browser = await client.browsers.retrieve(kernelSessionId);
   const session = await new InMemorySessionRepo().create({ id: taskId });
   const harness = new CuaAgentHarness({
     browser,
@@ -48,7 +49,11 @@ async function main(): Promise<void> {
   writeUserLine(outDir, instruction);
   const unsubscribe = attachAtifSink({ harness, outDir });
   try {
-    await harness.prompt(instruction);
+    const images = await captureInitialScreenshot(client, kernelSessionId);
+    const assistant = await harness.prompt(instruction, images ? { images } : undefined);
+    if (assistant.stopReason === "error" || assistant.stopReason === "aborted") {
+      throw new Error(assistant.errorMessage ?? `agent stopped with ${assistant.stopReason}`);
+    }
   } finally {
     unsubscribe();
   }
@@ -57,6 +62,16 @@ async function main(): Promise<void> {
   const answer = extractFinalAnswer(branch);
   writeFileSync(join(outDir, "answer.txt"), answer);
   writeFinalLine(outDir, { answer, session_id: taskId, model, agent_version: CUA_AGENT_VERSION });
+}
+
+async function captureInitialScreenshot(client: Kernel, sessionId: string): Promise<ImageContent[] | undefined> {
+  try {
+    const screenshot = await client.browsers.computer.captureScreenshot(sessionId);
+    const image = Buffer.from(await screenshot.arrayBuffer()).toString("base64");
+    return [{ type: "image", data: image, mimeType: "image/png" }];
+  } catch {
+    return undefined;
+  }
 }
 
 main().catch((err) => {

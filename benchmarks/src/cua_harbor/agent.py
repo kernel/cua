@@ -105,6 +105,9 @@ class CuaHarborAgent(BaseAgent):
             self.logger.warning(
                 f"cua entrypoint exited with code {proc.returncode}; see {stderr_path}"
             )
+            raise RuntimeError(
+                f"cua entrypoint exited with code {proc.returncode}; see {stderr_path}"
+            )
 
         self._ensure_answer_file()
         # Populate context now so a later timeout still leaves token/cost metrics.
