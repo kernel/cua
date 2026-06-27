@@ -132,6 +132,12 @@ def test_limit_and_task_ids_select(tmp_path: Path) -> None:
     assert ids == {"Amazon--3", "Apple--1"}
 
 
+def test_negative_limit_rejected(tmp_path: Path) -> None:
+    # tasks[:limit] with a negative limit would drop tasks off the end, so it must error.
+    with pytest.raises(ValueError, match="non-negative"):
+        WebVoyagerAdapter(output_dir=tmp_path / "out", limit=-1)
+
+
 def test_overwrite_false_skips_existing(adapter: WebVoyagerAdapter) -> None:
     adapter.run()
     target = adapter.output_dir / "webvoyager-allrecipes--0" / "instruction.md"

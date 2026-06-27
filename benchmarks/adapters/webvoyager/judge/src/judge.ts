@@ -32,6 +32,19 @@ export interface Args {
   detailsOut?: string;
 }
 
+const DEFAULT_MAX_IMAGES = 15;
+
+/**
+ * Parse `--max-images` into a positive integer last-k window. A 0, negative, or
+ * non-numeric value (e.g. a bad `WEBVOYAGER_MAX_IMAGES` env override) would make
+ * `lastShots`' `slice(-k)` attach *all* screenshots — blowing the judge's token
+ * budget — so anything that isn't a positive integer falls back to the default.
+ */
+export function parseMaxImages(raw: string | undefined): number {
+  const value = Number(raw ?? DEFAULT_MAX_IMAGES);
+  return Number.isInteger(value) && value > 0 ? value : DEFAULT_MAX_IMAGES;
+}
+
 function parseArgs(argv: string[]): Args {
   const flags = new Map<string, string>();
   for (let i = 0; i < argv.length; i += 1) {
@@ -51,7 +64,7 @@ function parseArgs(argv: string[]): Args {
     answer: flags.get("answer") ?? "/logs/agent/answer.txt",
     shots: flags.get("shots") ?? "/logs/agent/shots",
     judgeModel: flags.get("judge-model") ?? "claude-sonnet-4-5",
-    maxImages: Number(flags.get("max-images") ?? "15"),
+    maxImages: parseMaxImages(flags.get("max-images")),
     rewardOut: required("reward-out"),
     detailsOut: flags.get("details-out"),
   };
