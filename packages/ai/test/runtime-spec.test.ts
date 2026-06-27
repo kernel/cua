@@ -37,8 +37,10 @@ describe("resolveCuaRuntimeSpec", () => {
 		const tzafonSpec = resolveCuaRuntimeSpec("tzafon:tzafon.northstar-cua-fast");
 		const anthropicSpec = resolveCuaRuntimeSpec("anthropic:claude-opus-4-7");
 		expect(yutoriSpec.onPayload).toBeTypeOf("function");
-		expect(openaiSpec.onPayload).toBeTypeOf("function");
 		expect(tzafonSpec.onPayload).toBeTypeOf("function");
+		// OpenAI and Anthropic need no payload middleware: openai-cua-responses
+		// sets store:true in its own request builder.
+		expect(openaiSpec.onPayload).toBeUndefined();
 		expect(anthropicSpec.onPayload).toBeUndefined();
 	});
 

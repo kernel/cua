@@ -15,6 +15,13 @@ export type {
 	ComputerToolsOptions,
 	CuaNavigationInput as OpenAIExtraInput,
 } from "../common";
+export {
+	buildOpenAIRequestInput,
+	OPENAI_CUA_RESPONSES_API,
+	streamOpenAIResponses,
+	streamSimpleOpenAIResponses,
+} from "./provider";
+export type { OpenAIRequestBody, OpenAIRequestOptions, OpenAIResponsesOptions } from "./provider";
 
 // Provider-native action vocabulary emitted on `computer_call.action.type`:
 //   click, double_click, drag, move, scroll, type, keypress, wait, screenshot
@@ -29,20 +36,9 @@ export function buildOpenAISystemPrompt(opts: { suffix?: string } = {}): string 
 	return [OPENAI_COMPUTER_INSTRUCTIONS, opts.suffix].filter(Boolean).join("\n\n");
 }
 
-export function openaiResponsesStoreOnPayload(payload: unknown): unknown | undefined {
-	if (!payload || typeof payload !== "object") return undefined;
-	const current = payload as Record<string, unknown>;
-	if (current.store === true) return undefined;
-	return {
-		...current,
-		store: true,
-	};
-}
-
 export const providerModule = {
 	toolDefinitions: computerTools,
 	toolExecutors: computerToolExecutors,
 	coordinateSystem,
 	buildSystemPrompt: buildOpenAISystemPrompt,
-	onPayload: openaiResponsesStoreOnPayload,
 } satisfies CuaProviderModule;

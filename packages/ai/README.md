@@ -484,7 +484,10 @@ Every provider namespace (`openai`, `anthropic`, `gemini`, `tzafon`,
 
 Provider-specific extras:
 
-- `openai`: `openaiResponsesStoreOnPayload` payload hook, plus the
+- `openai`: the `openai-cua-responses` stream adapter (`OPENAI_CUA_RESPONSES_API`,
+  `streamOpenAIResponses`, `streamSimpleOpenAIResponses`, `OpenAIResponsesOptions`),
+  the pure `buildOpenAIRequestInput` request builder (threads
+  `previous_response_id` + delta input with `store: true`), plus the
   `computer_use_extra` navigation aliases `OPENAI_EXTRA_TOOL_NAME`,
   `OPENAI_EXTRA_TOOL_DESCRIPTION`, `OpenAIExtraSchema`, `OpenAIExtraInput`
 - `anthropic`: `ANTHROPIC_BATCH_TOOL_NAME` (`"computer_batch"`)
