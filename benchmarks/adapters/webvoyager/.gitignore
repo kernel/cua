@@ -1,0 +1,9 @@
+.tasks/
+jobs/
+trials/
+__pycache__/
+*.egg-info/
+.venv/
+.cache/
+.pytest_cache/
+.ruff_cache/
