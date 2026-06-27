@@ -4,13 +4,28 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadTask, loadTrajectory } from "../src/artifacts.ts";
-import {
-  anthropicJudgeModel,
-  judgeModel,
-  openaiJudgeModel,
-  parseModelRef,
-} from "../src/model.ts";
 import type { JudgeContent } from "../src/types.ts";
+
+// Stub pi-ai so the judge tests stay offline: `getModel`/`getEnvApiKey` own the
+// provider+key resolution and `completeSimple` owns the network call, all of
+// which pi-ai covers and the judge just wires together.
+const { completeSimple, getModel, getEnvApiKey } = vi.hoisted(() => ({
+  completeSimple: vi.fn(),
+  getModel: vi.fn(),
+  getEnvApiKey: vi.fn(),
+}));
+vi.mock("@earendil-works/pi-ai", () => ({ completeSimple, getModel, getEnvApiKey }));
+
+const { judgeModel, parseModelRef } = await import("../src/model.ts");
+
+/** A pi-ai AssistantMessage carrying a single text block. */
+function assistantText(text: string) {
+  return {
+    role: "assistant" as const,
+    content: [{ type: "text" as const, text }],
+    stopReason: "stop" as const,
+  };
+}
 
 // 1x1 transparent PNG, the same fixture the shared-core sink test uses.
 const PNG_B64 =
@@ -137,174 +152,102 @@ describe("parseModelRef", () => {
   });
 });
 
-describe("anthropicJudgeModel", () => {
+describe("judgeModel", () => {
   afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.unstubAllEnvs();
+    completeSimple.mockReset();
+    getModel.mockReset();
+    getEnvApiKey.mockReset();
   });
-
-  function okResponse(text: string): Response {
-    return new Response(JSON.stringify({ content: [{ type: "text", text }] }), { status: 200 });
-  }
-
-  it("retries without temperature when the model rejects it (400)", async () => {
-    vi.stubEnv("ANTHROPIC_API_KEY", "k");
-    const bodies: Array<Record<string, unknown>> = [];
-    const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
-      bodies.push(JSON.parse(init.body as string));
-      if (bodies.length === 1) {
-        return new Response(
-          JSON.stringify({ error: { message: "`temperature` is deprecated for this model." } }),
-          { status: 400 },
-        );
-      }
-      return okResponse("verdict");
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const out = await anthropicJudgeModel("anthropic:claude-opus-4-8").complete("sys", [
-      { type: "text", text: "hi" },
-    ]);
-
-    expect(out).toBe("verdict");
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(bodies[0].temperature).toBe(0);
-    expect(bodies[1]).not.toHaveProperty("temperature");
-  });
-
-  it("throws on a 400 unrelated to temperature", async () => {
-    vi.stubEnv("ANTHROPIC_API_KEY", "k");
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response(JSON.stringify({ error: { message: "bad request" } }), { status: 400 })),
-    );
-
-    await expect(
-      anthropicJudgeModel("anthropic:claude-opus-4-8").complete("sys", [{ type: "text", text: "hi" }]),
-    ).rejects.toThrow("Anthropic API error 400");
-  });
-});
-
-describe("openaiJudgeModel", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.unstubAllEnvs();
-  });
-
-  function okResponse(text: string): Response {
-    return new Response(JSON.stringify({ choices: [{ message: { content: text } }] }), {
-      status: 200,
-    });
-  }
-
-  /** Stub fetch with an OK response and capture each request body. */
-  function captureBodies(text = "out"): Array<Record<string, unknown>> {
-    const bodies: Array<Record<string, unknown>> = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (_url: string, init: RequestInit) => {
-        bodies.push(JSON.parse(init.body as string));
-        return okResponse(text);
-      }),
-    );
-    return bodies;
-  }
 
   const vision: JudgeContent = [
     { type: "text", text: "score this" },
     { type: "image", data: "AAAA", mimeType: "image/png" },
   ];
 
-  it("omits temperature and uses max_completion_tokens for o-series", async () => {
-    vi.stubEnv("OPENAI_API_KEY", "k");
-    const bodies = captureBodies();
+  it("resolves the ref through pi-ai and passes the prompt, content, and deterministic options", async () => {
+    const model = { id: "o4-mini", provider: "openai" };
+    getModel.mockReturnValue(model);
+    getEnvApiKey.mockReturnValue("sk-test");
+    completeSimple.mockResolvedValue(assistantText("Status: success"));
 
-    const out = await openaiJudgeModel("openai:o4-mini").complete("sys", [
-      { type: "text", text: "hi" },
-    ]);
+    const out = await judgeModel("openai:o4-mini").complete("sys", vision);
 
-    expect(out).toBe("out");
-    expect(bodies[0]).not.toHaveProperty("temperature");
-    expect(bodies[0].max_completion_tokens).toBe(1024);
-    expect(bodies[0]).not.toHaveProperty("max_tokens");
-    expect(bodies[0].model).toBe("o4-mini");
+    expect(out).toBe("Status: success");
+    expect(getModel).toHaveBeenCalledWith("openai", "o4-mini");
+    expect(getEnvApiKey).toHaveBeenCalledWith("openai");
+
+    const [calledModel, context, options] = completeSimple.mock.calls[0];
+    expect(calledModel).toBe(model);
+    expect(context.systemPrompt).toBe("sys");
+    expect(context.messages[0].role).toBe("user");
+    expect(context.messages[0].content).toBe(vision);
+    expect(options).toMatchObject({ apiKey: "sk-test", temperature: 0, maxTokens: 1024 });
   });
 
-  it("sends temperature 0 and max_tokens for non-o-series chat models", async () => {
-    vi.stubEnv("OPENAI_API_KEY", "k");
-    const bodies = captureBodies();
+  it("defaults a bare ref to the openai provider", async () => {
+    getModel.mockReturnValue({ id: "o4-mini" });
+    getEnvApiKey.mockReturnValue("sk-test");
+    completeSimple.mockResolvedValue(assistantText("ok"));
 
-    await openaiJudgeModel("openai:gpt-4o").complete("sys", [{ type: "text", text: "hi" }]);
+    await judgeModel("o4-mini").complete("sys", [{ type: "text", text: "hi" }]);
 
-    expect(bodies[0].temperature).toBe(0);
-    expect(bodies[0].max_tokens).toBe(1024);
-    expect(bodies[0]).not.toHaveProperty("max_completion_tokens");
+    expect(getModel).toHaveBeenCalledWith("openai", "o4-mini");
   });
 
-  it("encodes images as data-url image_url with detail:high", async () => {
-    vi.stubEnv("OPENAI_API_KEY", "k");
-    const bodies = captureBodies();
+  it("routes an anthropic ref to the anthropic provider", async () => {
+    getModel.mockReturnValue({ id: "claude-opus-4-8" });
+    getEnvApiKey.mockReturnValue("sk-ant");
+    completeSimple.mockResolvedValue(assistantText("ok"));
 
-    await openaiJudgeModel("openai:o4-mini").complete("sys", vision);
+    await judgeModel("anthropic:claude-opus-4-8").complete("sys", [{ type: "text", text: "hi" }]);
 
-    const messages = bodies[0].messages as Array<{ role: string; content: unknown }>;
-    expect(messages[0]).toEqual({ role: "system", content: "sys" });
-    expect(messages[1].content).toEqual([
-      { type: "text", text: "score this" },
-      {
-        type: "image_url",
-        image_url: { url: "data:image/png;base64,AAAA", detail: "high" },
-      },
-    ]);
+    expect(getModel).toHaveBeenCalledWith("anthropic", "claude-opus-4-8");
+    expect(getEnvApiKey).toHaveBeenCalledWith("anthropic");
+    expect(completeSimple.mock.calls[0][2]).toMatchObject({ apiKey: "sk-ant" });
   });
 
-  it("reads the assistant content from the first choice", async () => {
-    vi.stubEnv("OPENAI_API_KEY", "k");
-    captureBodies("Status: success");
+  it("concatenates the text blocks of the assistant message", async () => {
+    getModel.mockReturnValue({ id: "o4-mini" });
+    getEnvApiKey.mockReturnValue("sk-test");
+    completeSimple.mockResolvedValue({
+      role: "assistant",
+      content: [
+        { type: "thinking", thinking: "reasoning..." },
+        { type: "text", text: "Status: " },
+        { type: "text", text: "success" },
+      ],
+      stopReason: "stop",
+    });
 
-    const out = await openaiJudgeModel("openai:o4-mini").complete("sys", vision);
+    const out = await judgeModel("openai:o4-mini").complete("sys", vision);
     expect(out).toBe("Status: success");
   });
 
-  it("throws when the API key is missing", () => {
-    vi.stubEnv("OPENAI_API_KEY", "");
-    expect(() => openaiJudgeModel("openai:o4-mini")).toThrow("OPENAI_API_KEY is required");
-  });
+  it("throws when pi-ai returns a provider error instead of throwing", async () => {
+    getModel.mockReturnValue({ id: "o4-mini" });
+    getEnvApiKey.mockReturnValue("sk-test");
+    completeSimple.mockResolvedValue({
+      role: "assistant",
+      content: [],
+      stopReason: "error",
+      errorMessage: "OpenAI API error (401): Incorrect API key",
+    });
 
-  it("throws on a non-2xx response", async () => {
-    vi.stubEnv("OPENAI_API_KEY", "k");
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response(JSON.stringify({ error: { message: "rate limit" } }), { status: 429 })),
+    await expect(judgeModel("openai:o4-mini").complete("sys", vision)).rejects.toThrow(
+      "judge model error: OpenAI API error (401): Incorrect API key",
     );
-
-    await expect(
-      openaiJudgeModel("openai:o4-mini").complete("sys", [{ type: "text", text: "hi" }]),
-    ).rejects.toThrow("OpenAI API error 429");
-  });
-});
-
-describe("judgeModel routing", () => {
-  afterEach(() => {
-    vi.unstubAllEnvs();
   });
 
-  it("routes openai: refs to the OpenAI client", () => {
-    vi.stubEnv("OPENAI_API_KEY", "k");
-    expect(() => judgeModel("openai:o4-mini")).not.toThrow();
+  it("throws when the model ref is unknown to pi-ai", () => {
+    getModel.mockReturnValue(undefined);
+    expect(() => judgeModel("gemini:flash")).toThrow('unknown judge model "gemini:flash"');
   });
 
-  it("routes a bare ref to OpenAI (default provider)", () => {
-    vi.stubEnv("OPENAI_API_KEY", "k");
-    expect(() => judgeModel("o4-mini")).not.toThrow();
-  });
-
-  it("routes anthropic: refs to the Anthropic client", () => {
-    vi.stubEnv("ANTHROPIC_API_KEY", "k");
-    expect(() => judgeModel("anthropic:claude-opus-4-8")).not.toThrow();
-  });
-
-  it("throws on an unsupported provider", () => {
-    expect(() => judgeModel("gemini:flash")).toThrow('unsupported judge provider "gemini"');
+  it("throws when no API key is configured for the provider", () => {
+    getModel.mockReturnValue({ id: "o4-mini" });
+    getEnvApiKey.mockReturnValue(undefined);
+    expect(() => judgeModel("openai:o4-mini")).toThrow(
+      'no API key in the environment for judge provider "openai"',
+    );
   });
 });

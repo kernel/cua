@@ -1,8 +1,9 @@
 import { defineConfig } from "tsdown";
 
 // Bundle to a single self-contained ESM file so `node dist/judge.js` runs inside
-// the Kernel VM with no dependency install. No externals: the judge only uses
-// node builtins and global fetch.
+// the Kernel VM with no dependency install. pi-ai is bundled in (noExternal); it
+// lazy-loads providers via dynamic import(), so inlineDynamicImports folds those
+// chunks back into the one judge.js the adapter copies next to the verifier.
 export default defineConfig({
   entry: ["src/judge.ts"],
   format: ["esm"],
@@ -11,5 +12,6 @@ export default defineConfig({
   sourcemap: false,
   clean: true,
   noExternal: [/.*/],
+  outputOptions: { inlineDynamicImports: true },
   outExtensions: () => ({ js: ".js" }),
 });
