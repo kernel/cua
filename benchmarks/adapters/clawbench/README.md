@@ -13,8 +13,15 @@ write-heavy flows against ~144 live production sites; the score is two-stage:
 2. **Stage 2 — body judge.** An LLM judges whether that intercepted request body
    would fulfil the instruction. `final_pass = intercepted AND judge_match`.
 
-This is the leaderboard-reproducible metric (not the optional 5-layer "agentic
-evaluator", and not Online-Mind2Web's WebJudge).
+The judge ships **both** of upstream's rubrics, selectable via
+`CLAWBENCH_JUDGE_RUBRIC=lenient|strict` (`[verifier.env]`, default `lenient`).
+The public leaderboard's "Reward" column is the **lenient** rubric
+(`runner/judge_llm.py`); the **strict** rubric (`runner/judge.py`) is the other
+published column and scores roughly half. Default `lenient` so the emitted
+reward tracks the headline leaderboard number; set `strict` to reproduce the
+strict column. The chosen rubric is recorded in `clawbench-result.json`. This is
+the two-stage interception metric — not the optional 5-layer "agentic
+evaluator", and not Online-Mind2Web's WebJudge.
 
 ## What changes vs upstream's Docker adapter
 

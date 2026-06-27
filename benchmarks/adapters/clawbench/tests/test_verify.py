@@ -26,10 +26,44 @@ def test_parse_verdict_fenced_json():
     assert reason == "wrong item"
 
 
-def test_parse_verdict_unparseable():
-    match, reason = verify.parse_verdict("not json at all")
+def test_parse_verdict_unparseable_strict_is_none():
+    match, reason = verify.parse_verdict("not json at all", "strict")
     assert match is None
     assert reason
+
+
+def test_parse_verdict_unparseable_lenient_defaults_true():
+    # judge_llm.py convention: a parse failure under the lenient rubric is a match.
+    match, reason = verify.parse_verdict("not json at all", "lenient")
+    assert match is True
+    assert reason
+
+
+def test_parse_verdict_defaults_to_lenient():
+    # No explicit rubric -> lenient default (the headline leaderboard rubric).
+    match, _ = verify.parse_verdict("garbage")
+    assert match is True
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        (None, "lenient"),
+        ("lenient", "lenient"),
+        ("strict", "strict"),
+        ("STRICT", "strict"),
+        (" lenient ", "lenient"),
+        ("bogus", "lenient"),
+        ("", "lenient"),
+    ],
+)
+def test_resolve_rubric(value, expected):
+    assert verify.resolve_rubric(value) == expected
+
+
+def test_resolve_rubric_reads_env(monkeypatch):
+    monkeypatch.setenv("CLAWBENCH_JUDGE_RUBRIC", "strict")
+    assert verify.resolve_rubric() == "strict"
 
 
 def test_build_user_msg_includes_request_and_hidden_context():
@@ -51,6 +85,7 @@ def test_call_judge_openai_completions(monkeypatch):
     def fake_post(url, headers, payload, timeout=60):
         captured["url"] = url
         captured["headers"] = headers
+        captured["payload"] = payload
         return {"choices": [{"message": {"content": '{"match": true, "reason": "ok"}'}}]}
 
     monkeypatch.setattr(verify, "post_json", fake_post)
@@ -67,8 +102,35 @@ def test_call_judge_openai_completions(monkeypatch):
     )
     assert result["match"] is True
     assert result["error"] is None
+    assert result["rubric"] == "lenient"
     assert captured["url"] == "https://judge.example/v1/chat/completions"
     assert captured["headers"]["Authorization"] == "Bearer k"
+    # default rubric is lenient -> the lenient system prompt is sent
+    assert captured["payload"]["messages"][0]["content"] == verify.JUDGE_SYSTEM_LENIENT
+
+
+def test_call_judge_strict_rubric_sends_strict_prompt(monkeypatch):
+    captured = {}
+
+    def fake_post(url, headers, payload, timeout=60):
+        captured["payload"] = payload
+        return {"choices": [{"message": {"content": '{"match": false, "reason": "x"}'}}]}
+
+    monkeypatch.setattr(verify, "post_json", fake_post)
+    result = verify.call_judge(
+        {
+            "base_url": "https://judge.example/v1",
+            "api_key": "k",
+            "model": "deepseek-v4-pro",
+            "api_type": "openai-completions",
+        },
+        "instruction",
+        {"request": {"url": "u", "method": "POST", "body": {}}},
+        None,
+        "strict",
+    )
+    assert result["rubric"] == "strict"
+    assert captured["payload"]["messages"][0]["content"] == verify.JUDGE_SYSTEM_STRICT
 
 
 def test_call_judge_anthropic_messages(monkeypatch):
