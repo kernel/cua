@@ -1,7 +1,7 @@
 # Reference config for a WebVoyager run on the Kernel env with the cua agent.
 #
 #   cd benchmarks
-#   uv run python -m webvoyager.main --output-dir adapters/webvoyager/.tasks --limit 20
+#   python3 adapters/webvoyager/src/webvoyager/main.py --output-dir adapters/webvoyager/.tasks --limit 20
 #   uv run harbor run \
 #     -p adapters/webvoyager/.tasks \
 #     -e kernel --environment-kwarg pool_size=8 \
