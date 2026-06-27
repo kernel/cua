@@ -1,5 +1,14 @@
 # WebVoyager adapter — live smoke
 
+> **Transport update (post-smoke).** This run used the original Python judge
+> (`webjudge.py`, stdlib `urllib` POST to the Anthropic Messages API). The judge
+> has since been reimplemented as a self-contained `node` bin
+> (`judge/src/`, bundled to `judge.js`) calling the model through
+> `@earendil-works/pi-ai`. That is a transport-only change — the SYSTEM_PROMPT,
+> last-k selection, `SUCCESS`/`NOT SUCCESS` parse, and `claude-sonnet-4-5` default
+> are unchanged — so the findings below still hold, but references to
+> `webjudge.py` / `urllib` describe the transport at smoke time, not today's.
+
 Live 20-task smoke on the Kernel env with the cua agent. Goal: exercise the real pipeline end to
 end, learn failure modes, fix adapter bugs surfaced. Learning smoke, **not** a definitive
 WebVoyager number.

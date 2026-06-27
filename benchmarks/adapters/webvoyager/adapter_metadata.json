@@ -17,6 +17,7 @@
     "type": "multimodal-llm-judge",
     "port_of": "WebVoyager evaluation/auto_eval.py (single-call GPT-4V judge)",
     "provider": "anthropic",
-    "default_model": "claude-sonnet-4-5"
+    "default_model": "claude-sonnet-4-5",
+    "transport": "@earendil-works/pi-ai (bundled node bin)"
   }
 }

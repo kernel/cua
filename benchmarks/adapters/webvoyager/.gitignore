@@ -9,3 +9,7 @@ __pycache__/
 .cache/
 .pytest_cache/
 .ruff_cache/
+
+# Node judge bin build artifacts
+judge/dist/
+judge/node_modules/

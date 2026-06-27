@@ -2,9 +2,9 @@
 
 Each upstream record (``web_name``/``id``/``ques``/``web``) becomes one task dir:
 ``instruction.md`` (the ``ques`` plus an answer directive), ``environment/kernel.json``
-(``start_url`` = ``web`` + stealth + viewport), ``tests/`` (the ported WebVoyager
-multimodal judge + a per-task ``ground_truth.json``), ``solution/solve.sh`` (writes the
-reference answer for an oracle plumbing run), and ``task.toml``.
+(``start_url`` = ``web`` + stealth + viewport), ``tests/`` (the bundled WebVoyager
+multimodal judge ``judge.js`` + a per-task ``ground_truth.json``), ``solution/solve.sh``
+(writes the reference answer for an oracle plumbing run), and ``task.toml``.
 
 The dataset is vendored under ``data/`` so generation is hermetic and pinned to the
 upstream commit recorded in ``adapter_metadata.json``; ``--refresh`` re-fetches it.
@@ -24,6 +24,11 @@ TEMPLATE_DIR = PACKAGE_DIR / "task-template"
 DATA_DIR = PACKAGE_DIR / "data"
 DATASET_FILE = DATA_DIR / "WebVoyager_data.jsonl"
 REFERENCE_FILE = DATA_DIR / "reference_answer.json"
+
+# Bundled, self-contained WebJudge (pi-ai inlined); built by the judge package and
+# copied into each task's tests/ so the verifier runs `node judge.js` with no install.
+ADAPTER_ROOT = PACKAGE_DIR.parents[1]
+JUDGE_BUNDLE = ADAPTER_ROOT / "judge" / "dist" / "judge.js"
 
 RAW_BASE = "https://raw.githubusercontent.com/MinorJerry/WebVoyager/main/data"
 DATASET_URL = f"{RAW_BASE}/WebVoyager_data.jsonl"
@@ -152,7 +157,7 @@ class WebVoyagerAdapter:
         tests_dir = task_dir / "tests"
         tests_dir.mkdir(exist_ok=True)
         shutil.copy2(TEMPLATE_DIR / "tests/test.sh", tests_dir / "test.sh")
-        shutil.copy2(TEMPLATE_DIR / "tests/webjudge.py", tests_dir / "webjudge.py")
+        shutil.copy2(JUDGE_BUNDLE, tests_dir / "judge.js")
         (tests_dir / "ground_truth.json").write_text(
             json.dumps(
                 {
@@ -184,6 +189,11 @@ class WebVoyagerAdapter:
         logger.debug(f"Wrote task {local_id}")
 
     def run(self) -> None:
+        if not JUDGE_BUNDLE.exists():
+            raise FileNotFoundError(
+                f"WebJudge bundle not built at {JUDGE_BUNDLE}; run "
+                "`cd benchmarks/adapters/webvoyager/judge && npm install && npm run build`"
+            )
         selected = self._select()
         self.output_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"Generating {len(selected)} WebVoyager tasks -> {self.output_dir}")
