@@ -81,6 +81,10 @@ def test_task_toml_is_single_step_v1(cases_dir, tmp_path):
     assert venv["CLAWBENCH_JUDGE_BASE_URL"] == "${CLAWBENCH_JUDGE_BASE_URL}"
     assert "CLAWBENCH_CDP_URL" not in venv
     assert "CLAWBENCH_NOVNC_URL" not in venv
+    # The interceptor reads the eval_schema from tests/eval_schema.json on the
+    # host (Harbor's [agent.env] does not reach the host agent), so no agent env
+    # block is emitted.
+    assert "env" not in cfg.get("agent", {})
 
 
 def test_tests_dir_has_grader_assets(cases_dir, tmp_path):

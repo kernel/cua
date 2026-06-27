@@ -3,13 +3,20 @@ name = "clawbench-adapter"
 version = "0.1.0"
 description = "Generate Harbor task dirs from ClawBench V2/V1 cases for the Kernel env + cua agent"
 requires-python = ">=3.12"
+# websocket-client is the interceptor sidecar's CDP transport (host-side).
 dependencies = ["websocket-client>=1.7"]
 
 [project.scripts]
 clawbench-adapter = "clawbench_adapter.main:main"
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.6"]
+# cua-harbor is only needed to import/test agent.py (the interceptor wrapper);
+# the task generator (adapter.py/main.py) has no such dependency. At runtime it
+# is always present in the benchmarks workspace that loads the agent.
+dev = ["pytest>=8", "pytest-asyncio>=0.24", "ruff>=0.6", "cua-harbor"]
+
+[tool.uv.sources]
+cua-harbor = { path = "../..", editable = true }
 
 [build-system]
 requires = ["hatchling"]
@@ -23,3 +30,4 @@ target-version = "py312"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
