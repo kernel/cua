@@ -167,3 +167,158 @@ Despite the 0 score, the smoke exercised every load-bearing path:
 - **Agentic 5-layer evaluator** (phase 2). The passive layers (requests/actions/
   screenshots) are already captured and archived; the MP4 is intentionally dropped
   (no X11 on Kernel; unneeded for leaderboard parity).
+
+## Email cohort (live) — AGENTMAIL_API_KEY present
+
+Second session: validated the registration/signup/application cohort end-to-end
+with a real `AGENTMAIL_API_KEY`. This is the path the first session deferred. The
+AgentMail provisioning code had **never run live** and shipped two real bugs (one
+in the email wiring, one in the shared verifier contract) — both found and fixed
+here. Agent `anthropic/claude-sonnet-4-6`; judge Anthropic
+(`anthropic-messages` / `claude-sonnet-4-6`); `-e kernel --ek pool_size=5 -n 4`.
+
+### Does AgentMail provisioning work? YES.
+
+`prepare_task.py` → `AgentMailProvider.create()` hits `POST api.agentmail.to/v0/inboxes`
+and gets back `{"inbox_id": "<local>@agentmail.to", "email": ...}`; the address is
+written into `my-info/email_credentials.json` + the persona's `contact.email`, and
+a resume PDF is rendered with it. Confirmed live on every task in the validation +
+smoke (each `prepare-task.log` shows `Prepared ClawBench my-info for cb…@agentmail.to`).
+Teardown (`DELETE …/inboxes/{id}` → 202) runs host-side in `ClawbenchCuaAgent`'s
+`finally`; after every run `GET /inboxes` returned **0 open inboxes** — no leaks.
+`fpdf2` (needed for the resume) was missing from the adapter venv and is now a
+declared dependency.
+
+### Does the agent use the email? YES — but only by filling it, not reading it.
+
+Validated first on **v2-1133 (Red Cross newsletter signup)**, the cleanest isolator
+(pure fill-email-into-a-form, no login): the agent read its inline AgentMail address
+`cb…@agentmail.to`, typed it into the newsletter field, submitted, and the page
+returned "You're on the list - thanks". Across the smoke the agents reference their
+provisioned inbox by address and type it + the persona into each registration form
+(e.g. v2-583 Freshdesk: agent filled the signup form with the inbox + company
+details from the persona).
+
+The **in-browser email-verification subset is genuinely uncovered** (the limitation
+the code flags with `supports_in_browser_verification=False`). AgentMail has no
+per-inbox **webmail UI**, so when a site emails a confirmation/verification link
+(e.g. v2-091 Indeed), the agent cannot *read* it through the browser — it has only
+the live page, no inbox surface. One agent was observed trying to hit the AgentMail
+REST API from the browser address bar to read messages, which is off-spec and fails.
+So this adapter covers the *fill-a-real-address* cohort (newsletter, registration,
+application forms) but not flows gated on *clicking a link delivered to the inbox*.
+
+### Does interception + grading fire? YES.
+
+The Stage-1 interceptor attaches a second CDP `Fetch` client on every task and
+watches the per-task `eval_schema` pattern (each `interceptor.log`:
+`interceptor connected, watching for: <pattern>`). The Stage-2 `verify.py` runs in
+the verifier and writes a reward for every trial. Where a final submit matching the
+schema is issued, the interceptor blocks it (`Fetch.failRequest{BlockedByClient}`)
+and writes `interception.json`, which the judge then scores.
+
+### Bugs found + fixed (this cohort had never run live)
+
+1. **`my-info` was never provisioned, and the agent has no file tool to read it
+   anyway (the big one).** `prepare_task.py` was copied into `tests/` but *nothing
+   invoked it* — neither the post-agent `test.sh` (verifier phase) nor the agent.
+   The `./my-info/` bundle the instruction promises was never created. Worse, even
+   when created, the **cua harness on Kernel exposes only browser/computer tools —
+   no shell or file-editor** (`computerUseExtra: true` installs computer tools +
+   a navigation tool, and `NodeExecutionEnv` is *not* surfaced as an agent tool).
+   So the agent has no filesystem surface at all; the first live attempt showed it
+   flailing at `file:///root/my-info/`, `file:///home/kernel/my-info/`,
+   `chrome-extension://…`, `localhost:8888/…` — every path failing because the
+   files were on the host, unreachable from the browser VM. Fix: `ClawbenchCuaAgent`
+   now (a) runs `prepare_task.py` host-side before the drive to provision the inbox
+   + bundle, (b) **inlines the email credentials + persona JSON into the instruction
+   text** (`_inline_my_info`) so the agent reads its identity from the prompt and
+   types it into the site — no file tool needed — and (c) deletes the inbox in
+   teardown. The generated footer was updated to say "you have no file/shell tool;
+   identity is inline; disregard ./my-info/ file references". The resume **PDF**
+   still can't reach the agent (no file-upload surface either), which bounds the
+   resume-upload cohort (Indeed/Greenhouse/Charity Village resume attach).
+2. **`reward.json` shape crashed Harbor's verifier (the temperature-400-class bug).**
+   `verify.py`'s `write_reward` wrote `reward.json` as a *rich* object —
+   `{"reward": 0.0, "intercepted": false, "judge_match": null, "reason": "…",
+   "task_id": 1133}`. But Harbor reads `reward.json` as a **flat `{key: number}`**
+   map (`VerifierResult.rewards: dict[str, float|int]`) and coerces every value to a
+   number, so `judge_match: null` / `reason: "<str>"` / `task_id` made **every
+   ClawBench trial error** with `ValidationError: 4 validation errors for
+   VerifierResult` at the verifier — even though `reward.txt` held the right number.
+   (The first non-email smoke had this latent: it read `reward.txt` and didn't
+   notice the trials were `ValidationError`-ing.) Fix: `reward.json` now emits only
+   numeric reward keys — `{"reward": <0|1>, "intercepted": 0|1, "judge_match": 0|1}`
+   (the last omitted when the judge didn't run) — and the full diagnostic record
+   (reason/task_id/raw judge) moves to `clawbench-result.json` + `reward.txt`.
+   Proven by feeding all three shapes through `VerifierResult` (parse OK) and the
+   old shape (rejected), plus a live trial that wrote `{"reward":0.0,"intercepted":0.0}`
+   and passed the verifier with no exception.
+3. **`fpdf2` missing.** The resume PDF silently skipped (`No module named 'fpdf'`)
+   because `fpdf2` wasn't a dependency. Added to `pyproject.toml`; resume now renders.
+
+### Invocation gotcha (worth recording)
+
+Passing the cohort as **multiple `-p <task>` flags** made harbor run **only one
+task** (and serialize it). Passing a **single `-p <dataset-dir>`** (a dir of task
+subdirs) ran the whole set and **parallelized** (`-n 4` → up to 7 live Kernel
+browsers at once). Use a dataset dir, not repeated `-p`.
+
+### Results (8-task email smoke, `.tasks/email-8`)
+
+`reward = intercepted AND judge_match`; `--agent-timeout-multiplier 0.25` → 450s/task.
+8 tasks, `-n 4`, pool_size=5 (pools worked; up to 7 concurrent browsers).
+
+| task | site | provisioned + filled email | reward | intercepted | #req | note |
+|---|---|---|---|---|---|---|
+| v2-1133 | redcross (newsletter) | yes | 0 | no | 472 | filled+submitted; site posts a non-schema endpoint (drift) |
+| v2-815 | petfinder (favorite) | yes | 0 | no | 1550 | favorite is login-gated; no schema-matching submit |
+| v2-583 | freshdesk (signup) | yes | 0 | no | 1052 | account-creation flow; no final submit caught |
+| v2-774 | charityvillage (apply+acct) | yes | 0 | no | 910 | account+apply gated; never reached the sign-in POST |
+| v2-086 | greenhouse (resume autofill) | yes | 0 | no | 99 | resume PDF unreachable (no file-upload surface) |
+| v2-560 | eventbrite (register) | yes | (terminated) | — | — | registration walls behind login/checkout |
+| v2-1117 | eventbrite (register) | yes | (terminated) | — | — | registration walls behind login/checkout |
+| v2-1118 | eventbrite (register) | yes | (terminated) | — | — | registration walls behind login/checkout |
+
+**Pass rate: 0/5 graded (mean 0.000). Intercepted: 0/5.** Every graded trial
+provisioned a live inbox, inlined it, and the agent typed the address + persona into
+the site's form; none reached a *final submit matching the `eval_schema`*, so
+`interception.json` was never written → reward 0 (the dominant non-email outcome
+too). The headline result here is **mechanical, not score**: the AgentMail flow +
+both bug fixes work end-to-end, the verifier parses cleanly on every graded trial
+(no more `ValidationError`), and 0 inboxes leaked (verified `GET /inboxes` == 0 after
+teardown). The five graded trials show their captured request volumes (99–1550
+req/task — real heavy browsing, not stalls).
+
+The three Eventbrite trials were **manually terminated**: their cua agents kept
+browsing well past the 450s budget (90–120+ events), i.e. **the
+`--agent-timeout-multiplier` cap did not stop the cua harness drive** (a separate
+issue from this cohort — the cua Node process isn't bound by Harbor's agent
+timeout). Their force-killed trials skipped host teardown, leaving 2 inboxes that
+were swept afterward (final `GET /inboxes` == 0). For a real run, bound the cua
+drive itself, not just Harbor's agent timeout.
+
+### Taxonomy
+
+- **provisioning + fill: works on 100% of tasks** — every trial got a live inbox,
+  inlined it, and the agent typed the address + persona into the site's form.
+- **interception miss (dominant):** like the non-email cohort, most tasks don't
+  reach a *final submit that matches the schema* — either the site walls
+  account-creation behind login/verification, or (e.g. Red Cross) the live site's
+  form posts to a different endpoint than the authored `eval_schema` (site drift),
+  so `interception.json` is never written → reward 0. Parity-faithful: upstream
+  scores 0 on the same misses.
+- **email-verification wall (AgentMail-specific):** the account-creation +
+  link-click flows (Indeed apply, some signups) can't complete because AgentMail
+  has no in-browser webmail to read the verification email from. Flag + exclude
+  this subset for a parity run; a webmail-backed provider would be needed to cover it.
+- **agent budget:** 450s caps multi-step registration flows; a real parity run
+  should use the full 1800s.
+
+### Cleanup contract
+
+The host owns inbox teardown (`ClawbenchCuaAgent._cleanup_my_info` → `cleanup_email.py`
+with the host state file). `task-state.json` is deliberately **not** uploaded to the
+VM, so the VM's `test.sh` `cleanup_email.py` finds no state and no-ops (a harmless
+redundant call kept for the in-VM-provisioning path). Net: one delete per inbox,
+host-side, no leaks (verified 0 open inboxes post-run).

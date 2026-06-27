@@ -27,14 +27,17 @@ TEMPLATE_DIR = Path(__file__).parent / "task-template"
 
 # Footer appended to the upstream instruction. Unlike upstream's Docker footer
 # (which hands the agent a 127.0.0.1:9223 CDP endpoint to connect to), cua is
-# already attached to the Kernel session, so the footer only states the
-# browser-is-live + where the my-info bundle lives.
+# already attached to the Kernel session. The agent has only browser tools (no
+# file/shell), so the persona + email are spliced into the prompt at run time by
+# ClawbenchCuaAgent rather than read from ./my-info/ files; the footer says so.
 KERNEL_FOOTER = (
     "\n\n---\n"
     "You are already attached to a live Chrome browser. Do not open or launch a "
-    "new browser; complete the task in the current session. Your personal info "
-    "and credentials are in ./my-info/ in your working directory "
-    "(alex_green_personal_info.json, email_credentials.json, alex_green_resume.pdf).\n"
+    "new browser; complete the task in the current session. You have no separate "
+    "file or shell tool -- everything happens in the browser. Your identity for "
+    "this task (the persona and a real email inbox you control) is provided inline "
+    "below; use those values when a form asks for them. Disregard any instruction "
+    "to read files under ./my-info/ -- that content is inlined here instead.\n"
     "---\n"
 )
 

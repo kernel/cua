@@ -6,6 +6,8 @@ dataset/
 # Harbor run outputs
 jobs/
 trials/
+_smoke_logs/
+_spike/
 
 # Python build/test caches
 dist/

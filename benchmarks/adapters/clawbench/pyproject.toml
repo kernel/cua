@@ -3,8 +3,10 @@ name = "clawbench-adapter"
 version = "0.1.0"
 description = "Generate Harbor task dirs from ClawBench V2/V1 cases for the Kernel env + cua agent"
 requires-python = ">=3.12"
-# websocket-client is the interceptor sidecar's CDP transport (host-side).
-dependencies = ["websocket-client>=1.7"]
+# websocket-client is the interceptor sidecar's CDP transport (host-side);
+# fpdf2 renders the my-info resume PDF the setup step (prepare_task.py) injects
+# the disposable email into. Both run host-side around the cua drive.
+dependencies = ["websocket-client>=1.7", "fpdf2>=2.7"]
 
 [project.scripts]
 clawbench-adapter = "clawbench_adapter.main:main"

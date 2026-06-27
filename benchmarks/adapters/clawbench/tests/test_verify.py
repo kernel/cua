@@ -119,8 +119,30 @@ def test_write_reward_maps_match_to_reward(tmp_path, match, expected):
         output_dir=tmp_path,
     )
     assert (tmp_path / "reward.txt").read_text() == str(expected)
-    payload = json.loads((tmp_path / "reward.json").read_text())
-    assert payload["reward"] == expected
-    assert payload["judge_match"] == match
-    # The alias file the upstream rescorer reads is also written.
-    assert (tmp_path / "clawbench-result.json").exists()
+    rewards = json.loads((tmp_path / "reward.json").read_text())
+    assert rewards["reward"] == expected
+    # reward.json is a flat numeric map (Harbor coerces every value to float, so
+    # no strings/None/task_id may appear here).
+    assert all(isinstance(v, (int, float)) for v in rewards.values())
+    assert "reason" not in rewards
+    assert "task_id" not in rewards
+    if match is None:
+        assert "judge_match" not in rewards  # null is not numeric -> omitted
+    else:
+        assert rewards["judge_match"] == (1.0 if match else 0.0)
+    # The full diagnostic record (reason, task_id, raw judge) lives here instead.
+    result = json.loads((tmp_path / "clawbench-result.json").read_text())
+    assert result["judge_match"] == match
+    assert result["task_id"] == 1010
+
+
+def test_reward_json_is_numeric_when_not_intercepted(tmp_path):
+    # The dominant path: no interception.json -> reward 0, judge_match None.
+    # reward.json must still be a clean numeric map Harbor can parse.
+    verify.write_reward(
+        0.0,
+        {"intercepted": False, "judge_match": None, "reason": "missing", "task_id": 1},
+        output_dir=tmp_path,
+    )
+    rewards = json.loads((tmp_path / "reward.json").read_text())
+    assert rewards == {"reward": 0.0, "intercepted": 0.0}
