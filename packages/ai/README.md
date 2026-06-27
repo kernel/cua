@@ -20,6 +20,7 @@ check these environment variables, in order:
 | `openai`    | `OPENAI_API_KEY`                            |
 | `anthropic` | `ANTHROPIC_OAUTH_TOKEN`, `ANTHROPIC_API_KEY` |
 | `google`    | `GOOGLE_API_KEY`, `GEMINI_API_KEY`          |
+| `openrouter` | `OPENROUTER_API_KEY`                       |
 | `tzafon`    | `TZAFON_API_KEY`                            |
 | `yutori`    | `YUTORI_API_KEY`                            |
 
@@ -38,8 +39,8 @@ Pass the resolved key as the `apiKey` stream option (as in the Quick Start
 below) so a missing key fails loudly before any request is made. If you omit
 `apiKey`, pi-ai's built-in providers fall back to their own env lookup
 (`OPENAI_API_KEY`; `ANTHROPIC_OAUTH_TOKEN`/`ANTHROPIC_API_KEY`; for `google`
-only `GEMINI_API_KEY`, not `GOOGLE_API_KEY`), and this package's Tzafon/Yutori
-stream adapters read `TZAFON_API_KEY`/`YUTORI_API_KEY`.
+only `GEMINI_API_KEY`, not `GOOGLE_API_KEY`; `OPENROUTER_API_KEY`), and this
+package's Tzafon/Yutori stream adapters read `TZAFON_API_KEY`/`YUTORI_API_KEY`.
 
 ## Quick Start
 
@@ -220,7 +221,7 @@ list of CUA-supporting models per provider.
 `CuaProvider` is the string union of provider IDs this package targets:
 
 ```ts
-type CuaProvider = "openai" | "anthropic" | "google" | "tzafon" | "yutori";
+type CuaProvider = "openai" | "anthropic" | "google" | "openrouter" | "tzafon" | "yutori";
 ```
 
 The IDs match pi-ai's `Model.provider` values exactly. `providerForModel(model)`
@@ -467,8 +468,8 @@ type CuaNavigationInput = {
 
 ## Provider Namespaces
 
-Every provider namespace (`openai`, `anthropic`, `gemini`, `tzafon`,
-`yutori`) follows one convention:
+Every provider namespace (`openai`, `anthropic`, `gemini`, `openrouter`,
+`tzafon`, `yutori`) follows one convention:
 
 - `computerTools(options?)` and `computerToolExecutors(options?)`
 - `createActionSchema(actions?)` — TypeBox schema for the provider's subset
@@ -487,6 +488,8 @@ Provider-specific extras:
 - `openai`: `openaiResponsesStoreOnPayload` payload hook, plus the
   `computer_use_extra` navigation aliases `OPENAI_EXTRA_TOOL_NAME`,
   `OPENAI_EXTRA_TOOL_DESCRIPTION`, `OpenAIExtraSchema`, `OpenAIExtraInput`
+- `openrouter`: OpenAI-compatible chat-completions transport for routed models
+  such as `openrouter:z-ai/glm-5v-turbo` and `openrouter:z-ai/glm-4.6v`
 - `anthropic`: `ANTHROPIC_BATCH_TOOL_NAME` (`"computer_batch"`)
 - `tzafon`: the `tzafon-responses` stream adapter (`TZAFON_RESPONSES_API`,
   `streamTzafonResponses`, `streamSimpleTzafonResponses`,

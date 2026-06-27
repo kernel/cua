@@ -57,6 +57,19 @@ Google's native `tools.computer_use` request wrapper instead.
 
 Source: [Gemini computer use docs](https://ai.google.dev/gemini-api/docs/computer-use).
 
+## `openrouter`
+
+API: `openai-completions` · coordinates: pixel
+
+Exact IDs:
+
+- `z-ai/glm-5v-turbo` ([model page](https://openrouter.ai/z-ai/glm-5v-turbo))
+- `z-ai/glm-4.6v` ([model page](https://openrouter.ai/z-ai/glm-4.6v))
+
+OpenRouter routes these as OpenAI-compatible chat-completions models. The
+model-facing CUA tools are the canonical function tools exported by this
+package, not a provider-native browser action schema.
+
 ## `tzafon`
 
 API: `tzafon-responses` · coordinates: normalized 0–999

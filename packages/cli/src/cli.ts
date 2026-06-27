@@ -37,6 +37,7 @@ Options:
                                    openai:    openai:gpt-5.5
                                    anthropic: anthropic:claude-opus-4-7
                                    google:    google:gemini-3-flash-preview
+                                   openrouter: openrouter:z-ai/glm-5v-turbo
                                    tzafon:    tzafon:tzafon.northstar-cua-fast
                                    yutori:    yutori:n1.5-latest
       --thinking <level>         Thinking level: off | minimal | low | medium | high | xhigh
@@ -75,12 +76,14 @@ Environment:
   ANTHROPIC_API_KEY     Anthropic API key (required when -m anthropic:…)
   GOOGLE_API_KEY        Google API key (required when -m google:…)
   GEMINI_API_KEY        Alias for GOOGLE_API_KEY
+  OPENROUTER_API_KEY    OpenRouter API key (required when -m openrouter:…)
   TZAFON_API_KEY        Tzafon API key (required when -m tzafon:…)
   YUTORI_API_KEY        Yutori API key (required when -m yutori:…)
   KERNEL_BASE_URL       Override Kernel base URL
   OPENAI_BASE_URL       Override OpenAI base URL
   ANTHROPIC_BASE_URL    Override Anthropic base URL
   GOOGLE_BASE_URL       Override Google base URL
+  OPENROUTER_BASE_URL   Override OpenRouter base URL
   TZAFON_BASE_URL       Override Tzafon base URL
   YUTORI_BASE_URL       Override Yutori base URL
   XDG_DATA_HOME         Sessions are stored under \$XDG_DATA_HOME/cua/sessions

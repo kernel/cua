@@ -6,12 +6,15 @@ import {
 	CUA_ACTION_TYPES,
 	type Context,
 	type CuaActionType,
+	type CuaModelRef,
 	type CuaProvider,
 	anthropic,
 	complete,
 	gemini,
 	getCuaModel,
 	openai,
+	openrouter,
+	resolveCuaRuntimeSpec,
 	tzafon,
 	yutori,
 } from "../src/index";
@@ -22,7 +25,7 @@ const screenshotPath = join(here, "..", "examples", "screenshot.png");
 interface ProviderCase {
 	provider: CuaProvider;
 	envVar: string;
-	modelRef: string;
+	modelRef: CuaModelRef;
 	tools: () => ReturnType<typeof openai.computerTools>;
 	coordinateRange: readonly [number, number];
 	requireToolCalls: boolean;
@@ -54,6 +57,22 @@ const cases: ProviderCase[] = [
 		modelRef: "google:gemini-3-flash-preview",
 		tools: () => gemini.computerTools({ actions: ["click"] }),
 		coordinateRange: [0, 999],
+		requireToolCalls: true,
+	},
+	{
+		provider: "openrouter",
+		envVar: "OPENROUTER_API_KEY",
+		modelRef: "openrouter:z-ai/glm-5v-turbo",
+		tools: () => openrouter.computerTools({ actions: ["click"] }),
+		coordinateRange: [0, 1920],
+		requireToolCalls: true,
+	},
+	{
+		provider: "openrouter",
+		envVar: "OPENROUTER_API_KEY",
+		modelRef: "openrouter:z-ai/glm-4.6v",
+		tools: () => openrouter.computerTools({ actions: ["click"] }),
+		coordinateRange: [0, 1920],
 		requireToolCalls: true,
 	},
 	{
@@ -112,7 +131,7 @@ describe("individual computer action integration", () => {
 		const test = hasKey ? it : it.skip;
 
 		(ciEnabled ? test : it.skip)(`${c.provider} returns a canonical click tool call`, async () => {
-			const model = getCuaModel(c.modelRef as never);
+			const model = getCuaModel(c.modelRef);
 			const context = await buildContext(c.tools);
 			const response = await complete(model, context, {
 				apiKey: process.env[c.envVar],
@@ -131,13 +150,18 @@ describe("individual computer action integration", () => {
 
 			const click = toolCalls.find((call) => call.name === "click");
 			expect(click, `${c.provider} did not return click; got [${toolCalls.map((call) => call.name).join(", ")}]`).toBeDefined();
-			expect(typeof click!.arguments.x).toBe("number");
-			expect(typeof click!.arguments.y).toBe("number");
+			const executor = resolveCuaRuntimeSpec(c.modelRef).toolExecutors.find((candidate) => candidate.definition.name === "click");
+			expect(executor, `${c.provider} has no click executor`).toBeDefined();
+			const action = executor!.toActions(click!.arguments)[0];
+			expect(action?.type).toBe("click");
+			if (action?.type !== "click") throw new Error(`${c.provider} executor did not return a click action`);
+			expect(typeof action.x).toBe("number");
+			expect(typeof action.y).toBe("number");
 			const [min, max] = c.coordinateRange;
-			expect(click!.arguments.x as number, `${c.provider} x out of range`).toBeGreaterThanOrEqual(min);
-			expect(click!.arguments.x as number).toBeLessThanOrEqual(max);
-			expect(click!.arguments.y as number, `${c.provider} y out of range`).toBeGreaterThanOrEqual(min);
-			expect(click!.arguments.y as number).toBeLessThanOrEqual(max);
+			expect(action.x, `${c.provider} x out of range`).toBeGreaterThanOrEqual(min);
+			expect(action.x).toBeLessThanOrEqual(max);
+			expect(action.y, `${c.provider} y out of range`).toBeGreaterThanOrEqual(min);
+			expect(action.y).toBeLessThanOrEqual(max);
 			expect(response.usage.totalTokens, `${c.provider} usage tokens not reported`).toBeGreaterThan(0);
 		}, 60_000);
 	}

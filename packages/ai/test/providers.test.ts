@@ -12,6 +12,7 @@ describe("CUA provider registration", () => {
 
 	it("leaves pi-ai built-ins registered for the providers CUA targets", () => {
 		expect(getApiProvider("openai-responses")).toBeDefined();
+		expect(getApiProvider("openai-completions")).toBeDefined();
 		expect(getApiProvider("anthropic-messages")).toBeDefined();
 		expect(getApiProvider("google-generative-ai")).toBeDefined();
 	});
@@ -19,6 +20,7 @@ describe("CUA provider registration", () => {
 	it("exposes a stream function on every CUA-target API", () => {
 		for (const api of [
 			"openai-responses",
+			"openai-completions",
 			"anthropic-messages",
 			"google-generative-ai",
 			YUTORI_CHAT_COMPLETIONS_API,

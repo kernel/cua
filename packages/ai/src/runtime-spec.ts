@@ -3,6 +3,7 @@ import { getCuaModel, providerForModel } from "./models";
 import { providerModule as anthropic } from "./providers/anthropic/index";
 import { providerModule as gemini } from "./providers/gemini/index";
 import { providerModule as openai } from "./providers/openai/index";
+import { providerModule as openrouter } from "./providers/openrouter/index";
 import { providerModule as tzafon } from "./providers/tzafon/index";
 import { providerModule as yutori } from "./providers/yutori/index";
 import type {
@@ -16,6 +17,7 @@ const PROVIDERS = {
 	openai,
 	anthropic,
 	google: gemini,
+	openrouter,
 	tzafon,
 	yutori,
 } satisfies Record<CuaProvider, CuaProviderModule>;
