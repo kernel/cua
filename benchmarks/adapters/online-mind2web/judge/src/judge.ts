@@ -46,7 +46,7 @@ function parseArgs(argv: string[]): Args {
     run: require("run"),
     answer: require("answer"),
     shots: flags.get("shots"),
-    judgeModel: flags.get("judge-model") ?? "anthropic:claude-sonnet-4-6",
+    judgeModel: flags.get("judge-model") ?? "anthropic:claude-opus-4-8",
     scoreThreshold: Number(flags.get("score-threshold") ?? "3"),
     rewardOut: require("reward-out"),
     detailsOut: flags.get("details-out"),

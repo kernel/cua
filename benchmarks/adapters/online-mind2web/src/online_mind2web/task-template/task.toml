@@ -21,7 +21,7 @@ timeout_sec = 900.0
 # WebJudge backbone. The judge bin parses the provider from JUDGE_MODEL and
 # reads the matching provider key; anthropic is the wired provider.
 ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"
-JUDGE_MODEL = "anthropic:claude-sonnet-4-6"
+JUDGE_MODEL = "anthropic:claude-opus-4-8"
 SCORE_THRESHOLD = "3"
 
 [environment]

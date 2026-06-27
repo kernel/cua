@@ -114,7 +114,7 @@ def test_generates_full_task_dir(tmp_path):
     instruction = (task_dir / "instruction.md").read_text()
     assert "https://www.traderjoes.com/" in instruction
     assert "Find the closest store to 90028." in instruction
-    assert "/logs/agent/answer.txt" in instruction
+    assert "final message" in instruction
 
 
 def test_blank_website_omits_start_url_and_uses_nourl_prompt(tmp_path):
