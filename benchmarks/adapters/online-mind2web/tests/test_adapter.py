@@ -18,6 +18,7 @@ SAMPLE = json.dumps(
             "confirmed_task": "Find the closest store to 90028.",
             "website": "https://www.traderjoes.com/",
             "reference_length": 6,
+            "level": "medium",
         },
         # bare host -> normalized to https://
         {
@@ -105,10 +106,12 @@ def test_generates_full_task_dir(tmp_path):
     assert task_json["task_id"] == "abc123_110325"
     assert task_json["start_url"] == "https://www.traderjoes.com/"
     assert task_json["reference_length"] == 6
+    assert task_json["level"] == "medium"
 
     toml = tomllib.loads((task_dir / "task.toml").read_text())
     assert toml["task"]["name"] == "osunlp/online-mind2web-abc123-110325"
     assert toml["metadata"]["reference_length"] == "6"
+    assert toml["metadata"]["difficulty"] == "medium"
     assert toml["verifier"]["env"]["JUDGE_MODEL"].startswith("anthropic:")
 
     instruction = (task_dir / "instruction.md").read_text()
@@ -125,6 +128,12 @@ def test_blank_website_omits_start_url_and_uses_nourl_prompt(tmp_path):
     instruction = (task_dir / "instruction.md").read_text()
     assert "Go to" not in instruction
     assert "Do a thing." in instruction
+
+    # row carries no `level` -> difficulty defaults to hard, task.json level is null
+    toml = tomllib.loads((task_dir / "task.toml").read_text())
+    assert toml["metadata"]["difficulty"] == "hard"
+    task_json = json.loads((task_dir / "tests/task.json").read_text())
+    assert task_json["level"] is None
 
 
 def test_limit_and_overwrite(tmp_path):

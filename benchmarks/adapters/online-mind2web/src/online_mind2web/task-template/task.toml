@@ -6,7 +6,7 @@ authors = [{ name = "OSU NLP Group" }]
 keywords = ["online-mind2web", "web-agent", "live-web"]
 
 [metadata]
-difficulty = "hard"
+difficulty = "{difficulty}"
 category = "web-navigation"
 source = "osunlp/Online-Mind2Web"
 reference_length = "{reference_length}"
