@@ -1,0 +1,5 @@
+{
+  "start_url": "{start_url}",
+  "stealth": true,
+  "viewport": { "width": 1280, "height": 1024 }
+}
