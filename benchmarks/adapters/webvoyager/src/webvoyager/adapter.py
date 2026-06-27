@@ -99,6 +99,10 @@ class WebVoyagerAdapter:
         refresh: bool = False,
         **kwargs: object,
     ):
+        if limit is not None and limit < 0:
+            # tasks[:limit] with a negative limit drops tasks off the *end* instead
+            # of taking the first N, so reject it rather than silently mis-selecting.
+            raise ValueError(f"limit must be non-negative, got {limit}")
         self.output_dir = Path(output_dir)
         self.limit = limit
         self.overwrite = overwrite

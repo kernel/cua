@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { Args } from "../src/judge.ts";
-import { run } from "../src/judge.ts";
+import { parseMaxImages, run } from "../src/judge.ts";
 import type { GradingDetails, JudgeContent, JudgeModel } from "../src/types.ts";
 
 /** A /logs/agent + /tests layout, plus the verifier output paths run() writes. */
@@ -106,5 +106,22 @@ describe("run", () => {
     });
     expect(readFileSync(args.rewardOut, "utf8")).toBe("0");
     expect(readDetails(args).error).toContain("ANTHROPIC_API_KEY");
+  });
+});
+
+describe("parseMaxImages", () => {
+  it("keeps a valid positive integer", () => {
+    expect(parseMaxImages("3")).toBe(3);
+    expect(parseMaxImages("15")).toBe(15);
+  });
+
+  it("defaults to 15 when unset", () => {
+    expect(parseMaxImages(undefined)).toBe(15);
+  });
+
+  // A 0/negative/non-numeric last-k makes slice(-k) attach ALL screenshots, so
+  // anything that isn't a positive integer must fall back to the default.
+  it.each(["0", "-5", "abc", "", "2.5"])("falls back to 15 for invalid %o", (raw) => {
+    expect(parseMaxImages(raw)).toBe(15);
   });
 });
