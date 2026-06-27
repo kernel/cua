@@ -130,7 +130,7 @@ describe("individual computer action integration", () => {
 		const ciEnabled = !c.ciOptInEnvVar || !process.env.CI || process.env[c.ciOptInEnvVar] === "1";
 		const test = hasKey ? it : it.skip;
 
-		(ciEnabled ? test : it.skip)(`${c.provider} returns a canonical click tool call`, async () => {
+		(ciEnabled ? test : it.skip)(`${c.modelRef} returns a canonical click tool call`, async () => {
 			const model = getCuaModel(c.modelRef);
 			const context = await buildContext(c.tools);
 			const response = await complete(model, context, {

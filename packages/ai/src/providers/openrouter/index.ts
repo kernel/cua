@@ -31,6 +31,7 @@ export function buildOpenRouterSystemPrompt(opts: { suffix?: string } = {}): str
 	return [OPENROUTER_COMPUTER_INSTRUCTIONS, opts.suffix].filter(Boolean).join("\n\n");
 }
 
+/** Build OpenRouter execution adapters and normalize GLM tuple-shaped coordinates before browser execution. */
 export function computerToolExecutors(options: ComputerToolsOptions = {}): CuaToolExecutorSpec[] {
 	return createCuaActionToolExecutors(options.actions).map((executor) => ({
 		...executor,
@@ -40,37 +41,48 @@ export function computerToolExecutors(options: ComputerToolsOptions = {}): CuaTo
 	}));
 }
 
+/** Normalize OpenRouter GLM-V coordinate arguments into canonical CUA numeric coordinates. */
 export function normalizeOpenRouterAction(action: CuaAction): CuaAction {
-	// GLM-4.6V via OpenRouter can return [x, y] tuples in scalar coordinate
-	// fields even when the function schema asks for numbers.
 	switch (action.type) {
 		case "click":
 		case "double_click":
 		case "mouse_down":
 		case "mouse_up":
-		case "move":
-			return {
-				...action,
-				x: coordinateNumber(action.x, 0) ?? action.x,
-				y: coordinateNumber(action.y, 1) ?? coordinateNumber(action.x, 1) ?? action.y,
-			};
-		case "scroll":
-			return {
-				...action,
-				x: coordinateNumber(action.x, 0) ?? action.x,
-				y: coordinateNumber(action.y, 1) ?? coordinateNumber(action.x, 1) ?? action.y,
-			};
+		case "move": {
+			const { x, y, ...rest } = action;
+			return { ...rest, ...normalizeRequiredPoint(action.type, x, y) };
+		}
+		case "scroll": {
+			const { x, y, ...rest } = action;
+			return { ...rest, ...normalizeOptionalPoint(action.type, x, y) };
+		}
 		case "drag":
 			return {
 				...action,
-				path: action.path.map((point) => ({
-					x: coordinateNumber(point.x, 0) ?? point.x,
-					y: coordinateNumber(point.y, 1) ?? coordinateNumber(point.x, 1) ?? point.y,
-				})),
+				path: action.path.map((point) => normalizeRequiredPoint("drag path", point.x, point.y)),
 			};
 		default:
 			return action;
 	}
+}
+
+function normalizeRequiredPoint(label: string, xValue: unknown, yValue: unknown): { x: number; y: number } {
+	const x = coordinateNumber(xValue, 0);
+	const y = coordinateNumber(yValue, 1) ?? coordinateTupleNumber(xValue, 1);
+	if (x === undefined || y === undefined) throw new Error(`invalid OpenRouter ${label} coordinates`);
+	return { x, y };
+}
+
+function normalizeOptionalPoint(label: string, xValue: unknown, yValue: unknown): { x?: number; y?: number } {
+	const x = coordinateNumber(xValue, 0);
+	const yFromTuple = coordinateTupleNumber(xValue, 1);
+	const y = coordinateNumber(yValue, 1) ?? yFromTuple;
+	if (xValue !== undefined && x === undefined) throw new Error(`invalid OpenRouter ${label} x coordinate`);
+	if ((yValue !== undefined || yFromTuple !== undefined) && y === undefined) throw new Error(`invalid OpenRouter ${label} y coordinate`);
+	return {
+		...(x !== undefined ? { x } : {}),
+		...(y !== undefined ? { y } : {}),
+	};
 }
 
 function coordinateNumber(value: unknown, index: number): number | undefined {
@@ -80,6 +92,12 @@ function coordinateNumber(value: unknown, index: number): number | undefined {
 		return typeof next === "number" && Number.isFinite(next) ? next : undefined;
 	}
 	return undefined;
+}
+
+function coordinateTupleNumber(value: unknown, index: number): number | undefined {
+	if (!Array.isArray(value)) return undefined;
+	const next = value[index];
+	return typeof next === "number" && Number.isFinite(next) ? next : undefined;
 }
 
 export const providerModule = {
