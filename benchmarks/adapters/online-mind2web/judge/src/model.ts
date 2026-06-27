@@ -50,13 +50,15 @@ export function judgeModel(ref: string): JudgeModel {
   // reject a reasoning effort of "none" (pi-ai's default when the level is
   // unset) — they require low/medium/high. "medium" is OpenAI's own o4-mini
   // default, the setting the published WebJudge agreement numbers are
-  // calibrated to. Every other backbone keeps deterministic scoring
-  // (temperature 0) with no forced thinking.
+  // calibrated to. Anthropic backbones reject `temperature: 0`, so we omit it
+  // there and only force deterministic sampling on the remaining providers.
   const baseOptions = { apiKey, maxTokens: MAX_OUTPUT_TOKENS };
   const options =
     model.reasoning && provider === "openai"
       ? { ...baseOptions, reasoning: "medium" as const }
-      : { ...baseOptions, temperature: 0 };
+      : provider === "anthropic"
+        ? baseOptions
+        : { ...baseOptions, temperature: 0 };
 
   return {
     async complete(systemPrompt, content) {

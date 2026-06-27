@@ -112,7 +112,7 @@ def test_generates_full_task_dir(tmp_path):
     assert toml["task"]["name"] == "osunlp/online-mind2web-abc123-110325"
     assert toml["metadata"]["reference_length"] == "6"
     assert toml["metadata"]["difficulty"] == "medium"
-    assert toml["verifier"]["env"]["JUDGE_MODEL"].startswith("anthropic:")
+    assert toml["verifier"]["env"]["JUDGE_MODEL"] == "openai:o4-mini"
 
     instruction = (task_dir / "instruction.md").read_text()
     assert "https://www.traderjoes.com/" in instruction

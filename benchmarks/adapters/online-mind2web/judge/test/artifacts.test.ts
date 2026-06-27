@@ -203,7 +203,9 @@ describe("judgeModel", () => {
 
     expect(getModel).toHaveBeenCalledWith("anthropic", "claude-opus-4-8");
     expect(getEnvApiKey).toHaveBeenCalledWith("anthropic");
-    expect(completeSimple.mock.calls[0][2]).toMatchObject({ apiKey: "sk-ant" });
+    const options = completeSimple.mock.calls[0][2];
+    expect(options).toMatchObject({ apiKey: "sk-ant", maxTokens: 1024 });
+    expect(options).not.toHaveProperty("temperature");
   });
 
   it("concatenates the text blocks of the assistant message", async () => {
