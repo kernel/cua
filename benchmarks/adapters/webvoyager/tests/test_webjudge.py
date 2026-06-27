@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import sys
-import types
 from pathlib import Path
 
 import pytest
@@ -16,30 +14,24 @@ TEMPLATE_TESTS = (
 
 
 def _load_webjudge(monkeypatch, agent_dir: Path, tests_dir: Path, captured: dict):
-    """Import webjudge.py with a stubbed ``anthropic`` and redirected I/O paths."""
-    fake = types.ModuleType("anthropic")
+    """Import webjudge.py with the HTTP call stubbed and I/O paths redirected.
 
-    class _Resp:
-        def __init__(self, text: str):
-            self.content = [types.SimpleNamespace(type="text", text=text)]
-
-    class _Anthropic:
-        def __init__(self, *a, **k):
-            self.messages = self
-
-        def create(self, **kwargs):
-            captured.update(kwargs)
-            return _Resp(captured.get("_verdict", "Reasoning... SUCCESS"))
-
-    fake.Anthropic = _Anthropic
-    monkeypatch.setitem(sys.modules, "anthropic", fake)
-
+    ``_call_anthropic`` is replaced so no network request is made; the request
+    payload it would have sent is recorded in ``captured`` for assertions, and the
+    canned verdict comes from ``captured['_verdict']``.
+    """
     spec = importlib.util.spec_from_file_location(
         "wv_webjudge_under_test", TEMPLATE_TESTS / "webjudge.py"
     )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
+    def fake_call(payload: dict, api_key: str) -> str:
+        captured.update(payload)
+        captured["_api_key"] = api_key
+        return captured.get("_verdict", "Reasoning... SUCCESS")
+
+    monkeypatch.setattr(module, "_call_anthropic", fake_call)
     monkeypatch.setattr(module, "AGENT_DIR", agent_dir)
     monkeypatch.setattr(module, "ANSWER_FILE", agent_dir / "answer.txt")
     monkeypatch.setattr(module, "SHOTS_DIR", agent_dir / "shots")

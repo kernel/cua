@@ -13,7 +13,7 @@ webvoyager-<site>--<n>/
 ├── instruction.md           # the ques + a "state the answer in your last line" directive
 ├── environment/kernel.json  # { start_url: <web>, stealth: true, viewport: 1280x1024 }
 ├── tests/
-│   ├── test.sh              # pip install anthropic; python webjudge.py
+│   ├── test.sh              # python3 webjudge.py (stdlib-only; the Kernel VM has no pip)
 │   ├── webjudge.py          # WebVoyager single-call multimodal judge (Anthropic port)
 │   └── ground_truth.json    # { task, web_name, start_url, reference_answer, reference_type }
 ├── solution/solve.sh        # oracle plumbing: writes the reference answer to answer.txt
@@ -28,10 +28,14 @@ re-fetches it from upstream.
 
 ```bash
 cd benchmarks
-uv run python -m webvoyager.main --output-dir adapters/webvoyager/.tasks            # all 643
-uv run python -m webvoyager.main --output-dir adapters/webvoyager/.tasks --limit 20 # first 20
-uv run python -m webvoyager.main --output-dir adapters/webvoyager/.tasks --task-ids Allrecipes--0 Amazon--3
+SRC=adapters/webvoyager/src/webvoyager/main.py
+python3 $SRC --output-dir adapters/webvoyager/.tasks            # all 643
+python3 $SRC --output-dir adapters/webvoyager/.tasks --limit 20 # first 20
+python3 $SRC --output-dir adapters/webvoyager/.tasks --task-ids Allrecipes--0 Amazon--3
 ```
+
+The adapter has no third-party deps, so it runs on bare `python3` (no `uv sync` for
+generation). `uv sync`/`npm` are only needed for the `harbor run` below.
 
 `.tasks/` is gitignored.
 

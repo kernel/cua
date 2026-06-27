@@ -6,21 +6,28 @@ vision model with WebVoyager's verbatim SYSTEM_PROMPT, and writes a single 0/1 r
 ``/logs/verifier/reward.txt`` (verdict ``NOT SUCCESS`` -> 0, ``SUCCESS`` -> 1, ambiguous ->
 fail-closed 0). Upstream ``evaluation/auto_eval.py`` used the OpenAI GPT-4V payload; the
 prompt, last-k screenshots, and verdict parse are unchanged.
+
+The request is made with the standard library (``urllib.request``) rather than the
+``anthropic`` SDK: the Kernel verifier VM has Python 3.10 but no ``pip``/``ensurepip``, so
+nothing can be installed at grade time. A bare HTTPS POST to the Messages API needs no
+dependencies.
 """
 
 import base64
 import json
 import os
 import re
+import urllib.request
 from pathlib import Path
-
-from anthropic import Anthropic
 
 AGENT_DIR = Path("/logs/agent")
 ANSWER_FILE = AGENT_DIR / "answer.txt"
 SHOTS_DIR = AGENT_DIR / "shots"
 GROUND_TRUTH = Path("/tests/ground_truth.json")
 VERIFIER_DIR = Path("/logs/verifier")
+
+ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
+ANTHROPIC_VERSION = "2023-06-01"
 
 # Verbatim from MinorJerry/WebVoyager evaluation/auto_eval.py SYSTEM_PROMPT.
 SYSTEM_PROMPT = """As an evaluator, you will be presented with three primary components to assist you in your role:
@@ -67,6 +74,23 @@ def _last_shots(k: int) -> list[Path]:
     return shots[-k:]
 
 
+def _call_anthropic(payload: dict, api_key: str) -> str:
+    """POST the Messages payload and return the concatenated text content."""
+    request = urllib.request.Request(
+        ANTHROPIC_URL,
+        data=json.dumps(payload).encode(),
+        headers={
+            "x-api-key": api_key,
+            "anthropic-version": ANTHROPIC_VERSION,
+            "content-type": "application/json",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(request) as response:  # noqa: S310 (pinned API host)
+        body = json.loads(response.read().decode())
+    return "".join(part.get("text", "") for part in body.get("content", []))
+
+
 def main() -> None:
     VERIFIER_DIR.mkdir(parents=True, exist_ok=True)
     reward_path = VERIFIER_DIR / "reward.txt"
@@ -98,15 +122,14 @@ def main() -> None:
     blocks.append({"type": "text", "text": "Your verdict:\n"})
 
     model = os.getenv("JUDGE_MODEL", "claude-sonnet-4-5")
-    client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-    response = client.messages.create(
-        model=model,
-        max_tokens=1000,
-        temperature=0,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": blocks}],
-    )
-    verdict = "".join(part.text for part in response.content if part.type == "text")
+    payload = {
+        "model": model,
+        "max_tokens": 1000,
+        "temperature": 0,
+        "system": SYSTEM_PROMPT,
+        "messages": [{"role": "user", "content": blocks}],
+    }
+    verdict = _call_anthropic(payload, os.getenv("ANTHROPIC_API_KEY", ""))
 
     reward = 0 if "NOT SUCCESS" in verdict else (1 if "SUCCESS" in verdict else 0)
     reward_path.write_text(str(reward))
