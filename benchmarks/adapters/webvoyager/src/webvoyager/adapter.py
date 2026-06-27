@@ -29,8 +29,11 @@ REFERENCE_FILE = DATA_DIR / "reference_answer.json"
 # copied into each task's tests/ so the verifier runs `node judge.js` with no install.
 ADAPTER_ROOT = PACKAGE_DIR.parents[1]
 JUDGE_BUNDLE = ADAPTER_ROOT / "judge" / "dist" / "judge.js"
+UPSTREAM_COMMIT = json.loads((ADAPTER_ROOT / "adapter_metadata.json").read_text())["dataset"][
+    "upstream_commit"
+]
 
-RAW_BASE = "https://raw.githubusercontent.com/MinorJerry/WebVoyager/main/data"
+RAW_BASE = f"https://raw.githubusercontent.com/MinorJerry/WebVoyager/{UPSTREAM_COMMIT}/data"
 DATASET_URL = f"{RAW_BASE}/WebVoyager_data.jsonl"
 REFERENCE_URL = f"{RAW_BASE}/reference_answer.json"
 
@@ -136,6 +139,7 @@ class WebVoyagerAdapter:
                 task
                 for task in tasks
                 if task.source_id in requested
+                or self.normalize_id(task.source_id) in requested
                 or self.make_local_task_id(task.source_id) in requested
             ]
         if self.limit is not None:

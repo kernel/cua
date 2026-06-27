@@ -13,7 +13,14 @@ import pytest
 SRC = Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(SRC))
 
-from webvoyager.adapter import WebVoyagerAdapter, _index_reference, _toml_escape  # noqa: E402
+from webvoyager.adapter import (  # noqa: E402
+    DATASET_URL,
+    REFERENCE_URL,
+    WebVoyagerAdapter,
+    _index_reference,
+    _toml_escape,
+)
+from webvoyager.main import _default_output_dir  # noqa: E402
 
 
 @pytest.fixture
@@ -130,6 +137,23 @@ def test_limit_and_task_ids_select(tmp_path: Path) -> None:
     selected = adapter._select()
     ids = {t.source_id for t in selected}
     assert ids == {"Amazon--3", "Apple--1"}
+
+
+def test_task_ids_accept_normalized_alias(tmp_path: Path) -> None:
+    adapter = WebVoyagerAdapter(output_dir=tmp_path / "out", task_ids=["apple--1"])
+    selected = adapter._select()
+    assert {t.source_id for t in selected} == {"Apple--1"}
+
+
+def test_refresh_urls_pin_upstream_commit() -> None:
+    metadata = json.loads((Path(__file__).resolve().parents[1] / "adapter_metadata.json").read_text())
+    upstream_commit = metadata["dataset"]["upstream_commit"]
+    assert f"/{upstream_commit}/" in DATASET_URL
+    assert f"/{upstream_commit}/" in REFERENCE_URL
+
+
+def test_default_output_dir_points_to_adapter_root() -> None:
+    assert _default_output_dir() == Path(__file__).resolve().parents[1] / ".tasks"
 
 
 def test_negative_limit_rejected(tmp_path: Path) -> None:

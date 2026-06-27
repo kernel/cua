@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 def _default_output_dir() -> Path:
-    return Path(__file__).resolve().parents[3] / ".tasks"
+    return Path(__file__).resolve().parents[2] / ".tasks"
 
 
 def _parse_args() -> argparse.Namespace:
