@@ -212,13 +212,24 @@ def _connect(ws_url: str):
     return None
 
 
+def load_eval_schema() -> dict:
+    """Read the eval_schema, inline env first (host sidecar) then file (in-VM)."""
+    inline = os.environ.get("CLAWBENCH_EVAL_SCHEMA_JSON", "").strip()
+    if inline:
+        try:
+            return json.loads(inline)
+        except json.JSONDecodeError:
+            pass
+    if EVAL_SCHEMA_PATH.exists():
+        return json.loads(EVAL_SCHEMA_PATH.read_text())
+    return {}
+
+
 def run() -> int:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    eval_schema = {}
-    if EVAL_SCHEMA_PATH.exists():
-        eval_schema = json.loads(EVAL_SCHEMA_PATH.read_text())
+    eval_schema = load_eval_schema()
     url_pattern = eval_schema.get("url_pattern")
     required_method = eval_schema.get("method")
     match_body = eval_schema.get("body")
