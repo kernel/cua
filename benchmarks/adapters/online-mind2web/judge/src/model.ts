@@ -45,23 +45,40 @@ export function anthropicJudgeModel(ref: string): JudgeModel {
   if (!apiKey) {
     throw new Error("ANTHROPIC_API_KEY is required for the WebJudge model");
   }
+  const headers = {
+    "content-type": "application/json",
+    "x-api-key": apiKey,
+    "anthropic-version": ANTHROPIC_VERSION,
+  };
+
+  async function callOnce(
+    systemPrompt: string,
+    content: JudgeContent,
+    withTemperature: boolean,
+  ): Promise<Response> {
+    const body: Record<string, unknown> = {
+      model: name,
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages: [{ role: "user", content: toAnthropicContent(content) }],
+    };
+    // WebJudge wants deterministic scoring, but newer models (e.g. opus-4-8)
+    // reject `temperature` outright; on that 400 we retry without it.
+    if (withTemperature) body.temperature = 0;
+    return fetch(ANTHROPIC_URL, { method: "POST", headers, body: JSON.stringify(body) });
+  }
+
   return {
     async complete(systemPrompt, content) {
-      const res = await fetch(ANTHROPIC_URL, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": ANTHROPIC_VERSION,
-        },
-        body: JSON.stringify({
-          model: name,
-          max_tokens: 1024,
-          temperature: 0,
-          system: systemPrompt,
-          messages: [{ role: "user", content: toAnthropicContent(content) }],
-        }),
-      });
+      let res = await callOnce(systemPrompt, content, true);
+      if (res.status === 400) {
+        const body = await res.text();
+        if (body.includes("temperature")) {
+          res = await callOnce(systemPrompt, content, false);
+        } else {
+          throw new Error(`Anthropic API error 400: ${body}`);
+        }
+      }
       if (!res.ok) {
         const body = await res.text();
         throw new Error(`Anthropic API error ${res.status}: ${body}`);

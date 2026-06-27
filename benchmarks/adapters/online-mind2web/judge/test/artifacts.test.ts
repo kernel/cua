@@ -2,9 +2,9 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadTask, loadTrajectory } from "../src/artifacts.ts";
-import { parseModelRef } from "../src/model.ts";
+import { anthropicJudgeModel, parseModelRef } from "../src/model.ts";
 
 // 1x1 transparent PNG, the same fixture the shared-core sink test uses.
 const PNG_B64 =
@@ -128,5 +128,53 @@ describe("parseModelRef", () => {
       provider: "anthropic",
       name: "claude-sonnet-4-6",
     });
+  });
+});
+
+describe("anthropicJudgeModel", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  function okResponse(text: string): Response {
+    return new Response(JSON.stringify({ content: [{ type: "text", text }] }), { status: 200 });
+  }
+
+  it("retries without temperature when the model rejects it (400)", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "k");
+    const bodies: Array<Record<string, unknown>> = [];
+    const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
+      bodies.push(JSON.parse(init.body as string));
+      if (bodies.length === 1) {
+        return new Response(
+          JSON.stringify({ error: { message: "`temperature` is deprecated for this model." } }),
+          { status: 400 },
+        );
+      }
+      return okResponse("verdict");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const out = await anthropicJudgeModel("anthropic:claude-opus-4-8").complete("sys", [
+      { type: "text", text: "hi" },
+    ]);
+
+    expect(out).toBe("verdict");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(bodies[0].temperature).toBe(0);
+    expect(bodies[1]).not.toHaveProperty("temperature");
+  });
+
+  it("throws on a 400 unrelated to temperature", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "k");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ error: { message: "bad request" } }), { status: 400 })),
+    );
+
+    await expect(
+      anthropicJudgeModel("anthropic:claude-opus-4-8").complete("sys", [{ type: "text", text: "hi" }]),
+    ).rejects.toThrow("Anthropic API error 400");
   });
 });

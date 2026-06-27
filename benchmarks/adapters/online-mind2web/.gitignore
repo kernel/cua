@@ -1,5 +1,7 @@
-# Generated task dirs + caches (never committed)
+# Generated task dirs, smoke runs, caches (never committed)
 .tasks/
+.validate/
+_smoke_logs/
 jobs/
 trials/
 dataset/
@@ -11,6 +13,7 @@ __pycache__/
 .venv/
 .pytest_cache/
 .ruff_cache/
+uv.lock
 
 # Node judge bin build artifacts
 judge/dist/

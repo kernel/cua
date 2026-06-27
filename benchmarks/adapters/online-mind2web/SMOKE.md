@@ -1,67 +1,131 @@
-# online-mind2web — smoke notes
+# online-mind2web — live smoke
 
-The live 20-task Harbor smoke was **not run** in this session (scope: implement
-+ unit-test the adapter only; the parent runs the live smoke after review).
-What was validated, and the learnings that shaped the implementation, are below.
+Live Harbor smoke of the full pipeline (Kernel browser env + cua agent + WebJudge
+verifier) on 20 generated Online-Mind2Web tasks. Date: 2026-06-27. NOT a
+definitive benchmark number — the goal is to exercise the real pipeline, learn
+failure modes, and fix adapter bugs the smoke surfaces.
 
-## Validated without the live harbor run
+## Configuration
 
-- **Judge against the live Anthropic API.** The bundled `judge.js` ran
-  standalone against `anthropic:claude-sonnet-4-6`: it made the WebJudge
-  KEY_POINTS + FINAL model calls, parsed the verdict, and wrote
-  `reward.txt` + `grading_details.json`. The `model.ts` fetch client, the
-  recovered three-stage pipeline, the parsers, and the reward writer all work
-  end-to-end against the real provider.
-- **Kernel VM runtime probe.** A throwaway browser session confirmed the VM
-  ships `node v22.23.1` (with global `fetch`), `python3 3.10`, and `curl`, and
-  that `/logs/agent` + `/logs/verifier` are writable and ESM bundles run. This
-  is the fact the verifier design hinges on (see learnings).
-- **Generation end-to-end.** `python -m online_mind2web.main --limit 3` against
-  the cached dataset produced full task dirs (`instruction.md`, `task.toml`,
-  `environment/kernel.json`, `tests/{test.sh,judge.js,task.json}`,
-  `solution/solve.sh`) with correct `start_url` normalization and slugged ids.
-- **Unit tests / lint / typecheck.** `ruff check` clean; 9 mocked Python adapter
-  tests pass (no network — dataset injected); judge `tsc --noEmit` clean; 13
-  vitest tests pass (parsers, `gradeWithWebJudge` with a scripted judge, and
-  `loadTrajectory`/`loadTask` against a real on-disk `/logs/agent` layout).
+- **Agent:** cua (`--agent-import-path cua_harbor:CuaHarborAgent`), model
+  `anthropic/claude-opus-4-8`.
+- **Judge:** WebJudge with an Anthropic multimodal backbone,
+  `anthropic:claude-opus-4-8` (`JUDGE_MODEL` in `[verifier.env]`,
+  `SCORE_THRESHOLD=3`). Three-stage pipeline (key-point extraction →
+  per-screenshot 1-5 scoring → final verdict), recovered verbatim from upstream.
+- **Tasks:** 20 task dirs generated from the cached 300-task dataset
+  (`/tmp/om2w-real.json`) via `online_mind2web.main --limit 20`. Live consumer
+  sites: airlines (Qatar, United), retail (Amazon, Uniqlo, Speedo), cars
+  (KBB, Carvana, CarMax), media (IMDb, IGN), transit (Amtrak, MTA), etc.
+- **Pools:** `--environment-kwarg pool_size=5` — **pools worked, no 403** on this
+  account. (Fallback to `pool_size=1` was not needed.)
+- **Run:** `-n 4`, 1800s/task agent cap, 900s/task verifier cap.
 
-## Learnings that changed the design vs `map-online-mind2web.md`
+```
+uv run harbor run -y -p adapters/online-mind2web/.tasks -e kernel \
+  --environment-kwarg pool_size=5 \
+  --agent-import-path cua_harbor:CuaHarborAgent \
+  -m anthropic/claude-opus-4-8 --ae ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY -n 4
+```
 
-The design doc predates the finalized shared core (PR #40) and assumed two
-artifacts that do not exist; the implementation reconciles to what the shared
-core actually emits.
+## Result
 
-1. **No `trajectory.bench.json`, no `@onkernel/cua-bench` `grade.js`.** The
-   shared `node/src/sink.ts` writes `answer.txt`, `run.jsonl`, and spilled
-   `shots/shot-<n>.<ext>` (1-indexed) — not a purpose-built grader index, and
-   the entrypoint package is `cua-bench-task`, not `@onkernel/cua-bench`. The
-   verifier therefore reconstructs the WebJudge `Trajectory` directly from
-   `run.jsonl` (pairing each `tool_result`'s spilled shot with the originating
-   `assistant` tool call as the "action") + `answer.txt` (`judge/src/artifacts.ts`).
-2. **The Kernel VM does have `node`.** The benchmarks README says the base VM
-   "ships no Node", which is true for the cua *agent* (its npm package isn't
-   installed in-VM, so the agent entrypoint runs on the host). But a raw `node`
-   binary is present, so the verifier's `test.sh` runs the WebJudge in-VM. The
-   judge is bundled to a single self-contained ESM file (tsdown, no externals,
-   ~16 kB) and copied into each task's `tests/` so it travels with the uploaded
-   tests dir and needs no install at verify time.
-3. **Anthropic judge, not OpenAI.** No `OPENAI_API_KEY` this session, so the
-   WebJudge backbone is `anthropic:claude-sonnet-4-6` via a minimal Anthropic
-   Messages client over global `fetch` (`judge/src/model.ts`) instead of the
-   recovered cua-ai `piJudgeModel`. `JUDGE_MODEL` / `SCORE_THRESHOLD` stay
-   configurable in `[verifier.env]`. The recovered `webjudge.ts` / `prompts.ts`
-   are otherwise placed verbatim (they are line-checked against upstream and
-   carry the parser-coupled literal markers).
-4. **Answer-file path = `/logs/agent/answer.txt`.** Matches the shared-core
-   contract (`cua_harbor.constants.ANSWER_FILE`) and the example task's
-   `test.sh`, resolving the open item in the design doc.
+**16 / 20 pass — mean reward 0.800.** 1 exception (`AgentTimeoutError`). Runtime
+48m53s. Agent spend (opus, from trajectory metrics) ~$11.6 over 20 live
+sessions; the opus WebJudge is billed separately on top — a sonnet judge would
+cut the grading bill materially with little expected accuracy loss. Rewards:
+16×`1.0`, 4×`0.0`.
 
-## What the live smoke should still surface (to capture next round)
+| Outcome | Count |
+|---|---|
+| SUCCESS (reward 1.0) | 16 |
+| NOT SUCCESS (reward 0.0) | 4 |
+| of which agent exceptions | 1 (`AgentTimeoutError`) |
 
-- Pass rate / per-task reward across ~20 tasks with `pool_size=8` (fall back to
-  `pool_size=1` if pools 403 on this account; note it, don't fail the smoke).
-- Failure taxonomy: env-vs-task, live-site drift / anti-bot walls (stealth is on
-  in every `kernel.json`), judge disagreement, adapter bugs.
-- Whether `claude-sonnet-4-6` as the judge backbone tracks the published
-  WebJudge(o4-mini) success rate within a tolerance band (live-site drift makes
-  exact parity impossible; pin judge + viewport + threshold and record the date).
+Every verifier ran clean (no judge errors in any `test-stdout.txt`) — the
+opus-judge `temperature` fix below held across all 20 trials, and the pipeline
+(browser provision -> agent drive -> answer+shots land -> WebJudge score) was
+green end-to-end on every task. The 4 failures are agent/task/judge effects, not
+adapter bugs.
+
+## Validation gate (2 tasks, run first)
+
+Before the 20-task run, 2 tasks (IMDb crazy-credits, Trader Joe's store locator)
+were run end-to-end to confirm the pipeline was green. The first validation pass
+**surfaced a real adapter bug** (see below): both tasks scored 0.0 despite the
+agent clearly completing them. After the fix, the same 2 tasks scored **2/2
+(1.0)**. Then the full 20-task run was launched.
+
+## Adapter bugs surfaced and FIXED by the smoke
+
+1. **WebJudge crashed on the opus judge: `temperature` is deprecated.** The
+   Anthropic judge client (`judge/src/model.ts`) sent `temperature: 0` on every
+   call (WebJudge wants deterministic scoring). `claude-opus-4-8` rejects the
+   parameter outright with HTTP 400 (`"temperature is deprecated for this
+   model"`). The judge's fail-closed `catch` then wrote reward `0` for every
+   task — so the whole run scored 0.0 even though `answer.txt`, `run.jsonl`, and
+   the per-step screenshots all landed correctly and the agent had succeeded.
+   **Fix:** on a 400 whose body mentions `temperature`, retry the request once
+   without the field; keep `temperature: 0` for models that accept it. Covered
+   by a new mocked `anthropicJudgeModel` test (fetch stubbed).
+
+2. **Instruction told a browser-only agent to write a file.** The template ended
+   with "write a short summary … to `/logs/agent/answer.txt`". The cua agent has
+   only computer-use (browser) tools, so it burned several turns trying to
+   "navigate to a file URL" to write the file, then gave up. The answer landed
+   anyway — the Node entrypoint's `extractFinalAnswer` captures the last
+   assistant message into `answer.txt` regardless — so the misdirection only
+   wasted steps. **Fix:** the instruction now tells the agent to state its
+   answer directly in its final message (which is what is recorded) and not to
+   attempt file I/O. Applied to both `instruction.md` and `instruction.nourl.md`.
+
+## Failure taxonomy
+
+All 4 zero-reward trials, classified (per-task reward + judge reasoning from
+`grading_details.json`):
+
+1. **env / budget — agent timeout (1 task).** IGN "editor's choice review with a
+   score of 10 in the boardgame category." The agent ran to the 1800s cap
+   (`AgentTimeoutError`) after 63 screenshots; the verifier still graded the
+   partial trajectory and scored NOT SUCCESS. This is a budget/latency effect on
+   a deep-navigation site, not an adapter fault. A higher `[agent].timeout_sec`
+   (or a faster agent model) would likely recover it.
+2. **agent stall — empty final answer (1 task).** Speedo "women's black
+   one-piece swimsuit, size large, highest rating." 47 screenshots landed but
+   `answer.txt` was 0 bytes — the agent's last turn was a tool call, not a text
+   message, so `extractFinalAnswer` had nothing to capture. The judge fail-closes
+   to 0 on screenshots-with-no-answer. Inherent agent behavior; the instruction
+   already asks for a final summary, and the screenshots/`run.jsonl` were still
+   captured correctly.
+3. **judge strict-grading — filter not visibly applied (1 task).** Micro Center
+   "most helpful reviews of the PS5 Digital Edition." The agent's answer was
+   reasonable (the live product had only a single ratings-only review, so there
+   was nothing to sort), but WebJudge criteria 1-3 require the *sort/filter to be
+   visibly applied*; the agent filtered by 5-star rating instead of a "Most
+   Helpful" sort, so the judge scored NOT SUCCESS. This is the WebJudge's known
+   strict posture interacting with live-site reality, not an agent capability gap.
+4. **genuine task failure — hard multi-constraint (1 task).** Carvana "cheapest
+   used Honda Civic meeting all of: <6 constraints>." Adding the final
+   "Blindspot Sensors" filter yielded 0 matches, so the agent dropped it and
+   picked a car missing that constraint. WebJudge criterion 3 (all requirements
+   must be applied via the filter) correctly scores this 0 — a real failure of
+   the agent on an unsatisfiable-as-posed live query.
+
+Not observed: no anti-bot / CAPTCHA hard-block surfaced in this sample (stealth
+held on every site), and **no adapter bugs and no judge disagreement-by-crash** —
+the one judge "disagreement" (PS5) is the judge working as specified.
+
+## What held up (no change needed)
+
+- **Pipeline wiring is correct.** The shared-core contract (`answer.txt`,
+  `run.jsonl`, `shots/*.png` under `/logs/agent`) and the verifier's reads of
+  exactly those paths agree end-to-end; the judge reconstructs the WebJudge
+  trajectory (pairing each spilled screenshot with the tool call that produced
+  it) and scores it.
+- **Self-contained in-VM judge.** The bundled `judge.js` (~16 kB ESM, no
+  externals) runs under the VM's `node` + global `fetch` with no install at
+  verify time; the reward file is never left empty (fail-closed to 0).
+- **`start_url` + stealth + pinned viewport.** Every `kernel.json` lands the
+  browser on the right page with `stealth: true` and a fixed 1280×1024 viewport
+  so the screenshots the judge sees are reproducible.
+- **Browser pools.** `pool_size=5` provisioned without 403 on this account.

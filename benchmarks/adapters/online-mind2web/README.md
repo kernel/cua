@@ -53,5 +53,8 @@ cd benchmarks && uv sync && (cd node && npm install && npm run build)
 uv run harbor run -p adapters/online-mind2web/.tasks -e kernel \
   --environment-kwarg pool_size=8 \
   --agent-import-path cua_harbor:CuaHarborAgent \
-  -m anthropic/claude-sonnet-4-6 --ae ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY -n 6
+  -m anthropic/claude-opus-4-8 --ae ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY -n 6
 ```
+
+If browser pools 403 on your account (quota/plan), drop `--environment-kwarg
+pool_size=8` to fall back to per-task browser creation.
