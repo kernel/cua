@@ -34,7 +34,10 @@ from pathlib import Path
 from cua_harbor import constants
 from cua_harbor.agent import CuaHarborAgent
 
-_INTERCEPTOR = Path(__file__).parent / "task-template" / "tests" / "interceptor.py"
+_TEMPLATE_TESTS = Path(__file__).parent / "task-template" / "tests"
+_INTERCEPTOR = _TEMPLATE_TESTS / "interceptor.py"
+_PREPARE_TASK = _TEMPLATE_TESTS / "prepare_task.py"
+_CLEANUP_EMAIL = _TEMPLATE_TESTS / "cleanup_email.py"
 # VM target dir the shared-mode verifier reads (/data/interception.json).
 _VM_DATA_DIR = "/data"
 # How long to wait for the sidecar to flush + exit after the stop sentinel.
@@ -42,7 +45,23 @@ _FINALIZE_GRACE_SEC = 8.0
 
 
 class ClawbenchCuaAgent(CuaHarborAgent):
-    """cua agent that runs the ClawBench interceptor sidecar around the drive."""
+    """cua agent that runs the ClawBench interceptor sidecar around the drive.
+
+    On top of the shared cua drive this adds the two pieces ClawBench's reward
+    needs that ``CuaHarborAgent`` does not own:
+
+    * a per-trial identity (disposable AgentMail inbox + persona) provisioned by
+      ``prepare_task.py`` before the drive and torn down after, and
+    * the Stage-1 CDP interceptor sidecar that blocks + records the final submit.
+
+    Upstream hands the agent the persona/credentials as ``./my-info/`` files. On
+    Kernel the cua harness exposes only browser/computer tools -- no shell or
+    file-editor -- so the agent has no way to read those files. The bundle's text
+    (email credentials + persona JSON) is therefore inlined into the instruction
+    (``_inline_my_info``) so the agent reads its identity from the prompt and
+    types it into the site. The resume PDF stays on disk but is unreachable by the
+    agent (no file-upload surface), which bounds the resume-upload cohort.
+    """
 
     @staticmethod
     def name() -> str:
@@ -56,12 +75,94 @@ class ClawbenchCuaAgent(CuaHarborAgent):
         if stop_file.exists():
             stop_file.unlink()
 
+        myinfo_dir = self.logs_dir.parent / "clawbench-myinfo"
+        state_file = data_dir / "task-state.json"
+        self._prepare_my_info(myinfo_dir, state_file)
+        instruction = self._inline_my_info(instruction, myinfo_dir)
+
         proc = self._start_interceptor(environment, data_dir)
         try:
             await super().run(instruction, environment, context)
         finally:
             self._finalize_interceptor(proc, stop_file)
             await self._upload_capture(environment, data_dir)
+            self._cleanup_my_info(state_file)
+
+    def _inline_my_info(self, instruction: str, myinfo_dir: Path) -> str:
+        """Splice the persona + email credentials into the instruction text.
+
+        The cua harness on Kernel exposes only browser/computer tools -- there is
+        no shell or file-editor tool, so the agent cannot read the ``./my-info/``
+        files the upstream instruction points at (it has no filesystem surface,
+        only the live page). So the bundle's text content is inlined into the
+        prompt instead; the agent reads its identity here and types it into the
+        site. The resume *PDF* cannot be inlined (no file-upload surface either),
+        which bounds the resume-upload cohort -- see SMOKE.md.
+        """
+        info_dir = myinfo_dir / "my-info"
+        persona_file = info_dir / "alex_green_personal_info.json"
+        creds_file = info_dir / "email_credentials.json"
+        if not persona_file.is_file() or not creds_file.is_file():
+            return instruction
+        persona = persona_file.read_text().strip()
+        creds = creds_file.read_text().strip()
+        block = (
+            "\n\n---\n"
+            "IDENTITY FOR THIS TASK (you have no separate file tool -- this is the "
+            "content of ./my-info/, provided inline). Use these values when a form "
+            "asks for them; the email below is a real inbox you control.\n\n"
+            f"email_credentials.json:\n{creds}\n\n"
+            f"alex_green_personal_info.json:\n{persona}\n"
+            "---\n"
+        )
+        return instruction + block
+
+    def _prepare_my_info(self, myinfo_dir: Path, state_file: Path) -> None:
+        """Provision the disposable inbox + write the ./my-info bundle (host-side).
+
+        Runs ``prepare_task.py`` with this trial's interpreter (the adapter venv,
+        which has ``fpdf2`` for the resume + ``AGENTMAIL_API_KEY`` from env). On
+        failure the bundle is simply absent: ``_inline_my_info`` then leaves the
+        instruction unchanged and the task scores 0 -- it never aborts the trial.
+        """
+        myinfo_dir.mkdir(parents=True, exist_ok=True)
+        state_file.parent.mkdir(parents=True, exist_ok=True)
+        log = (self.logs_dir / "prepare-task.log").open("wb")
+        try:
+            rc = subprocess.call(
+                [
+                    sys.executable,
+                    str(_PREPARE_TASK),
+                    "--output-dir",
+                    str(myinfo_dir / "my-info"),
+                    "--state-file",
+                    str(state_file),
+                ],
+                env={**os.environ},
+                stdout=log,
+                stderr=subprocess.STDOUT,
+            )
+        finally:
+            log.close()
+        if rc != 0:
+            self.logger.warning(
+                f"clawbench: prepare_task exited {rc}; ./my-info may be incomplete "
+                f"(see {self.logs_dir / 'prepare-task.log'})"
+            )
+
+    def _cleanup_my_info(self, state_file: Path) -> None:
+        """Delete the disposable inbox provisioned for this trial (best-effort)."""
+        if not state_file.is_file():
+            return
+        try:
+            subprocess.call(
+                [sys.executable, str(_CLEANUP_EMAIL), str(state_file)],
+                env={**os.environ},
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except Exception as exc:
+            self.logger.warning(f"clawbench: inbox cleanup failed: {exc}")
 
     def _start_interceptor(
         self, environment, data_dir: Path

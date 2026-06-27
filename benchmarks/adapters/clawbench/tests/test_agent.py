@@ -1,8 +1,9 @@
 """Mocked lifecycle tests for ClawbenchCuaAgent.
 
-No live browser: the cua drive, the interceptor subprocess, and the Kernel
-environment are all stubbed. These assert the sidecar order (start -> drive ->
-finalize -> upload) and that a sidecar that can't start never breaks the run.
+No live browser: the cua drive, the interceptor subprocess, the my-info
+provisioning, and the Kernel environment are all stubbed. These assert the
+lifecycle order (prepare-my-info -> start interceptor -> drive -> finalize ->
+upload -> cleanup-inbox) and that a sidecar that can't start never breaks the run.
 """
 
 from __future__ import annotations
@@ -84,12 +85,38 @@ def test_eval_schema_falls_back_to_extra_env(tmp_path):
     assert agent._eval_schema_json(env) == '{"url_pattern":"z","method":"GET"}'
 
 
+def _stub_my_info(monkeypatch, order: list[str] | None = None, *, persona=None):
+    """Stub the host-side inbox provisioning + teardown (no live AgentMail)."""
+
+    def prep(self, myinfo_dir, state_file):
+        if order is not None:
+            order.append("prepare")
+        info = myinfo_dir / "my-info"
+        info.mkdir(parents=True, exist_ok=True)
+        (info / "email_credentials.json").write_text(
+            '{"email": "cb1@agentmail.to", "provider": "agentmail"}'
+        )
+        (info / "alex_green_personal_info.json").write_text(
+            json.dumps(persona or {"contact": {"email": "cb1@agentmail.to"}})
+        )
+        state_file.parent.mkdir(parents=True, exist_ok=True)
+        state_file.write_text('{"email": {"address": "cb1@agentmail.to"}}')
+
+    def clean(self, state_file):
+        if order is not None:
+            order.append("cleanup")
+
+    monkeypatch.setattr(ClawbenchCuaAgent, "_prepare_my_info", prep)
+    monkeypatch.setattr(ClawbenchCuaAgent, "_cleanup_my_info", clean)
+
+
 async def test_run_starts_interceptor_then_drives_then_uploads(tmp_path, monkeypatch):
     agent = _make_agent(tmp_path)
     env = FakeEnv(
         environment_dir=_task_env_dir(tmp_path, {"url_pattern": "x", "method": "POST"})
     )
     order: list[str] = []
+    _stub_my_info(monkeypatch, order)
 
     class FakeProc:
         returncode = 0
@@ -111,22 +138,24 @@ async def test_run_starts_interceptor_then_drives_then_uploads(tmp_path, monkeyp
 
     async def fake_super_run(self, instruction, environment, context):
         order.append("drive")
+        started["instruction"] = instruction
         # Simulate the interceptor having written an interception.json on the host.
         data = self.logs_dir.parent / "clawbench-data"
         (data / "interception.json").write_text('{"intercepted": true}')
 
     monkeypatch.setattr("clawbench_adapter.agent.subprocess.Popen", fake_popen)
     monkeypatch.setattr("clawbench_adapter.agent.time.sleep", lambda s: None)
-    monkeypatch.setattr(
-        "clawbench_adapter.agent.CuaHarborAgent.run", fake_super_run
-    )
+    monkeypatch.setattr("clawbench_adapter.agent.CuaHarborAgent.run", fake_super_run)
 
     await agent.run("do it", env, context=object())
 
-    assert order == ["start", "drive", "finalize"]
+    assert order == ["prepare", "start", "drive", "finalize", "cleanup"]
     # The interceptor received the task's eval_schema (read from tests/).
     assert json.loads(started["eval"]) == {"url_pattern": "x", "method": "POST"}
     assert started["data"] == str(agent.logs_dir.parent / "clawbench-data")
+    # The email + persona were inlined into the instruction the agent saw.
+    assert "cb1@agentmail.to" in started["instruction"]
+    assert "IDENTITY FOR THIS TASK" in started["instruction"]
     # interception.json was uploaded into the VM /data for the verifier.
     assert ("interception.json", "/data/interception.json") in env.uploaded
 
@@ -135,6 +164,7 @@ async def test_run_survives_no_session(tmp_path, monkeypatch):
     agent = _make_agent(tmp_path)
     env = FakeEnv(session=False, environment_dir=_task_env_dir(tmp_path, {}))
     drove = {}
+    _stub_my_info(monkeypatch)
 
     async def fake_super_run(self, instruction, environment, context):
         drove["ok"] = True
@@ -144,9 +174,7 @@ async def test_run_survives_no_session(tmp_path, monkeypatch):
         raise AssertionError("interceptor should not start without a session")
 
     monkeypatch.setattr("clawbench_adapter.agent.subprocess.Popen", boom)
-    monkeypatch.setattr(
-        "clawbench_adapter.agent.CuaHarborAgent.run", fake_super_run
-    )
+    monkeypatch.setattr("clawbench_adapter.agent.CuaHarborAgent.run", fake_super_run)
 
     await agent.run("do it", env, context=object())
     assert drove["ok"] is True
@@ -158,6 +186,7 @@ async def test_run_survives_interceptor_early_exit(tmp_path, monkeypatch):
         environment_dir=_task_env_dir(tmp_path, {"url_pattern": "x", "method": "POST"})
     )
     drove = {}
+    _stub_my_info(monkeypatch)
 
     class DeadProc:
         returncode = 1
@@ -173,9 +202,64 @@ async def test_run_survives_interceptor_early_exit(tmp_path, monkeypatch):
     async def fake_super_run(self, instruction, environment, context):
         drove["ok"] = True
 
-    monkeypatch.setattr(
-        "clawbench_adapter.agent.CuaHarborAgent.run", fake_super_run
-    )
+    monkeypatch.setattr("clawbench_adapter.agent.CuaHarborAgent.run", fake_super_run)
 
     await agent.run("do it", env, context=object())
     assert drove["ok"] is True  # drive happened despite a dead sidecar
+
+
+def test_inline_my_info_splices_email_and_persona(tmp_path):
+    agent = _make_agent(tmp_path)
+    info = tmp_path / "myinfo" / "my-info"
+    info.mkdir(parents=True)
+    (info / "email_credentials.json").write_text('{"email": "cb9@agentmail.to"}')
+    (info / "alex_green_personal_info.json").write_text(
+        '{"contact": {"email": "cb9@agentmail.to"}}'
+    )
+    out = agent._inline_my_info("base instruction", tmp_path / "myinfo")
+    assert out.startswith("base instruction")
+    assert "cb9@agentmail.to" in out
+    assert "IDENTITY FOR THIS TASK" in out
+
+
+def test_inline_my_info_noop_when_bundle_missing(tmp_path):
+    agent = _make_agent(tmp_path)
+    out = agent._inline_my_info("base instruction", tmp_path / "absent")
+    assert out == "base instruction"  # no bundle -> instruction unchanged
+
+
+def test_prepare_my_info_invokes_prepare_task(tmp_path, monkeypatch):
+    agent = _make_agent(tmp_path)
+    myinfo = tmp_path / "myinfo"
+    state = tmp_path / "data" / "task-state.json"
+    calls = {}
+
+    def fake_call(cmd, env=None, **kw):
+        calls["cmd"] = cmd
+        return 0
+
+    monkeypatch.setattr("clawbench_adapter.agent.subprocess.call", fake_call)
+    agent._prepare_my_info(myinfo, state)
+
+    # prepare_task.py invoked with the per-trial output + state paths.
+    assert calls["cmd"][1].endswith("prepare_task.py")
+    assert str(myinfo / "my-info") in calls["cmd"]
+    assert str(state) in calls["cmd"]
+
+
+def test_cleanup_my_info_noops_without_state(tmp_path, monkeypatch):
+    agent = _make_agent(tmp_path)
+    called = {"n": 0}
+
+    def fake_call(*a, **k):
+        called["n"] += 1
+        return 0
+
+    monkeypatch.setattr("clawbench_adapter.agent.subprocess.call", fake_call)
+    agent._cleanup_my_info(tmp_path / "missing-state.json")
+    assert called["n"] == 0  # nothing to delete -> no subprocess
+
+    state = tmp_path / "task-state.json"
+    state.write_text('{"email": {"address": "a@agentmail.to"}}')
+    agent._cleanup_my_info(state)
+    assert called["n"] == 1  # state present -> cleanup_email.py invoked

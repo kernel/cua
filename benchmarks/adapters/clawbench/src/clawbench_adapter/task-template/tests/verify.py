@@ -34,11 +34,22 @@ def write_reward(
 ) -> None:
     out = output_dir
     out.mkdir(parents=True, exist_ok=True)
-    result = {"reward": reward, **payload}
+    # reward.json is Harbor's reward map: a flat {key: number} (CONTRACT.md). The
+    # diagnostic fields (reason/task_id/judge raw, plus null judge_match) are NOT
+    # numbers, so they cannot live here -- Harbor coerces every value to float and
+    # the trial errors on a string/None. Emit only numeric reward keys here; the
+    # full record goes to clawbench-result.json and reward.txt.
+    rewards: dict[str, float] = {"reward": float(reward)}
+    intercepted = payload.get("intercepted")
+    if isinstance(intercepted, bool):
+        rewards["intercepted"] = 1.0 if intercepted else 0.0
+    match = payload.get("judge_match")
+    if isinstance(match, bool):
+        rewards["judge_match"] = 1.0 if match else 0.0
     (out / "reward.txt").write_text(str(reward))
-    (out / "reward.json").write_text(json.dumps(result, indent=2, ensure_ascii=False))
+    (out / "reward.json").write_text(json.dumps(rewards, indent=2))
     (out / "clawbench-result.json").write_text(
-        json.dumps(result, indent=2, ensure_ascii=False)
+        json.dumps({"reward": reward, **payload}, indent=2, ensure_ascii=False)
     )
 
 
