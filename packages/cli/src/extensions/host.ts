@@ -118,6 +118,7 @@ export class HarnessExtensionHost {
 	}
 
 	async load(): Promise<void> {
+		if (this.disposed || this.runner) return;
 		await this.buildRunner();
 		await this.reapplyTools();
 		this.installBridge();
@@ -132,14 +133,16 @@ export class HarnessExtensionHost {
 	 * the loader imports each extension fresh from disk.
 	 */
 	async reload(): Promise<void> {
-		if (this.disposed) return;
-		const flags = this.runner?.getFlagValues() ?? new Map<string, boolean | string>();
+		if (this.disposed || this.reloading) return;
 		// `reloading` defers any `ctx.shutdown()` raised by an extension's
 		// session_shutdown handler so an unawaited dispose can't tear down the
-		// runner/bridge mid-rebuild. Each await boundary then honors a pending
-		// request before continuing.
+		// runner/bridge mid-rebuild (including while waiting for the harness to go
+		// idle). Each await boundary then honors a pending request before continuing.
 		this.reloading = true;
 		try {
+			await this.harness.waitForIdle();
+			if (await this.disposeIfShutdownRequested()) return;
+			const flags = this.runner?.getFlagValues() ?? new Map<string, boolean | string>();
 			await this.runner?.emit({ type: "session_shutdown", reason: "reload" });
 			if (await this.disposeIfShutdownRequested()) return;
 			this.teardownBridge?.();
