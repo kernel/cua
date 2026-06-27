@@ -1,0 +1,25 @@
+[project]
+name = "clawbench-adapter"
+version = "0.1.0"
+description = "Generate Harbor task dirs from ClawBench V2/V1 cases for the Kernel env + cua agent"
+requires-python = ">=3.12"
+dependencies = ["websocket-client>=1.7"]
+
+[project.scripts]
+clawbench-adapter = "clawbench_adapter.main:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/clawbench_adapter"]
+
+[tool.ruff]
+target-version = "py312"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

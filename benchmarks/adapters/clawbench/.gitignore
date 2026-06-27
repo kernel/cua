@@ -1,0 +1,17 @@
+# Generated Harbor task dirs (regenerated from the dataset; never committed)
+.tasks/
+tasks/
+dataset/
+
+# Harbor run outputs
+jobs/
+trials/
+
+# Python build/test caches
+dist/
+__pycache__/
+*.egg-info/
+.venv/
+.cache/
+.pytest_cache/
+.ruff_cache/
