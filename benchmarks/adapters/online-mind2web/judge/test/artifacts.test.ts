@@ -4,7 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadTask, loadTrajectory } from "../src/artifacts.ts";
-import { anthropicJudgeModel, parseModelRef } from "../src/model.ts";
+import {
+  anthropicJudgeModel,
+  judgeModel,
+  openaiJudgeModel,
+  parseModelRef,
+} from "../src/model.ts";
+import type { JudgeContent } from "../src/types.ts";
 
 // 1x1 transparent PNG, the same fixture the shared-core sink test uses.
 const PNG_B64 =
@@ -123,10 +129,10 @@ describe("parseModelRef", () => {
     });
   });
 
-  it("defaults provider to anthropic when no colon", () => {
-    expect(parseModelRef("claude-sonnet-4-6")).toEqual({
-      provider: "anthropic",
-      name: "claude-sonnet-4-6",
+  it("defaults provider to openai when no colon", () => {
+    expect(parseModelRef("o4-mini")).toEqual({
+      provider: "openai",
+      name: "o4-mini",
     });
   });
 });
@@ -176,5 +182,129 @@ describe("anthropicJudgeModel", () => {
     await expect(
       anthropicJudgeModel("anthropic:claude-opus-4-8").complete("sys", [{ type: "text", text: "hi" }]),
     ).rejects.toThrow("Anthropic API error 400");
+  });
+});
+
+describe("openaiJudgeModel", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  function okResponse(text: string): Response {
+    return new Response(JSON.stringify({ choices: [{ message: { content: text } }] }), {
+      status: 200,
+    });
+  }
+
+  /** Stub fetch with an OK response and capture each request body. */
+  function captureBodies(text = "out"): Array<Record<string, unknown>> {
+    const bodies: Array<Record<string, unknown>> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: RequestInit) => {
+        bodies.push(JSON.parse(init.body as string));
+        return okResponse(text);
+      }),
+    );
+    return bodies;
+  }
+
+  const vision: JudgeContent = [
+    { type: "text", text: "score this" },
+    { type: "image", data: "AAAA", mimeType: "image/png" },
+  ];
+
+  it("omits temperature and uses max_completion_tokens for o-series", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "k");
+    const bodies = captureBodies();
+
+    const out = await openaiJudgeModel("openai:o4-mini").complete("sys", [
+      { type: "text", text: "hi" },
+    ]);
+
+    expect(out).toBe("out");
+    expect(bodies[0]).not.toHaveProperty("temperature");
+    expect(bodies[0].max_completion_tokens).toBe(1024);
+    expect(bodies[0]).not.toHaveProperty("max_tokens");
+    expect(bodies[0].model).toBe("o4-mini");
+  });
+
+  it("sends temperature 0 and max_tokens for non-o-series chat models", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "k");
+    const bodies = captureBodies();
+
+    await openaiJudgeModel("openai:gpt-4o").complete("sys", [{ type: "text", text: "hi" }]);
+
+    expect(bodies[0].temperature).toBe(0);
+    expect(bodies[0].max_tokens).toBe(1024);
+    expect(bodies[0]).not.toHaveProperty("max_completion_tokens");
+  });
+
+  it("encodes images as data-url image_url with detail:high", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "k");
+    const bodies = captureBodies();
+
+    await openaiJudgeModel("openai:o4-mini").complete("sys", vision);
+
+    const messages = bodies[0].messages as Array<{ role: string; content: unknown }>;
+    expect(messages[0]).toEqual({ role: "system", content: "sys" });
+    expect(messages[1].content).toEqual([
+      { type: "text", text: "score this" },
+      {
+        type: "image_url",
+        image_url: { url: "data:image/png;base64,AAAA", detail: "high" },
+      },
+    ]);
+  });
+
+  it("reads the assistant content from the first choice", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "k");
+    captureBodies("Status: success");
+
+    const out = await openaiJudgeModel("openai:o4-mini").complete("sys", vision);
+    expect(out).toBe("Status: success");
+  });
+
+  it("throws when the API key is missing", () => {
+    vi.stubEnv("OPENAI_API_KEY", "");
+    expect(() => openaiJudgeModel("openai:o4-mini")).toThrow("OPENAI_API_KEY is required");
+  });
+
+  it("throws on a non-2xx response", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "k");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ error: { message: "rate limit" } }), { status: 429 })),
+    );
+
+    await expect(
+      openaiJudgeModel("openai:o4-mini").complete("sys", [{ type: "text", text: "hi" }]),
+    ).rejects.toThrow("OpenAI API error 429");
+  });
+});
+
+describe("judgeModel routing", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("routes openai: refs to the OpenAI client", () => {
+    vi.stubEnv("OPENAI_API_KEY", "k");
+    expect(() => judgeModel("openai:o4-mini")).not.toThrow();
+  });
+
+  it("routes a bare ref to OpenAI (default provider)", () => {
+    vi.stubEnv("OPENAI_API_KEY", "k");
+    expect(() => judgeModel("o4-mini")).not.toThrow();
+  });
+
+  it("routes anthropic: refs to the Anthropic client", () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "k");
+    expect(() => judgeModel("anthropic:claude-opus-4-8")).not.toThrow();
+  });
+
+  it("throws on an unsupported provider", () => {
+    expect(() => judgeModel("gemini:flash")).toThrow('unsupported judge provider "gemini"');
   });
 });

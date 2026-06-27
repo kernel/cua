@@ -1,7 +1,7 @@
 {
   "name": "online-mind2web-webjudge",
   "version": "0.1.0",
-  "description": "Self-contained WebJudge verifier bin for the Online-Mind2Web Harbor adapter; runs in-VM via node, grades the agent trajectory against an Anthropic judge",
+  "description": "Self-contained WebJudge verifier bin for the Online-Mind2Web Harbor adapter; runs in-VM via node, grades the agent trajectory against the configured judge backbone (default OpenAI o4-mini; Anthropic configurable)",
   "license": "MIT",
   "private": true,
   "type": "module",

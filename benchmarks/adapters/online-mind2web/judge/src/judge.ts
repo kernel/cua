@@ -4,8 +4,9 @@
  * Runs inside the Kernel browser VM (which ships `node` + global `fetch`) as a
  * self-contained bundle — no `npm install` at verify time. Reads the agent's
  * artifacts under `/logs/agent` (answer.txt + run.jsonl + shots/), reconstructs
- * the WebJudge trajectory, grades it with an Anthropic-backed judge, and writes
- * a single reward float to `/logs/verifier/reward.txt`.
+ * the WebJudge trajectory, grades it with the configured judge backbone
+ * (default OpenAI o4-mini, the published WebJudge model), and writes a single
+ * reward float to `/logs/verifier/reward.txt`.
  *
  * A missing/empty trajectory or any failure writes reward `0` rather than
  * leaving the reward file empty (an empty reward is a Harbor verifier error).
@@ -13,7 +14,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { loadTask, loadTrajectory } from "./artifacts.ts";
-import { anthropicJudgeModel } from "./model.ts";
+import { judgeModel } from "./model.ts";
 import { gradeWithWebJudge } from "./webjudge.ts";
 
 interface Args {
@@ -46,7 +47,7 @@ function parseArgs(argv: string[]): Args {
     run: require("run"),
     answer: require("answer"),
     shots: flags.get("shots"),
-    judgeModel: flags.get("judge-model") ?? "anthropic:claude-opus-4-8",
+    judgeModel: flags.get("judge-model") ?? "openai:o4-mini",
     scoreThreshold: Number(flags.get("score-threshold") ?? "3"),
     rewardOut: require("reward-out"),
     detailsOut: flags.get("details-out"),
@@ -67,7 +68,7 @@ async function main(): Promise<void> {
       answerPath: args.answer,
       shotsBaseDir: args.shots,
     });
-    const judge = anthropicJudgeModel(args.judgeModel);
+    const judge = judgeModel(args.judgeModel);
     const result = await gradeWithWebJudge({
       task,
       trajectory,

@@ -19,9 +19,12 @@ timeout_sec = 900.0
 
 [verifier.env]
 # WebJudge backbone. The judge bin parses the provider from JUDGE_MODEL and
-# reads the matching provider key; anthropic is the wired provider.
+# reads the matching provider key. Default openai:o4-mini is the published
+# WebJudge backbone (leaderboard parity); set JUDGE_MODEL=anthropic:<model>
+# to use the Anthropic path instead (non-canonical, cheaper alternative).
+OPENAI_API_KEY = "${OPENAI_API_KEY}"
 ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"
-JUDGE_MODEL = "anthropic:claude-opus-4-8"
+JUDGE_MODEL = "openai:o4-mini"
 SCORE_THRESHOLD = "3"
 
 [environment]
