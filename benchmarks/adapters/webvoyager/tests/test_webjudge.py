@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
+import urllib.error
 from pathlib import Path
 
 import pytest
@@ -116,3 +118,56 @@ def test_payload_attaches_images_and_system_prompt(monkeypatch, tmp_path: Path):
     assert "my answer" in blocks[0]["text"]
     assert captured["system"].startswith("As an evaluator")
     assert captured["temperature"] == 0
+
+
+def _http_error(code: int, body: str) -> urllib.error.HTTPError:
+    return urllib.error.HTTPError(
+        url=MODULE_URL, code=code, msg="err", hdrs=None, fp=io.BytesIO(body.encode())
+    )
+
+
+MODULE_URL = "https://api.anthropic.com/v1/messages"
+
+
+def _import_webjudge():
+    spec = importlib.util.spec_from_file_location(
+        "wv_webjudge_retry", TEMPLATE_TESTS / "webjudge.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_call_anthropic_drops_temperature_on_400(monkeypatch):
+    """A 400 citing temperature retries once without it (newer models reject it)."""
+    module = _import_webjudge()
+    calls: list[dict] = []
+
+    def fake_post(payload: dict, api_key: str) -> str:
+        calls.append(payload)
+        if "temperature" in payload:
+            raise _http_error(400, '{"error":{"message":"temperature is deprecated"}}')
+        return "SUCCESS"
+
+    monkeypatch.setattr(module, "_post", fake_post)
+    out = module._call_anthropic({"model": "m", "temperature": 0}, "k")
+    assert out == "SUCCESS"
+    assert len(calls) == 2
+    assert "temperature" not in calls[1]
+
+
+def test_main_fails_closed_on_http_error(monkeypatch, tmp_path: Path):
+    """A judge HTTP error writes reward 0 + an error note, never crashes the trial."""
+    agent_dir, tests_dir = _setup_dirs(tmp_path, answer="ans", shot_indices=[1])
+    module = _load_webjudge(monkeypatch, agent_dir, tests_dir, {})
+
+    def boom(payload: dict, api_key: str) -> str:
+        raise _http_error(529, '{"error":{"message":"overloaded"}}')
+
+    monkeypatch.setattr(module, "_call_anthropic", boom)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
+    module.main()
+    assert (tests_dir / "verifier" / "reward.txt").read_text() == "0"
+    details = json.loads((tests_dir / "verifier" / "grading_details.json").read_text())
+    assert details["reward"] == 0
+    assert "529" in details["error"]
