@@ -67,7 +67,7 @@ def test_run_emits_expected_files(adapter: WebVoyagerAdapter) -> None:
         assert (task_dir / "instruction.md").is_file()
         assert (task_dir / "environment" / "kernel.json").is_file()
         assert (task_dir / "tests" / "test.sh").is_file()
-        assert (task_dir / "tests" / "webjudge.py").is_file()
+        assert (task_dir / "tests" / "judge.js").is_file()
         assert (task_dir / "tests" / "ground_truth.json").is_file()
         assert (task_dir / "solution" / "solve.sh").is_file()
         assert (task_dir / "task.toml").is_file()

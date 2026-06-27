@@ -15,7 +15,20 @@ Upstream files inspected:
   `Now given a task: … Please interact with …` task framing that `auto_eval.py` parses back out.
 
 Our files: `src/webvoyager/adapter.py`, `task-template/{instruction.md,task.toml,environment/kernel.json,
-solution/solve.sh,tests/test.sh,tests/webjudge.py}`.
+solution/solve.sh,tests/test.sh}`, and the judge bin under `judge/src/` (built to `tests/judge.js`).
+
+> **Transport note.** The judge was reimplemented as a self-contained `node` bin
+> (`judge/src/`, bundled to `judge.js`) that calls the model through
+> [`@earendil-works/pi-ai`](https://www.npmjs.com/package/@earendil-works/pi-ai)
+> instead of a hand-rolled `urllib`/Anthropic POST. This is a **transport-only**
+> change: the SYSTEM_PROMPT, the last-k (MAX_IMAGES=15) screenshot selection, the
+> `SUCCESS`/`NOT SUCCESS` verdict parse, and the `claude-sonnet-4-5` default are
+> carried over byte-identically. The rows below cite the original `webjudge.py`
+> lines for the logic; that same logic now lives in `judge/src/{prompts,artifacts,
+> webjudge,judge}.ts`. pi-ai handles provider routing (a `provider:name`
+> `JUDGE_MODEL` ref, bare name = `anthropic`), env-var keys, o-series quirks,
+> vision, and retries, so the abandon-on-error / temperature-drop handling is
+> pi-ai's rather than the old manual retry.
 
 ---
 
@@ -33,8 +46,8 @@ solution/solve.sh,tests/test.sh,tests/webjudge.py}`.
   is exactly the symptom a too-small k produces. **Applied:** default raised to 15 in `task.toml`
   and `webjudge.py` (env override kept). See "Applied vs skipped" below.
 - Everything else that diverges is a **deliberate Kernel adaptation** (Anthropic judge instead of
-  OpenAI, whole-answer-file instead of the brittle `ANSWER;` regex, fail-closed `None→0`, stdlib
-  HTTP instead of the SDK) and should **not** be reverted.
+  OpenAI, whole-answer-file instead of the brittle `ANSWER;` regex, fail-closed `None→0`, a bundled
+  pi-ai `node` bin instead of the OpenAI SDK) and should **not** be reverted.
 
 ---
 
@@ -94,10 +107,11 @@ solution/solve.sh,tests/test.sh,tests/webjudge.py}`.
 - **Upstream:** OpenAI `chat.completions` with `model=gpt-4-vision-preview` (default) /
   `gpt-4o`, `image_url` data-URI payload, `max_tokens=1000, seed=42, temperature=0`
   (`auto_eval.py` line 99).
-- **Ours:** Anthropic Messages API (`webjudge.py`): `system`+`messages`, `image`/`base64` blocks,
-  `max_tokens=1000, temperature=0`, default model `claude-sonnet-4-5`, posted with stdlib
-  `urllib.request` (the Kernel verifier VM has no pip). `[verifier.env]` carries `ANTHROPIC_API_KEY`
-  + `JUDGE_MODEL` instead of `OPENAI_API_KEY`.
+- **Ours:** the model is called through pi-ai's `completeSimple` (`judge/src/model.ts`):
+  `systemPrompt` + one user message of text/image blocks, `maxTokens=1000, temperature=0`, default
+  model `claude-sonnet-4-5`. pi-ai is bundled into `judge.js`, so the verifier needs no install on
+  the Kernel VM. `[verifier.env]` carries `ANTHROPIC_API_KEY` + `JUDGE_MODEL` instead of
+  `OPENAI_API_KEY`; `JUDGE_MODEL` is a pi-ai `provider:name` ref (bare name = `anthropic`).
 - **Assessment:** deliberate Kernel-wide standardization on the Anthropic judge for the live-web
   adapters. The *prompt and decision logic are unchanged*, so the grading contract is preserved.
   **Do not revert.** Documented in SMOKE.md "Deviations" and `adapter_metadata.json`. (Caveat below.)
@@ -139,11 +153,12 @@ solution/solve.sh,tests/test.sh,tests/webjudge.py}`.
 - **Upstream:** `auto_eval_res = 0 if 'NOT SUCCESS' in res else 1; if 'SUCCESS' not in res:
   auto_eval_res = None` (`auto_eval.py` lines 128–130). `None` (judge emitted neither marker) is
   returned and **excluded** from aggregation.
-- **Ours:** `reward = 0 if "NOT SUCCESS" in verdict else (1 if "SUCCESS" in verdict else 0)`
-  (`webjudge.py` line 161) — ambiguous **fails closed to 0**, with the raw verdict saved to
-  `grading_details.json` for audit. Plus a Kernel-specific retry: a 400 citing `temperature` retries
-  once without it (newer Anthropic models reject `temperature`), and any HTTP/OSError also fails
-  closed to 0 with an `error` note (`webjudge.py` `_call_anthropic` + `main` try/except).
+- **Ours:** `parseReward`: `NOT SUCCESS` -> 0 else `SUCCESS` -> 1 else 0 (`judge/src/prompts.ts`) —
+  ambiguous **fails closed to 0**, with the raw verdict saved to `grading_details.json` for audit.
+  Any error from the judge call (model resolution, a 4xx/5xx, a transient network failure) also
+  fails closed to 0 with an `error` note (`judge/src/judge.ts` `run` try/catch). The old manual
+  `temperature`-drop retry is gone: pi-ai owns the o-series `temperature`/`max_completion_tokens`
+  quirks and client-side retries, so the judge no longer hand-rolls them.
 - **Assessment:** Harbor's reward channel is a single float, so an abstain must become a number;
   fail-closed + audit trail is the right single-reward encoding and the verdict-marker logic
   otherwise matches upstream exactly (`NOT SUCCESS` wins over `SUCCESS`, same precedence). **Keep.**
@@ -204,7 +219,8 @@ solution/solve.sh,tests/test.sh,tests/webjudge.py}`.
   `evaluation/run_eval.sh` / `README.md` auto-eval invocation (`--max_attached_imgs 15`). Edited two
   load-bearing places plus two docs that quoted the old default:
   - `src/webvoyager/task-template/task.toml`: `MAX_IMAGES = "${WEBVOYAGER_MAX_IMAGES:-15}"`
-  - `src/webvoyager/task-template/tests/webjudge.py`: `k = int(os.getenv("MAX_IMAGES", "15"))`
+  - the judge default (now `judge/src/judge.ts` `--max-images` default `15`, plumbed via `test.sh`;
+    originally `webjudge.py`'s `k = int(os.getenv("MAX_IMAGES", "15"))`).
   - `README.md` `[verifier.env]` table + `run_webvoyager.yaml` comment: default now `15`, and the
     stale "set `1` to match the paper" line corrected (canonical is 15, not 1).
   The `WEBVOYAGER_MAX_IMAGES` env override is preserved. This is the only change that affects parity
@@ -225,8 +241,8 @@ solution/solve.sh,tests/test.sh,tests/webjudge.py}`.
 - Anthropic Messages judge instead of OpenAI GPT-4V (§4) — prompt + decision logic unchanged.
 - Whole `answer.txt` as `Result Response` instead of the brittle `ANSWER[; ]+[...]` regex (§6).
 - `ground_truth["task"]` instead of regexing `ques` out of agent logs (§7).
-- `None`→0 fail-closed + `temperature` auto-drop + fail-closed-on-HTTP-error (§8).
-- stdlib `urllib` POST instead of the `anthropic` SDK (no pip on the Kernel verifier VM).
+- `None`→0 fail-closed + fail-closed-on-judge-error; pi-ai owns the o-series `temperature` quirks (§8).
+- bundled pi-ai `node` bin instead of the OpenAI SDK (self-contained; no install on the Kernel verifier VM).
 - id slugification for `ORG_NAME_PATTERN` (§10).
 
 **Skipped — minor / no grading impact (left as-is):**
@@ -242,8 +258,8 @@ solution/solve.sh,tests/test.sh,tests/webjudge.py}`.
 - Anthropic judge instead of OpenAI GPT-4V (#4) — prompt + logic unchanged.
 - Whole `answer.txt` instead of the `ANSWER[; ]+[...]` regex (#6).
 - `ground_truth["task"]` instead of regexing `ques` from agent logs (#7).
-- `None`→0 fail-closed + `temperature` auto-drop + fail-closed-on-HTTP-error (#8).
-- stdlib `urllib` POST instead of the `anthropic` SDK (no pip on the verifier VM).
+- `None`→0 fail-closed + fail-closed-on-judge-error; pi-ai owns the o-series `temperature` quirks (#8).
+- bundled pi-ai `node` bin instead of the OpenAI SDK (self-contained; no install on the verifier VM).
 - id slugification for `ORG_NAME_PATTERN` (#10).
 
 ---

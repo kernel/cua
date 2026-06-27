@@ -1,0 +1,28 @@
+{
+  "name": "webvoyager-webjudge",
+  "version": "0.1.0",
+  "description": "Self-contained WebVoyager single-call multimodal judge bin for the Harbor adapter; runs in-VM via node and grades the agent's answer + last-k screenshots through pi-ai (default claude-sonnet-4-5)",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "webvoyager-webjudge": "./dist/judge.js"
+  },
+  "scripts": {
+    "build": "tsdown && chmod +x dist/judge.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest --run"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "@earendil-works/pi-ai": "0.79.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsdown": "^0.22.2",
+    "typescript": "5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
