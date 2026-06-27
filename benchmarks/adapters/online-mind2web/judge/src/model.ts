@@ -58,6 +58,9 @@ export function anthropicJudgeModel(ref: string): JudgeModel {
   ): Promise<Response> {
     const body: Record<string, unknown> = {
       model: name,
+      // Upstream caps each stage at 512 (max_new_tokens). We keep 1024 of headroom
+      // so the verbose opus judge's per-image reasoning isn't truncated before the
+      // `Score`/`Status:` line the parsers key on.
       max_tokens: 1024,
       system: systemPrompt,
       messages: [{ role: "user", content: toAnthropicContent(content) }],

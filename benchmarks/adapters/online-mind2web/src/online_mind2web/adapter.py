@@ -43,11 +43,19 @@ _SLUG_RE = re.compile(r"[^a-z0-9-]")
 class OnlineMind2WebTask:
     """One Online-Mind2Web row mapped to the adapter's task shape."""
 
-    def __init__(self, instruction: str, website: str | None, task_id: str, reference_length: int | None):
+    def __init__(
+        self,
+        instruction: str,
+        website: str | None,
+        task_id: str,
+        reference_length: int | None,
+        level: str | None = None,
+    ):
         self.id = task_id
         self.instruction = instruction
         self.website = website
         self.reference_length = reference_length
+        self.level = level
 
     @property
     def start_url(self) -> str | None:
@@ -74,12 +82,14 @@ def parse_tasks(raw: str) -> list[OnlineMind2WebTask]:
         if not task_id or not instruction:
             continue
         ref_len = row.get("reference_length")
+        level = row.get("level")
         tasks.append(
             OnlineMind2WebTask(
                 instruction=instruction,
                 website=row.get("website"),
                 task_id=task_id,
                 reference_length=ref_len if isinstance(ref_len, int) else None,
+                level=level if isinstance(level, str) else None,
             )
         )
     return tasks
@@ -185,16 +195,19 @@ class OnlineMind2WebAdapter:
             "instruction": task.instruction,
             "start_url": task.start_url,
             "reference_length": task.reference_length,
+            "level": task.level,
         }
         (tests_dir / "task.json").write_text(json.dumps(task_json, indent=2) + "\n")
 
-        # task.toml — substitute the slugged id and reference length.
+        # task.toml — substitute the slugged id, reference length, and difficulty.
         task_toml = (TEMPLATE_DIR / "task.toml").read_text()
         task_toml = task_toml.replace("{task_id}", self.make_local_task_id(task.id))
         task_toml = task_toml.replace(
             "{reference_length}",
             str(task.reference_length) if task.reference_length is not None else "",
         )
+        # Carry the row's level (easy/medium/hard) through; default to hard when absent.
+        task_toml = task_toml.replace("{difficulty}", task.level or "hard")
         (output_dir / "task.toml").write_text(task_toml)
 
         # instruction.md — the agent prompt, with or without a start URL.

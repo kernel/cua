@@ -8,6 +8,7 @@ interface TaskJson {
   instruction: string;
   start_url?: string | null;
   reference_length?: number | null;
+  level?: string | null;
 }
 
 const MIME_BY_EXT: Record<string, string> = {
