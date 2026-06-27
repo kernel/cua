@@ -218,7 +218,12 @@ export class HarnessExtensionHost {
 				this.runner,
 			);
 			const extensionNames = new Set(nextExtensionTools.map((tool) => tool.name));
-			const base = this.harness.getTools().filter((tool) => !extensionNames.has(tool.name));
+			const previousExtensionNames = new Set(this.extensionTools.map((tool) => tool.name));
+			const base = this.harness
+				.getTools()
+				.filter(
+					(tool) => !extensionNames.has(tool.name) && !previousExtensionNames.has(tool.name),
+				);
 			const final = [...base, ...nextExtensionTools];
 			const finalNames = new Set(final.map((tool) => tool.name));
 			const activeNames = new Set(

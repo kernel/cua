@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { cpSync, mkdtempSync } from "node:fs";
+import { cpSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -103,5 +103,30 @@ describe("HarnessExtensionHost", () => {
 		await created.reload();
 
 		expect(fx!.harness.getTools().map((tool) => tool.name)).toContain("click_visual");
+	});
+
+	it("drops removed extension tools after reload", async () => {
+		fx = await buildTestHarness({
+			turns: [
+				{ steps: [{ type: "tool_call", toolName: "click_visual", args: { description: "the button" } }] },
+				{ steps: [{ type: "text", text: "done" }] },
+			],
+		});
+		const extDir = makeExtensionDir();
+		const created = new HarnessExtensionHost({
+			harness: fx.harness,
+			session: fx.session,
+			cwd: fx.cwd,
+			configuredPaths: [extDir],
+			agentDir: mkdtempSync(join(tmpdir(), "cua-agentdir-")),
+		});
+		await created.load();
+		host = created;
+		expect(fx.harness.getTools().map((tool) => tool.name)).toContain("click_visual");
+
+		rmSync(join(extDir, "click-visual.ts"));
+		await created.reload();
+
+		expect(fx.harness.getTools().map((tool) => tool.name)).not.toContain("click_visual");
 	});
 });
