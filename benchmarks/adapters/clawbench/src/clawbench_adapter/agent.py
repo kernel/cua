@@ -254,7 +254,6 @@ class ClawbenchCuaAgent(CuaHarborAgent):
             )
         except Exception as exc:
             self.logger.warning(f"clawbench: could not mkdir {_VM_DATA_DIR}: {exc}")
-            return
 
         for name in ("interception.json", "requests.jsonl", "actions.jsonl"):
             src = data_dir / name
