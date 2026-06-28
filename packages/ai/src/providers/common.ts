@@ -518,25 +518,27 @@ export function responseThreadingEnabled(options?: ResponseThreadingOptions): bo
 
 /** Result of {@link responseThreadingDelta}: the chaining id and the messages to send this turn. */
 export interface ResponseThreadingDelta {
-	/** Most recent assistant `responseId`, or undefined when no prior turn carries one. */
+	/** The most recent assistant turn's `responseId`, or undefined when it has none. */
 	previousResponseId?: string;
-	/** Messages to send: those after the latest assistant `responseId`, or all messages when none. */
+	/** Messages to send this turn: those after the anchor assistant turn, or all messages when not threading. */
 	deltaMessages: Message[];
 }
 
 /**
  * Derive the `previous_response_id` continuation from a message history.
  *
- * Scans for the most recent assistant message carrying a `responseId` and
- * returns it alongside the messages that follow it (the turn's delta). When no
- * assistant message carries a `responseId`, returns every message and no id.
+ * Anchors on the most recent assistant turn: returns its `responseId` and the
+ * messages after it (the delta). If that turn has no `responseId` — a failed or
+ * aborted request the server never stored — or there is no assistant turn yet,
+ * returns every message and no id so the caller replays the full history,
+ * rather than chaining to a staler id and re-sending the items past it.
  */
 export function responseThreadingDelta(messages: readonly Message[]): ResponseThreadingDelta {
 	for (let index = messages.length - 1; index >= 0; index -= 1) {
 		const message = messages[index]!;
-		if (message.role === "assistant" && (message as AssistantMessage).responseId) {
-			return { previousResponseId: (message as AssistantMessage).responseId, deltaMessages: messages.slice(index + 1) };
-		}
+		if (message.role !== "assistant") continue;
+		const responseId = (message as AssistantMessage).responseId;
+		return responseId ? { previousResponseId: responseId, deltaMessages: messages.slice(index + 1) } : { deltaMessages: [...messages] };
 	}
 	return { deltaMessages: [...messages] };
 }

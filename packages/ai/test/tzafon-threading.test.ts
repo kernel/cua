@@ -94,6 +94,27 @@ describe("buildTzafonRequestInput response threading", () => {
 		expect(body.previous_response_id).toBeUndefined();
 	});
 
+	it("replays full history when the latest assistant turn has no responseId (failed request)", () => {
+		const context = multiTurnContext();
+		// A newer assistant turn whose request errored carries no responseId; threading must
+		// anchor on it and replay, not chain to the older id and re-send the items past it.
+		context.messages.push({
+			role: "assistant",
+			content: [{ type: "text", text: "request failed" }],
+			api: tzafon.TZAFON_RESPONSES_API,
+			provider: "tzafon",
+			model: model.id,
+			usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+			stopReason: "error",
+			timestamp: 0,
+		});
+
+		const body = tzafon.buildTzafonRequestInput(model, context);
+		expect(body.previous_response_id).toBeUndefined();
+		expect(body.store).toBeUndefined();
+		expect(screenshotImageUrls(body.input)).toHaveLength(TURNS);
+	});
+
 	// Off-path screenshot count scales with turn count; on-path stays constant at one.
 	it("grows the payload per turn when off but stays flat when on", () => {
 		const counts = (turns: number, disable: boolean) => {
