@@ -341,6 +341,21 @@ export class HarnessExtensionHost {
 		this.teardownBridge?.();
 		this.teardownBridge = undefined;
 		await this.runner?.emit({ type: "session_shutdown", reason: "quit" });
+		const managedNames = new Set([
+			...this.hostTools.map((tool) => tool.name),
+			...this.extensionTools.map((tool) => tool.name),
+		]);
+		if (managedNames.size > 0) {
+			const baseTools = this.harness.getTools().filter((tool) => !managedNames.has(tool.name));
+			const baseNames = new Set(baseTools.map((tool) => tool.name));
+			const activeBaseNames = this.harness
+				.getActiveTools()
+				.map((tool) => tool.name)
+				.filter((name) => baseNames.has(name));
+			await this.harness.setTools(baseTools, activeBaseNames);
+		}
+		this.extensionTools = [];
+		this.inactiveExtensionTools.clear();
 		this.runner = undefined;
 	}
 

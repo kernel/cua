@@ -139,6 +139,16 @@ describe("HarnessExtensionHost", () => {
 		await expect(created.load()).rejects.toThrow(/disposed/);
 	});
 
+	it("removes extension tools from the harness on dispose", async () => {
+		const created = await loadHost();
+		expect(fx!.harness.getTools().map((tool) => tool.name)).toContain("click_visual");
+		await created.dispose();
+		const tools = fx!.harness.getTools().map((tool) => tool.name);
+		const active = fx!.harness.getActiveTools().map((tool) => tool.name);
+		expect(tools).not.toContain("click_visual");
+		expect(active).not.toContain("click_visual");
+	});
+
 	it("ignores a second load() rather than stacking a duplicate registration", async () => {
 		const created = await loadHost();
 		const count = () =>
