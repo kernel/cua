@@ -199,13 +199,20 @@ export class HarnessExtensionHost {
 		if (this.disposed) throw new Error("cannot load a disposed extension host");
 		if (this.loaded) return;
 		this.loaded = true;
-		await this.buildRunner();
-		await this.reapplyTools();
-		this.installBridge();
-		await this.runner?.emit({ type: "session_start", reason: "startup" });
-		// An extension that calls ctx.shutdown() during session_start disposes via
-		// requestShutdown; honor it so load doesn't resolve a torn-down host as ready.
-		if (this.shutdownRequested) await this.dispose();
+		try {
+			await this.buildRunner();
+			await this.reapplyTools();
+			this.installBridge();
+			await this.runner?.emit({ type: "session_start", reason: "startup" });
+			// An extension that calls ctx.shutdown() during session_start disposes via
+			// requestShutdown; honor it so load doesn't resolve a torn-down host as ready.
+			if (this.shutdownRequested) await this.dispose();
+		} catch (error) {
+			// Keep load() retryable on the same host when startup fails before the
+			// host is disposed.
+			if (!this.disposed) this.loaded = false;
+			throw error;
+		}
 	}
 
 	/**
@@ -435,7 +442,11 @@ export class HarnessExtensionHost {
 		}
 		if (!this.reloadRequested || this.reloading || this.disposed) return;
 		this.reloadRequested = false;
-		this.pendingReload = this.reload();
+		this.pendingReload = this.reload().catch((error) => {
+			// Retry on the next idle drain when a queued reload fails.
+			if (!this.disposed) this.reloadRequested = true;
+			throw error;
+		});
 		try {
 			await this.pendingReload;
 		} finally {
