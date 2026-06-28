@@ -387,69 +387,65 @@ async function setupHarnessRuntime(
 	});
 
 	const provisioned = await provisionForFlags(flags, auth);
-	const repo = createSessionRepo(flags.sessionDir);
-
-	const skipDisk = opts.skipDiskSession === true && !hasExplicitSessionFlag(flags);
-	const resolved = skipDisk ? undefined : await resolveSession(repo, cwd, flags, provisioned.named);
-
-	let inMemorySession: Session | undefined;
-	if (!resolved) {
-		const memRepo = new InMemorySessionRepo();
-		inMemorySession = await memRepo.create();
-	}
-
-	const session = resolved?.session ?? inMemorySession!;
-	const { provider } = parseCuaModelRef(auth.modelRef);
-
-	if (resolved) {
-		await appendBrowserEntry(session, {
-			sessionId: provisioned.handle.browser.session_id,
-			liveUrl: provisioned.handle.browser.browser_live_view_url,
-			profileId: provisioned.handle.profileId,
-			createdAt: Date.now(),
-		});
-		if (provisioned.named) {
-			await recordTranscriptPath(provisioned.named.name, resolved.transcriptPath);
-		}
-		if (flags.verbose) {
-			stderr.write(`[cua] session=${resolved.transcriptPath}\n`);
-			if (resolved.resumed) stderr.write("[cua] resumed prior session into fresh browser\n");
-		}
-	}
-
-	const thinkingLevel = mapThinkingLevel(flags.thinking);
-	const baseUrlOverride = providerBaseUrlOverride(provider);
-	const harness = buildCuaHarness({
-		cwd,
-		client: provisioned.handle.client,
-		browser: provisioned.handle.browser,
-		session,
-		model: auth.modelRef,
-		skills,
-		contextFiles,
-		thinkingLevel,
-		playwright: flags.playwright,
-		modelBaseUrl: baseUrlOverride,
-	});
-
 	const handle = provisioned.handle;
-	// Raw capture: the host gates this behind the session's prior-turn state, so
-	// it must not re-apply the CLI's own first-prompt guard.
-	const initialScreenshot = async (): Promise<ImageContent[] | undefined> => {
-		const png = await captureScreenshot(handle.client, handle.browser.session_id);
-		return png ? [{ type: "image", data: png.toString("base64"), mimeType: "image/png" }] : undefined;
-	};
-	// Decide the first-turn screenshot before extensions load: a resumed session
-	// already has turns, and capturing it now (rather than re-reading the live
-	// transcript at prompt time) keeps an extension's startup sendUserMessage from
-	// flipping the check and leaving the user's real first prompt without it.
-	const skipInitialScreenshot = resolved?.resumed === true || (await sessionHasPriorTurn(session));
-	// A throwing extension load (e.g. a tool name colliding with a base tool)
-	// must not leak the already-provisioned browser handle: the caller's finally
-	// only runs once this returns, so close the handle here before rethrowing.
-	let host: HarnessExtensionHost | undefined;
 	try {
-		host = await loadHarnessExtensions({
+		const repo = createSessionRepo(flags.sessionDir);
+
+		const skipDisk = opts.skipDiskSession === true && !hasExplicitSessionFlag(flags);
+		const resolved = skipDisk ? undefined : await resolveSession(repo, cwd, flags, provisioned.named);
+
+		let inMemorySession: Session | undefined;
+		if (!resolved) {
+			const memRepo = new InMemorySessionRepo();
+			inMemorySession = await memRepo.create();
+		}
+
+		const session = resolved?.session ?? inMemorySession!;
+		const { provider } = parseCuaModelRef(auth.modelRef);
+
+		if (resolved) {
+			await appendBrowserEntry(session, {
+				sessionId: provisioned.handle.browser.session_id,
+				liveUrl: provisioned.handle.browser.browser_live_view_url,
+				profileId: provisioned.handle.profileId,
+				createdAt: Date.now(),
+			});
+			if (provisioned.named) {
+				await recordTranscriptPath(provisioned.named.name, resolved.transcriptPath);
+			}
+			if (flags.verbose) {
+				stderr.write(`[cua] session=${resolved.transcriptPath}\n`);
+				if (resolved.resumed) stderr.write("[cua] resumed prior session into fresh browser\n");
+			}
+		}
+
+		const thinkingLevel = mapThinkingLevel(flags.thinking);
+		const baseUrlOverride = providerBaseUrlOverride(provider);
+		const harness = buildCuaHarness({
+			cwd,
+			client: provisioned.handle.client,
+			browser: provisioned.handle.browser,
+			session,
+			model: auth.modelRef,
+			skills,
+			contextFiles,
+			thinkingLevel,
+			playwright: flags.playwright,
+			modelBaseUrl: baseUrlOverride,
+		});
+
+		// Raw capture: the host gates this behind the session's prior-turn state, so
+		// it must not re-apply the CLI's own first-prompt guard.
+		const initialScreenshot = async (): Promise<ImageContent[] | undefined> => {
+			const png = await captureScreenshot(handle.client, handle.browser.session_id);
+			return png ? [{ type: "image", data: png.toString("base64"), mimeType: "image/png" }] : undefined;
+		};
+		// Decide the first-turn screenshot before extensions load: a resumed session
+		// already has turns, and capturing it now (rather than re-reading the live
+		// transcript at prompt time) keeps an extension's startup sendUserMessage from
+		// flipping the check and leaving the user's real first prompt without it.
+		const skipInitialScreenshot = resolved?.resumed === true || (await sessionHasPriorTurn(session));
+		const host = await loadHarnessExtensions({
 			harness,
 			session,
 			cwd,
@@ -457,23 +453,23 @@ async function setupHarnessRuntime(
 			initialScreenshot,
 			selfExtend: flags.selfExtend,
 		});
+
+		return {
+			handle: provisioned.handle,
+			resolved,
+			session,
+			skills,
+			contextFiles,
+			harness,
+			provider,
+			modelRef: auth.modelRef,
+			skipInitialScreenshot,
+			host,
+		};
 	} catch (err) {
-		await provisioned.handle.close().catch(() => {});
+		await handle.close().catch(() => {});
 		throw err;
 	}
-
-	return {
-		handle: provisioned.handle,
-		resolved,
-		session,
-		skills,
-		contextFiles,
-		harness,
-		provider,
-		modelRef: auth.modelRef,
-		skipInitialScreenshot,
-		host,
-	};
 }
 
 async function sessionHasPriorTurn(session: Session): Promise<boolean> {

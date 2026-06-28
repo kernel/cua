@@ -40,6 +40,24 @@ function makeToolExtension(toolName: string): string {
 /** A module that fails to parse — stands in for a broken authoring attempt. */
 const BROKEN_EXTENSION = "export default function ( {  // syntactically broken\n";
 
+/** Tracks whether bridge-forwarded agent_start keeps flowing during reloads. */
+const START_COUNTER_EXTENSION = [
+	"let starts = 0;",
+	"export default function (pi) {",
+	'  pi.on("agent_start", () => {',
+	"    starts += 1;",
+	"  });",
+	"  pi.registerTool({",
+	'    name: "start_counter",',
+	'    label: "start counter",',
+	'    description: "report the bridged agent_start count",',
+	'    parameters: { type: "object", properties: {}, additionalProperties: false },',
+	'    async execute() { return { content: [{ type: "text", text: `starts=${starts}` }], details: {} }; },',
+	"  });",
+	"}",
+	"",
+].join("\n");
+
 interface WriteExtensionResult {
 	content: Array<{ type: string; text?: string }>;
 	details: {
@@ -318,6 +336,73 @@ describe("self-extend: runtime tool authoring", () => {
 		await fx.harness.prompt("use it");
 		expect(sawAuthoredCall).toBe(true);
 	});
+
+	it("keeps bridge forwarding live while queued reload waits behind the next prompt", async () => {
+		const extDir = mkdtempSync(join(tmpdir(), "cua-ext-"));
+		writeFileSync(join(extDir, "counter.ts"), START_COUNTER_EXTENSION);
+		fx = await buildTestHarness({
+			turns: [
+				{
+					steps: [
+						{
+							type: "tool_call",
+							toolName: "write_extension",
+							args: { filename: "authored_tool.ts", code: makeToolExtension("authored_tool") },
+						},
+					],
+				},
+				{ steps: [{ type: "text", text: "authored" }] },
+				{ steps: [{ type: "tool_call", toolName: "start_counter", args: {} }] },
+				{ steps: [{ type: "text", text: "counted" }] },
+			],
+		});
+
+		host = new HarnessExtensionHost({
+			harness: fx.harness,
+			session: fx.session,
+			cwd: fx.cwd,
+			configuredPaths: [extDir],
+			agentDir: mkdtempSync(join(tmpdir(), "cua-agentdir-")),
+			selfExtend: true,
+		});
+		await host.load();
+
+		const hostWithPrivate = host as unknown as { buildRunner: () => Promise<void> };
+		const realBuildRunner = hostWithPrivate.buildRunner.bind(hostWithPrivate);
+		let releaseReloadBuild!: () => void;
+		const reloadBuildGate = new Promise<void>((resolve) => {
+			releaseReloadBuild = resolve;
+		});
+		let sawReloadBuild!: () => void;
+		const reloadBuildSeen = new Promise<void>((resolve) => {
+			sawReloadBuild = resolve;
+		});
+		let holdNextBuild = true;
+		hostWithPrivate.buildRunner = async () => {
+			if (holdNextBuild) {
+				holdNextBuild = false;
+				sawReloadBuild();
+				await reloadBuildGate;
+			}
+			return realBuildRunner();
+		};
+
+		let startCounterText = "";
+		fx.harness.subscribe((event) => {
+			if (event.type === "tool_execution_end" && event.toolName === "start_counter") {
+				const content = (event.result as { content: Array<{ type: string; text?: string }> }).content;
+				startCounterText = content.map((part) => part.text ?? "").join("");
+			}
+		});
+
+		await fx.harness.prompt("author it");
+		await reloadBuildSeen;
+		await fx.harness.prompt("count starts");
+		releaseReloadBuild();
+		await host.drainPendingReload();
+
+		expect(startCounterText).toContain("starts=2");
+	}, 5000);
 
 	it("drains a reload latched while another reload is in flight", async () => {
 		const extDir = mkdtempSync(join(tmpdir(), "cua-ext-"));

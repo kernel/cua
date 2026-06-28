@@ -133,6 +133,64 @@ describe("HarnessExtensionHost", () => {
 		expect(toolNames).not.toContain("alpha_tool");
 	});
 
+	it("keeps tool bookkeeping coherent after a failed reload setTools pass", async () => {
+		const extDir = mkdtempSync(join(tmpdir(), "cua-ext-"));
+		const extFile = join(extDir, "learned.ts");
+		writeFileSync(extFile, makeToolExtension("alpha_tool"));
+		fx = await buildTestHarness({ turns: [{ steps: [{ type: "text", text: "ok" }] }] });
+		const created = new HarnessExtensionHost({
+			harness: fx.harness,
+			session: fx.session,
+			cwd: fx.cwd,
+			configuredPaths: [extDir],
+			agentDir: mkdtempSync(join(tmpdir(), "cua-agentdir-")),
+		});
+		host = created;
+		await created.load();
+		expect(fx.harness.getTools().map((tool) => tool.name)).toContain("alpha_tool");
+
+		writeFileSync(extFile, makeToolExtension("beta_tool"));
+		const realSetTools = fx.harness.setTools.bind(fx.harness);
+		let failOnce = true;
+		fx.harness.setTools = (async (tools, activeToolNames) => {
+			if (failOnce) {
+				failOnce = false;
+				throw new Error("setTools boom");
+			}
+			return realSetTools(tools, activeToolNames);
+		}) as typeof fx.harness.setTools;
+
+		await expect(created.reload()).rejects.toThrow(/setTools boom/);
+		expect(fx.harness.getTools().map((tool) => tool.name)).toContain("alpha_tool");
+		expect(fx.harness.getTools().map((tool) => tool.name)).not.toContain("beta_tool");
+
+		await created.reload();
+		const names = fx.harness.getTools().map((tool) => tool.name);
+		expect(names).toContain("beta_tool");
+		expect(names).not.toContain("alpha_tool");
+	});
+
+	it("drops duplicate tool names registered by multiple extensions", async () => {
+		const extDir = mkdtempSync(join(tmpdir(), "cua-ext-"));
+		writeFileSync(join(extDir, "one.ts"), makeToolExtension("dup_tool"));
+		writeFileSync(join(extDir, "two.ts"), makeToolExtension("dup_tool"));
+		fx = await buildTestHarness({ turns: [{ steps: [{ type: "text", text: "ok" }] }] });
+		const created = new HarnessExtensionHost({
+			harness: fx.harness,
+			session: fx.session,
+			cwd: fx.cwd,
+			configuredPaths: [extDir],
+			agentDir: mkdtempSync(join(tmpdir(), "cua-agentdir-")),
+		});
+		host = created;
+		await created.load();
+
+		const names = fx.harness.getTools().map((tool) => tool.name);
+		expect(names.filter((name) => name === "dup_tool")).toHaveLength(1);
+		// No duplicate reaches the harness tool list, so load/reload cannot crash.
+		expect(created.loadErrors.every((e) => e.path !== "<reload>")).toBe(true);
+	});
+
 	it("throws when load() is called after dispose", async () => {
 		const created = await loadHost();
 		await created.dispose();

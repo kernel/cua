@@ -265,24 +265,38 @@ export class HarnessExtensionHost {
 				// cannot deadlock on an awaited-in-loop reload.
 				await this.harness.waitForIdle();
 				if (this.disposed) return "disposed";
-				const flags = this.runner?.getFlagValues() ?? new Map<string, boolean | string>();
-				await this.runner?.emit({ type: "session_shutdown", reason: "reload" });
+				const previousRunner = this.runner;
+				const previousBridgeTeardown = this.teardownBridge;
+				const flags = previousRunner?.getFlagValues() ?? new Map<string, boolean | string>();
+				await previousRunner?.emit({ type: "session_shutdown", reason: "reload" });
 				if (await this.disposeIfShutdownRequested()) return "disposed";
-				this.teardownBridge?.();
-				this.teardownBridge = undefined;
 				try {
 					await this.buildRunner();
 					if (await this.disposeIfShutdownRequested()) return "disposed";
 					for (const [name, value] of flags) this.runner?.setFlagValue(name, value);
-
+					// A new prompt can start while reload is rebuilding; finish any such
+					// turn before touching the live tool list.
+					await this.harness.waitForIdle();
+					if (this.disposed) return "disposed";
 					await this.reapplyTools();
 					if (await this.disposeIfShutdownRequested()) return "disposed";
+					// Keep event forwarding live until the replacement generation is
+					// fully ready, then swap bridge listeners without a bridge-down gap.
+					await this.harness.waitForIdle();
+					if (this.disposed) return "disposed";
+					previousBridgeTeardown?.();
+					if (this.teardownBridge === previousBridgeTeardown) {
+						this.teardownBridge = undefined;
+					}
 					this.installBridge();
 					await this.runner?.emit({ type: "session_start", reason: "reload" });
 				} catch (error) {
-					// A failed rebuild left the bridge torn down; reinstall it over the
-					// current runner so extension events keep flowing rather than going
-					// silently dark for the rest of the session.
+					// If reload fails before bridge swap, keep the prior generation as
+					// authoritative so host bookkeeping still matches the harness.
+					if (this.teardownBridge === previousBridgeTeardown) {
+						this.runner = previousRunner;
+					}
+					// A failed rebuild must not leave the host bridge-less.
 					if (this.runner && !this.teardownBridge) this.installBridge();
 					throw error;
 				}
@@ -388,6 +402,7 @@ export class HarnessExtensionHost {
 			// dropped rather than allowed to crash `setTools`, which throws on
 			// duplicate names.
 			const hostNames = new Set(this.hostTools.map((tool) => tool.name));
+			const seenExtensionNames = new Set<string>();
 			const nextExtensionTools = wrapRegisteredTools(
 				this.runner.getAllRegisteredTools(),
 				this.runner,
@@ -397,6 +412,16 @@ export class HarnessExtensionHost {
 				// Reapply can run several times per runner generation (e.g. on each
 				// model switch) without a rebuild resetting loadErrors, so don't
 				// re-push the same collision.
+				if (!this.loadErrors.some((e) => e.path === tool.name && e.error === error)) {
+					this.loadErrors.push({ path: tool.name, error });
+				}
+				return false;
+			}).filter((tool) => {
+				if (!seenExtensionNames.has(tool.name)) {
+					seenExtensionNames.add(tool.name);
+					return true;
+				}
+				const error = `extension tool "${tool.name}" is duplicated across extensions and was dropped`;
 				if (!this.loadErrors.some((e) => e.path === tool.name && e.error === error)) {
 					this.loadErrors.push({ path: tool.name, error });
 				}
@@ -423,10 +448,10 @@ export class HarnessExtensionHost {
 			for (const name of extensionNames) {
 				if (!this.inactiveExtensionTools.has(name)) activeNames.add(name);
 			}
-			this.extensionTools = nextExtensionTools;
 			this.applyingTools = true;
 			try {
 				await this.harness.setTools(final, [...activeNames]);
+				this.extensionTools = nextExtensionTools;
 			} finally {
 				this.applyingTools = false;
 			}
