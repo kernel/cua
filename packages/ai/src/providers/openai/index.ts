@@ -16,12 +16,11 @@ export type {
 	CuaNavigationInput as OpenAIExtraInput,
 } from "../common";
 export {
-	buildOpenAIRequestInput,
 	OPENAI_CUA_RESPONSES_API,
 	streamOpenAIResponses,
 	streamSimpleOpenAIResponses,
 } from "./provider";
-export type { OpenAIRequestBody, OpenAIRequestOptions, OpenAIResponsesOptions } from "./provider";
+export type { OpenAIResponsesOptions } from "./provider";
 
 // Provider-native action vocabulary emitted on `computer_call.action.type`:
 //   click, double_click, drag, move, scroll, type, keypress, wait, screenshot
