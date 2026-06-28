@@ -1,6 +1,6 @@
 {
   "modelRef": "openai:gpt-5.5",
-  "api": "openai-responses",
+  "api": "openai-cua-responses",
   "skills": [
     {
       "name": "deploy-skill",

@@ -30,7 +30,7 @@ export interface BuildTestHarnessOptions {
 }
 
 const DEFAULT_API_FOR_MODEL: Record<string, string> = {
-	"openai:gpt-5.5": "openai-responses",
+	"openai:gpt-5.5": "openai-cua-responses",
 	"anthropic:claude-opus-4-7": "anthropic-messages",
 	"google:gemini-3-flash-preview": "google-generative-ai",
 };
