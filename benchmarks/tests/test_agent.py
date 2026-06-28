@@ -5,6 +5,7 @@ import pytest
 
 from cua_harbor.agent import CuaHarborAgent
 from cua_harbor.models import to_cua_model_ref
+from harbor.agents.installed.base import NonZeroAgentExitCodeError
 from harbor.models.agent.context import AgentContext
 
 
@@ -100,3 +101,45 @@ async def test_run_raises_without_session(tmp_path, patched_subprocess):
     agent = _make_agent(tmp_path)
     with pytest.raises(RuntimeError, match="Kernel session not started"):
         await agent.run("hi", EmptyEnv(), AgentContext())
+
+
+class _FailProc:
+    returncode = 1
+
+    async def wait(self) -> None:
+        return None
+
+
+async def test_run_raises_on_nonzero_exit_without_answer(tmp_path, fake_env, monkeypatch):
+    """A crash that leaves nothing to grade surfaces as a Harbor agent error."""
+
+    async def fake_exec(program, *args, env=None, stdout=None, stderr=None):
+        return _FailProc()  # no run.jsonl, no answer.txt
+
+    monkeypatch.setattr("cua_harbor.agent.asyncio.create_subprocess_exec", fake_exec)
+    monkeypatch.setattr(CuaHarborAgent, "_bundle_path", lambda self: Path("/fake/task.js"))
+
+    agent = _make_agent(tmp_path)
+    with pytest.raises(NonZeroAgentExitCodeError, match="produced no answer"):
+        await agent.run("Go to example.com", fake_env, AgentContext())
+
+
+async def test_run_grades_nonzero_exit_when_answer_present(
+    tmp_path, fake_env, monkeypatch, run_jsonl_records
+):
+    """A non-zero exit that still produced an answer is graded, not raised."""
+
+    async def fake_exec(program, *args, env=None, stdout=None, stderr=None):
+        out_dir = Path(env["AGENT_OUT_DIR"])
+        out_dir.joinpath("run.jsonl").write_text(
+            "".join(f"{json.dumps(r)}\n" for r in run_jsonl_records)
+        )
+        out_dir.joinpath("answer.txt").write_text("Example Domain")
+        return _FailProc()
+
+    monkeypatch.setattr("cua_harbor.agent.asyncio.create_subprocess_exec", fake_exec)
+    monkeypatch.setattr(CuaHarborAgent, "_bundle_path", lambda self: Path("/fake/task.js"))
+
+    agent = _make_agent(tmp_path)
+    await agent.run("Go to example.com", fake_env, AgentContext())
+    assert (tmp_path / "answer.txt").read_text() == "Example Domain"

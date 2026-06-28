@@ -15,6 +15,7 @@ import shutil
 from pathlib import Path
 
 from harbor.agents.base import BaseAgent
+from harbor.agents.installed.base import NonZeroAgentExitCodeError
 from harbor.environments.base import BaseEnvironment
 from harbor.models.agent.context import AgentContext
 
@@ -101,14 +102,28 @@ class CuaHarborAgent(BaseAgent):
                 stderr=err,
             )
             await proc.wait()
-        if proc.returncode != 0:
-            self.logger.warning(
-                f"cua entrypoint exited with code {proc.returncode}; see {stderr_path}"
-            )
-
         self._ensure_answer_file()
-        # Populate context now so a later timeout still leaves token/cost metrics.
+        # Populate context now so a later timeout still leaves token/cost metrics,
+        # and so a non-zero exit that still produced an answer is graded normally.
         self.populate_context_post_run(context)
+
+        # A non-zero exit means the entrypoint threw (bad setup, a provider error,
+        # an aborted turn) instead of finishing the task. If it still left an
+        # answer, grade it; if it produced nothing, raise so Harbor records the
+        # failure (retryable) rather than scoring an empty answer as a legitimate
+        # 0. NonZeroAgentExitCodeError is the agent-error type Harbor's trial loop
+        # catches, so the verifier still runs either way.
+        if proc.returncode != 0:
+            answer = (self.logs_dir / constants.ANSWER_FILE).read_text().strip()
+            if not answer:
+                raise NonZeroAgentExitCodeError(
+                    f"cua entrypoint exited with code {proc.returncode} and produced "
+                    f"no answer; see {stderr_path}"
+                )
+            self.logger.warning(
+                f"cua entrypoint exited with code {proc.returncode} but produced an "
+                f"answer; grading it. See {stderr_path}"
+            )
 
     def _ensure_answer_file(self) -> None:
         answer_path = self.logs_dir / constants.ANSWER_FILE
