@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CUA_NAVIGATION_TOOL_NAME, CUA_PROVIDERS, listCuaModels, resolveCuaRuntimeSpec } from "../src/index";
+import { CUA_NAVIGATION_TOOL_NAME, CUA_PROVIDERS, getCuaModel, listCuaModels, openai, resolveCuaRuntimeSpec } from "../src/index";
 
 describe("resolveCuaRuntimeSpec", () => {
 	it("resolves a runtime spec for every CUA provider", () => {
@@ -42,6 +42,11 @@ describe("resolveCuaRuntimeSpec", () => {
 		// sets store:true in its own request builder.
 		expect(openaiSpec.onPayload).toBeUndefined();
 		expect(anthropicSpec.onPayload).toBeUndefined();
+	});
+
+	it("routes a concrete OpenAI Model input (not just a string ref) to openai-cua-responses", () => {
+		const raw = { ...getCuaModel("openai:gpt-5.5"), api: "openai-responses" } as Parameters<typeof resolveCuaRuntimeSpec>[0];
+		expect(resolveCuaRuntimeSpec(raw).model.api).toBe(openai.OPENAI_CUA_RESPONSES_API);
 	});
 
 	it("threads tool options through to the provider module", () => {

@@ -116,6 +116,9 @@ export const streamOpenAIResponses: StreamFunction<typeof OPENAI_CUA_RESPONSES_A
 			for (const block of output.content) {
 				delete (block as { partialJson?: string }).partialJson;
 			}
+			// An errored/aborted turn may have captured a responseId from an incomplete
+			// response; drop it so it never anchors `previous_response_id` next turn.
+			output.responseId = undefined;
 			output.stopReason = options?.signal?.aborted ? "aborted" : "error";
 			output.errorMessage = err instanceof Error ? err.message : String(err);
 			stream.push({ type: "error", reason: output.stopReason, error: output });

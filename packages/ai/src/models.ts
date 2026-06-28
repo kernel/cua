@@ -197,7 +197,7 @@ export function getCuaModel(ref: CuaModelRef): Model<Api> {
 // Route OpenAI CUA models to cua's own openai-cua-responses stream provider,
 // which threads previous_response_id. Registry-resolved models (gpt-5.4,
 // gpt-5.4-mini, gpt-5.5) otherwise carry pi-ai's builtin "openai-responses" api.
-function routeCuaApi(model: Model<Api>): Model<Api> {
+export function routeCuaApi(model: Model<Api>): Model<Api> {
 	return model.provider === "openai" && model.api !== OPENAI_CUA_RESPONSES_API
 		? { ...model, api: OPENAI_CUA_RESPONSES_API }
 		: model;

@@ -1,5 +1,5 @@
 import type { CuaProvider } from "./models";
-import { getCuaModel, providerForModel } from "./models";
+import { getCuaModel, providerForModel, routeCuaApi } from "./models";
 import { providerModule as anthropic } from "./providers/anthropic/index";
 import { providerModule as gemini } from "./providers/gemini/index";
 import { providerModule as openai } from "./providers/openai/index";
@@ -29,7 +29,7 @@ const PROVIDERS = {
  * executors to a supported subset.
  */
 export function resolveCuaRuntimeSpec(input: CuaRuntimeSpecInput, options?: ComputerToolsOptions): CuaRuntimeSpec {
-	const model = typeof input === "string" ? getCuaModel(input) : input;
+	const model = typeof input === "string" ? getCuaModel(input) : routeCuaApi(input);
 	const provider = providerForModel(model);
 	const mod: CuaProviderModule = PROVIDERS[provider];
 	return {
