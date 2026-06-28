@@ -41,6 +41,7 @@ export function threadRequest(
 	return { context: messages === context.messages ? context : { ...context, messages }, onPayload };
 }
 
+// pi-ai's builtin stream fns are typed to the "openai-responses" api; we reuse them under our routed api, hence `as never` on the model.
 export const streamOpenAIResponses: StreamFunction<typeof OPENAI_CUA_RESPONSES_API, OpenAIResponsesOptions> = (model, context, options) => {
 	const threaded = threadRequest(context, options);
 	return piStreamOpenAIResponses(model as never, threaded.context, { ...options, onPayload: threaded.onPayload });
