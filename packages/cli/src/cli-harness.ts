@@ -181,6 +181,7 @@ export interface HarnessCliFlags {
 	jsonlIncludeDeltas: boolean;
 	jsonlIncludeImages: boolean;
 	playwright: boolean;
+	selfExtend: boolean;
 	model?: string;
 	thinking?: string;
 	browserProfile?: string;
@@ -442,6 +443,7 @@ async function setupHarnessRuntime(
 			cwd,
 			noExtensions: flags.noExtensions,
 			initialScreenshot,
+			selfExtend: flags.selfExtend,
 		});
 	} catch (err) {
 		await provisioned.handle.close().catch(() => {});
