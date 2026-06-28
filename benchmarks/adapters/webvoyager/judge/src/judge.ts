@@ -10,8 +10,10 @@
  * reward to `/logs/verifier/reward.txt` (`NOT SUCCESS` -> 0, `SUCCESS` -> 1,
  * ambiguous -> fail-closed 0).
  *
- * A judge call that errors fails closed to 0 (recorded in grading_details), so a
- * transient API hiccup never crashes the verifier into a missing-reward trial.
+ * Any failure the bin owns — a missing/corrupt artifact, model resolution, or
+ * the judge call — fails closed to 0 (recorded in grading_details), so a missing
+ * ground_truth.json or a transient API hiccup never crashes the verifier into a
+ * missing-reward trial.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
@@ -75,47 +77,66 @@ function writeReward(path: string, reward: 0 | 1): void {
   writeFileSync(path, String(reward));
 }
 
+function formatError(err: unknown): string {
+  return err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+}
+
+function writeDetails(args: Args, details: GradingDetails): void {
+  if (!args.detailsOut) return;
+  mkdirSync(dirname(args.detailsOut), { recursive: true });
+  writeFileSync(args.detailsOut, JSON.stringify(details, null, 2));
+}
+
 /**
  * Read the artifacts, grade through `makeJudge()`, and write reward.txt (+
- * optional grading_details.json). Both model resolution and the judge call run
- * inside the try, so a missing key or a transient API error fails closed to
- * reward 0 with the error recorded in the details rather than crashing the
- * verifier. Takes a factory so the file contract is testable without a live
+ * optional grading_details.json). Every step the bin owns — reading
+ * ground_truth.json / answer.txt / the screenshots, model resolution, and the
+ * judge call — runs inside the try, so a missing/corrupt artifact, a missing
+ * key, or a transient API error fails closed to reward 0 with the error recorded
+ * in the details rather than throwing out of the bin and leaving the reward file
+ * empty. Takes a factory so the file contract is testable without a live
  * provider call.
  */
 export async function run(args: Args, makeJudge: () => JudgeModel): Promise<void> {
-  const task = loadGroundTruth(args.groundTruth).task;
-  const answer = loadAnswer(args.answer);
-  const shots = lastShots(args.shots, args.maxImages);
+  let answer = "";
+  let nImages = 0;
+  let verdict = "";
+  let reward: 0 | 1 = 0;
+  try {
+    const task = loadGroundTruth(args.groundTruth).task;
+    answer = loadAnswer(args.answer);
+    const shots = lastShots(args.shots, args.maxImages);
+    nImages = shots.length;
 
-  // No answer and no screenshots: nothing to judge, fail closed without details.
-  if (!answer && shots.length === 0) {
+    // No answer and no screenshots: nothing to judge, fail closed without details.
+    if (!answer && shots.length === 0) {
+      writeReward(args.rewardOut, 0);
+      return;
+    }
+
+    ({ verdict, reward } = await gradeWithWebJudge({ task, answer, shots, judge: makeJudge() }));
+  } catch (err) {
     writeReward(args.rewardOut, 0);
+    writeDetails(args, {
+      verdict_raw: verdict,
+      reward: 0,
+      n_images: nImages,
+      answer,
+      model: args.judgeModel,
+      error: formatError(err),
+    });
     return;
   }
 
-  let verdict = "";
-  let reward: 0 | 1 = 0;
-  let error: string | null = null;
-  try {
-    ({ verdict, reward } = await gradeWithWebJudge({ task, answer, shots, judge: makeJudge() }));
-  } catch (err) {
-    error = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-  }
-
   writeReward(args.rewardOut, reward);
-  if (args.detailsOut) {
-    const details: GradingDetails = {
-      verdict_raw: verdict,
-      reward,
-      n_images: shots.length,
-      answer,
-      model: args.judgeModel,
-      error,
-    };
-    mkdirSync(dirname(args.detailsOut), { recursive: true });
-    writeFileSync(args.detailsOut, JSON.stringify(details, null, 2));
-  }
+  writeDetails(args, {
+    verdict_raw: verdict,
+    reward,
+    n_images: nImages,
+    answer,
+    model: args.judgeModel,
+    error: null,
+  });
 }
 
 async function main(): Promise<void> {

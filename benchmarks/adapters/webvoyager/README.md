@@ -74,6 +74,7 @@ to `/logs/verifier/reward.txt` plus a `grading_details.json`.
 
 | var | default | meaning |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | `${ANTHROPIC_API_KEY}` | resolved from the host at exec time |
+| `ANTHROPIC_API_KEY` | `${ANTHROPIC_API_KEY}` | resolved from the host at exec time; used by the default `claude-sonnet-4-5` judge |
+| `OPENAI_API_KEY` | `${OPENAI_API_KEY}` | resolved from the host at exec time; used when `JUDGE_MODEL` is an `openai:` ref (e.g. `openai:o4-mini`) |
 | `JUDGE_MODEL` | `claude-sonnet-4-5` | vision judge model; a pi-ai `provider:name` ref (bare name = `anthropic`), e.g. `openai:o4-mini` (`WEBVOYAGER_JUDGE_MODEL` to override) |
 | `MAX_IMAGES` | `15` | last-k screenshots sent to the judge (`WEBVOYAGER_MAX_IMAGES`; `15` matches the canonical `auto_eval.py` invocation) |

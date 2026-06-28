@@ -107,6 +107,30 @@ describe("run", () => {
     expect(readFileSync(args.rewardOut, "utf8")).toBe("0");
     expect(readDetails(args).error).toContain("ANTHROPIC_API_KEY");
   });
+
+  it("fails closed to reward 0 when ground_truth.json is missing", async () => {
+    const { args } = setup({ answer: "ans", shotIndices: [1] });
+    args.groundTruth = join(args.shots, "does-not-exist.json");
+    let called = false;
+    await expect(
+      run(args, () => {
+        called = true;
+        return { async complete() { return "SUCCESS"; } };
+      }),
+    ).resolves.toBeUndefined();
+    expect(called).toBe(false);
+    expect(readFileSync(args.rewardOut, "utf8")).toBe("0");
+    expect(readDetails(args).error).toBeTruthy();
+  });
+
+  it("fails closed to reward 0 when ground_truth.json is corrupt", async () => {
+    const { args } = setup({ answer: "ans", shotIndices: [1] });
+    writeFileSync(args.groundTruth, "{ not valid json");
+    await run(args, () => ({ async complete() { return "SUCCESS"; } }));
+    expect(readFileSync(args.rewardOut, "utf8")).toBe("0");
+    expect(readDetails(args).reward).toBe(0);
+    expect(readDetails(args).error).toBeTruthy();
+  });
 });
 
 describe("parseMaxImages", () => {

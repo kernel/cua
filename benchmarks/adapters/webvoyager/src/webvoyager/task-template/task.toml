@@ -18,7 +18,12 @@ reference_type = "{reference_type}"
 timeout_sec = 600.0
 
 [verifier.env]
+# JUDGE_MODEL is a pi-ai provider:name ref (bare name = anthropic). The judge
+# resolves the key for whichever provider it names, so both are forwarded:
+# the default claude-sonnet-4-5 uses ANTHROPIC_API_KEY; an openai:o4-mini
+# override uses OPENAI_API_KEY.
 ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"
+OPENAI_API_KEY = "${OPENAI_API_KEY}"
 JUDGE_MODEL = "${WEBVOYAGER_JUDGE_MODEL:-claude-sonnet-4-5}"
 MAX_IMAGES = "${WEBVOYAGER_MAX_IMAGES:-15}"
 

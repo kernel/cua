@@ -102,6 +102,8 @@ def test_task_toml_valid_and_named(adapter: WebVoyagerAdapter) -> None:
     assert "allrecipes" in parsed["task"]["keywords"]
     assert parsed["metadata"]["start_url"] == "https://www.allrecipes.com/"
     assert parsed["verifier"]["env"]["ANTHROPIC_API_KEY"] == "${ANTHROPIC_API_KEY}"
+    # JUDGE_MODEL=openai:o4-mini needs OPENAI_API_KEY on the verifier VM.
+    assert parsed["verifier"]["env"]["OPENAI_API_KEY"] == "${OPENAI_API_KEY}"
 
 
 def test_ground_truth_carries_task(adapter: WebVoyagerAdapter) -> None:
