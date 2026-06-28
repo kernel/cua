@@ -42,13 +42,20 @@ function parseArgs(argv: string[]): Args {
     if (!value) throw new Error(`missing required --${name}`);
     return value;
   };
+  const scoreThresholdRaw = flags.get("score-threshold");
+  const scoreThreshold = Number(scoreThresholdRaw ?? "3");
+  if (!Number.isFinite(scoreThreshold)) {
+    throw new Error(
+      `invalid --score-threshold value: ${scoreThresholdRaw ?? "(missing)"}`,
+    );
+  }
   return {
     task: require("task"),
     run: require("run"),
     answer: require("answer"),
     shots: flags.get("shots"),
     judgeModel: flags.get("judge-model") ?? "openai:o4-mini",
-    scoreThreshold: Number(flags.get("score-threshold") ?? "3"),
+    scoreThreshold,
     rewardOut: require("reward-out"),
     detailsOut: flags.get("details-out"),
   };
