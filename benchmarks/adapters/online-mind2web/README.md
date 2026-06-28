@@ -50,13 +50,16 @@ threshold are set in `[verifier.env]` (`JUDGE_MODEL`, `SCORE_THRESHOLD`).
 
 The default `JUDGE_MODEL` is **`openai:o4-mini`** — the published WebJudge
 backbone (~85.7% human agreement), so a recomputed success rate is comparable to
-the Online-Mind2Web leaderboard. The judge bin parses the provider from the
-`JUDGE_MODEL` prefix and reads the matching key from the verifier env:
+the Online-Mind2Web leaderboard. The judge resolves the `JUDGE_MODEL` ref
+(`provider:name`) through [`@earendil-works/pi-ai`](https://www.npmjs.com/package/@earendil-works/pi-ai),
+which owns provider routing, env-key resolution, the OpenAI o-series quirks, and
+vision encoding — so the bin carries no hand-rolled provider client. pi-ai is
+bundled into the verifier (tsdown, no externals), so it stays self-contained in
+the Kernel VM with no `npm install` at grade time.
 
-- `openai:<model>` → `OPENAI_API_KEY`. o-series models (o4-mini, o3, …) reject
-  `temperature` and use `max_completion_tokens`; the client omits/swaps these
-  automatically. Screenshots are sent as vision `image_url` blocks with
-  `detail: high`.
+- `openai:<model>` → `OPENAI_API_KEY`. For o-series reasoning models (o4-mini,
+  o3, …) the judge requests a `medium` reasoning effort and omits `temperature`
+  (which they reject); pi-ai handles the token cap and the vision encoding.
 - `anthropic:<model>` → `ANTHROPIC_API_KEY`. Configurable, **non-canonical**
   cheaper alternative (e.g. `anthropic:claude-sonnet-4-6` /
   `anthropic:claude-opus-4-8`); an opus/sonnet judge is a *different grader* and
@@ -66,8 +69,8 @@ Both keys are passed through `[verifier.env]`, resolved from host env, so either
 provider works by changing only `JUDGE_MODEL`.
 
 [WebJudge-7B](https://huggingface.co/osunlp/WebJudge-7B) (open weights) is a
-future cheaper option but needs GPU hosting, so it is not wired into the
-dependency-free in-VM bundle.
+future cheaper option but needs GPU hosting, so it is not wired into the bundled
+in-VM judge.
 
 ## Run on Harbor
 
