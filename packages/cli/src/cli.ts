@@ -47,6 +47,9 @@ Options:
       --max-steps <n>            Max turns for action subcommands (default 3)
       --playwright               Add the playwright_execute tool so the model can run
                                  Playwright code against the browser session
+      --self-extend              Allow the agent to author its own tools at runtime;
+                                 an authored tool joins the toolset at the next idle
+                                 boundary (no manual reload)
       --out <file|->             Output file for screenshot subcommand
   -o, --output <fmt>             Output format for --print: text (default) | jsonl
       --jsonl-include-deltas     Include assistant_text_delta events (default off)
@@ -105,6 +108,7 @@ interface CliFlags {
 	jsonlIncludeDeltas: boolean;
 	jsonlIncludeImages: boolean;
 	playwright: boolean;
+	selfExtend: boolean;
 	model?: string;
 	thinking?: string;
 	browserProfile?: string;
@@ -155,6 +159,7 @@ function parseCliArgs(argv: string[]): CliFlags {
 				"jsonl-include-deltas": { type: "boolean", default: false },
 				"jsonl-include-images": { type: "boolean", default: false },
 				playwright: { type: "boolean", default: false },
+				"self-extend": { type: "boolean", default: false },
 			},
 			allowPositionals: true,
 			strict: true,
@@ -203,6 +208,7 @@ function parseCliArgs(argv: string[]): CliFlags {
 		jsonlIncludeDeltas: !!parsed.values["jsonl-include-deltas"],
 		jsonlIncludeImages: !!parsed.values["jsonl-include-images"],
 		playwright: !!parsed.values.playwright,
+		selfExtend: !!parsed.values["self-extend"],
 		positionals: parsed.positionals,
 	};
 }
@@ -220,6 +226,7 @@ function toHarnessFlags(flags: CliFlags): HarnessCliFlags {
 		jsonlIncludeDeltas: flags.jsonlIncludeDeltas,
 		jsonlIncludeImages: flags.jsonlIncludeImages,
 		playwright: flags.playwright,
+		selfExtend: flags.selfExtend,
 		model: flags.model,
 		thinking: flags.thinking,
 		browserProfile: flags.browserProfile,
