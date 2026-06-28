@@ -249,9 +249,7 @@ class ClawbenchCuaAgent(CuaHarborAgent):
         with no block simply has no interception.json and scores 0.
         """
         try:
-            await environment.exec(
-                f"mkdir -p {_VM_DATA_DIR}/screenshots", user="root"
-            )
+            await environment.exec(f"mkdir -p {_VM_DATA_DIR}", user="root")
         except Exception as exc:
             self.logger.warning(f"clawbench: could not mkdir {_VM_DATA_DIR}: {exc}")
             return
@@ -264,9 +262,15 @@ class ClawbenchCuaAgent(CuaHarborAgent):
                 except Exception as exc:
                     self.logger.warning(f"clawbench: upload {name} failed: {exc}")
 
+        # The screenshots dir is a passive layer; isolate its mkdir + upload so a
+        # failure here can never strand interception.json (the grading-critical
+        # file uploaded above).
         shots = data_dir / "screenshots"
         if shots.is_dir() and any(shots.iterdir()):
             try:
+                await environment.exec(
+                    f"mkdir -p {_VM_DATA_DIR}/screenshots", user="root"
+                )
                 await environment.upload_dir(shots, f"{_VM_DATA_DIR}/screenshots")
             except Exception as exc:
                 self.logger.warning(f"clawbench: upload screenshots failed: {exc}")

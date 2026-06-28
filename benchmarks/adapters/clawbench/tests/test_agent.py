@@ -208,6 +208,31 @@ async def test_run_survives_interceptor_early_exit(tmp_path, monkeypatch):
     assert drove["ok"] is True  # drive happened despite a dead sidecar
 
 
+async def test_upload_capture_uploads_interception_when_screenshots_mkdir_fails(
+    tmp_path,
+):
+    """A screenshots-dir mkdir failure must not strand interception.json."""
+    agent = _make_agent(tmp_path)
+
+    class FlakyEnv(FakeEnv):
+        async def exec(self, command, **kw):
+            if command.endswith("/screenshots"):
+                raise RuntimeError("boom")
+            return await super().exec(command, **kw)
+
+    env = FlakyEnv()
+    data_dir = tmp_path / "data"
+    (data_dir / "screenshots").mkdir(parents=True)
+    (data_dir / "interception.json").write_text('{"intercepted": true}')
+    (data_dir / "screenshots" / "0.png").write_text("img")
+
+    await agent._upload_capture(env, data_dir)
+
+    # The grading-critical file uploaded despite the screenshots mkdir failing.
+    assert ("interception.json", "/data/interception.json") in env.uploaded
+    assert env.uploaded_dirs == []  # screenshots upload was skipped, not retried
+
+
 def test_inline_my_info_splices_email_and_persona(tmp_path):
     agent = _make_agent(tmp_path)
     info = tmp_path / "myinfo" / "my-info"
