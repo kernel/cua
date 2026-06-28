@@ -36,15 +36,15 @@ export function judgeModel(ref: string): JudgeModel {
   // string, so widen the way pi-ai's own consumers do.
   const model = getModel(provider as never, name as never) as Model<Api>;
   const apiKey = getEnvApiKey(provider);
-  // OpenAI reasoning backbones (o4-mini, o3, …) reject `temperature` and a
-  // reasoning effort of "none" (pi-ai's default when unset); they require
-  // low/medium/high. Other backbones — including this adapter's
-  // claude-sonnet-4-5 default — keep deterministic scoring (temperature 0).
+  // Reasoning backbones reject `temperature`; OpenAI reasoning models also
+  // require reasoning effort low/medium/high (pi-ai defaults to "none").
+  // Non-reasoning backbones keep deterministic scoring (temperature 0).
   const baseOptions = { apiKey, maxTokens: MAX_TOKENS };
-  const options =
-    model.reasoning && provider === "openai"
+  const options = model.reasoning
+    ? provider === "openai"
       ? { ...baseOptions, reasoning: "medium" as const }
-      : { ...baseOptions, temperature: 0 };
+      : baseOptions
+    : { ...baseOptions, temperature: 0 };
   return {
     async complete(systemPrompt, content) {
       const res = await completeSimple(
