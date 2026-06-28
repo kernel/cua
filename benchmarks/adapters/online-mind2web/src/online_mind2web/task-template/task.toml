@@ -1,0 +1,31 @@
+schema_version = "1.0"
+
+[task]
+name = "osunlp/{task_id}"
+authors = [{ name = "OSU NLP Group" }]
+keywords = ["online-mind2web", "web-agent", "live-web"]
+
+[metadata]
+difficulty = "{difficulty}"
+category = "web-navigation"
+source = "osunlp/Online-Mind2Web"
+reference_length = "{reference_length}"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 900.0
+
+[verifier.env]
+# WebJudge backbone. The judge bin parses the provider from JUDGE_MODEL and
+# reads the matching provider key. Default openai:o4-mini is the published
+# WebJudge backbone (leaderboard parity); set JUDGE_MODEL=anthropic:<model>
+# to use the Anthropic path instead (non-canonical, cheaper alternative).
+OPENAI_API_KEY = "${OPENAI_API_KEY}"
+ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"
+JUDGE_MODEL = "openai:o4-mini"
+SCORE_THRESHOLD = "3"
+
+[environment]
+build_timeout_sec = 300.0
