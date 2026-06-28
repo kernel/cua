@@ -18,7 +18,9 @@ logger = logging.getLogger(__name__)
 
 
 def _default_output_dir() -> Path:
-    return Path(__file__).resolve().parents[3] / ".tasks"
+    # main.py is at adapters/webvoyager/src/webvoyager/main.py; parents[2] is the
+    # adapters/webvoyager package root, so the default lands in adapters/webvoyager/.tasks.
+    return Path(__file__).resolve().parents[2] / ".tasks"
 
 
 def _parse_args() -> argparse.Namespace:

@@ -14,6 +14,7 @@ SRC = Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(SRC))
 
 from webvoyager.adapter import WebVoyagerAdapter, _index_reference, _toml_escape  # noqa: E402
+from webvoyager.main import _default_output_dir  # noqa: E402
 
 
 @pytest.fixture
@@ -144,6 +145,14 @@ def test_overwrite_false_skips_existing(adapter: WebVoyagerAdapter) -> None:
     target.write_text("SENTINEL")
     adapter.run()  # overwrite=False
     assert target.read_text() == "SENTINEL"
+
+
+def test_default_output_dir_is_adapter_dot_tasks() -> None:
+    # Default must land in adapters/webvoyager/.tasks, as the README + --help document.
+    default = _default_output_dir()
+    assert default.name == ".tasks"
+    assert default.parent.name == "webvoyager"
+    assert default.parent.parent.name == "adapters"
 
 
 def test_toml_escape_quotes_and_backslashes() -> None:
