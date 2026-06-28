@@ -1,0 +1,24 @@
+# Reference config for a WebVoyager run on the Kernel env with the cua agent.
+#
+#   cd benchmarks
+#   python3 adapters/webvoyager/src/webvoyager/main.py --output-dir adapters/webvoyager/.tasks --limit 20
+#   uv run harbor run \
+#     -p adapters/webvoyager/.tasks \
+#     -e kernel --environment-kwarg pool_size=8 \
+#     --agent-import-path cua_harbor:CuaHarborAgent \
+#     -m anthropic/claude-sonnet-4-6 \
+#     --ae ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY \
+#     -n 6
+#
+# The judge model is pinned via [verifier.env] in each task.toml
+# (JUDGE_MODEL=claude-sonnet-4-5, override with WEBVOYAGER_JUDGE_MODEL); the verifier
+# reads ANTHROPIC_API_KEY from the host. MAX_IMAGES (last-k screenshots sent to the
+# judge) defaults to 15, matching the canonical auto_eval.py invocation; override with
+# WEBVOYAGER_MAX_IMAGES.
+tasks_path: adapters/webvoyager/.tasks
+environment: kernel
+environment_kwargs:
+  pool_size: 8
+agent_import_path: cua_harbor:CuaHarborAgent
+model: anthropic/claude-sonnet-4-6
+n_concurrent: 6
