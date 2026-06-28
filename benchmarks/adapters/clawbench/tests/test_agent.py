@@ -160,6 +160,65 @@ async def test_run_starts_interceptor_then_drives_then_uploads(tmp_path, monkeyp
     assert ("interception.json", "/data/interception.json") in env.uploaded
 
 
+def test_reset_capture_clears_prior_attempt(tmp_path):
+    agent = _make_agent(tmp_path)
+    data = tmp_path / "data"
+    (data / "screenshots").mkdir(parents=True)
+    (data / "interception.json").write_text('{"intercepted": true}')
+    (data / "requests.jsonl").write_text('{"url": "old"}\n')
+    (data / "actions.jsonl").write_text('{"type": "click"}\n')
+    (data / "screenshots" / "1.png").write_text("img")
+    stop_file = data / ".stop-requested"
+    stop_file.write_text("stop")
+
+    agent._reset_capture(data, stop_file)
+
+    # Every per-attempt capture file (and the stop sentinel) is gone.
+    assert not (data / "interception.json").exists()
+    assert not (data / "requests.jsonl").exists()
+    assert not (data / "actions.jsonl").exists()
+    assert list((data / "screenshots").glob("*.png")) == []
+    assert not stop_file.exists()
+
+
+async def test_run_does_not_upload_stale_interception_on_retry(tmp_path, monkeypatch):
+    """A retry that produces no block must not upload the prior attempt's block."""
+    agent = _make_agent(tmp_path)
+    env = FakeEnv(
+        environment_dir=_task_env_dir(tmp_path, {"url_pattern": "x", "method": "POST"})
+    )
+    _stub_my_info(monkeypatch)
+    # A stale interception.json left in the reused data dir by a prior attempt.
+    data = agent.logs_dir.parent / "clawbench-data"
+    data.mkdir(parents=True, exist_ok=True)
+    (data / "interception.json").write_text('{"intercepted": true, "stale": true}')
+
+    class FakeProc:
+        returncode = 0
+
+        def poll(self):
+            return None
+
+        def wait(self, timeout=None):
+            return 0
+
+    monkeypatch.setattr(
+        "clawbench_adapter.agent.subprocess.Popen", lambda *a, **k: FakeProc()
+    )
+    monkeypatch.setattr("clawbench_adapter.agent.time.sleep", lambda s: None)
+
+    async def fake_super_run(self, instruction, environment, context):
+        pass  # this attempt blocks nothing -> writes no interception.json
+
+    monkeypatch.setattr("clawbench_adapter.agent.CuaHarborAgent.run", fake_super_run)
+
+    await agent.run("do it", env, context=object())
+
+    # The stale file was cleared at the start, so nothing is uploaded.
+    assert not (data / "interception.json").exists()
+    assert ("interception.json", "/data/interception.json") not in env.uploaded
+
+
 async def test_run_survives_no_session(tmp_path, monkeypatch):
     agent = _make_agent(tmp_path)
     env = FakeEnv(session=False, environment_dir=_task_env_dir(tmp_path, {}))

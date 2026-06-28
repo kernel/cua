@@ -24,6 +24,12 @@ from clawbench_adapter._upstream import (
 )
 
 TEMPLATE_DIR = Path(__file__).parent / "task-template"
+# Single source of truth for the email provider: the live agent imports it as
+# ``clawbench_adapter.email_provider``; the in-VM grader scripts import it as
+# ``_email_provider``. It is copied into each task's tests/ at generation time
+# (below) rather than hand-maintained as a second template asset, so the two
+# can never drift.
+_EMAIL_PROVIDER_SRC = Path(__file__).parent / "email_provider.py"
 
 # Footer appended to the upstream instruction. Unlike upstream's Docker footer
 # (which hands the agent a 127.0.0.1:9223 CDP endpoint to connect to), cua is
@@ -49,7 +55,6 @@ _TEST_ASSETS = (
     "finalize_capture.py",
     "cleanup_email.py",
     "prepare_task.py",
-    "_email_provider.py",
     "alex_green_personal_info.json",
     "resume_template.json",
 )
@@ -219,6 +224,9 @@ def write_harbor_task(case: Case, output_root: Path, *, org: str, dataset_name: 
     _copy_extra_info(task, case.task_dir, tests_dir / "extra_info")
     for asset in _TEST_ASSETS:
         shutil.copy2(TEMPLATE_DIR / "tests" / asset, tests_dir / asset)
+    # The grader scripts import the provider as ``_email_provider``; copy the
+    # canonical module so the in-VM copy is always identical to the live one.
+    shutil.copy2(_EMAIL_PROVIDER_SRC, tests_dir / "_email_provider.py")
     for script in ("test.sh", "interceptor.py", "finalize_capture.py", "cleanup_email.py", "prepare_task.py"):
         _chmod_executable(tests_dir / script)
 

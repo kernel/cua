@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-# Make the in-VM tests/ scripts (verify.py, interceptor.py, _email_provider.py)
+# Make the in-VM tests/ scripts (verify.py, interceptor.py, cleanup_email.py)
 # importable by their module name, exactly as they are laid out in a task dir.
 TEMPLATE_TESTS = (
     Path(__file__).resolve().parents[1]
@@ -14,6 +14,14 @@ TEMPLATE_TESTS = (
     / "tests"
 )
 sys.path.insert(0, str(TEMPLATE_TESTS))
+
+# The grader scripts import the email provider as ``_email_provider``; the
+# adapter copies the canonical ``clawbench_adapter.email_provider`` into each
+# task's tests/ under that name at generation time. Mirror that here so the
+# in-VM scripts under test resolve the same single source (no template copy).
+import clawbench_adapter.email_provider as _email_provider  # noqa: E402
+
+sys.modules.setdefault("_email_provider", _email_provider)
 
 
 @pytest.fixture

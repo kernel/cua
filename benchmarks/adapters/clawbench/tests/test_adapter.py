@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+import clawbench_adapter.email_provider
 from clawbench_adapter.adapter import (
     KERNEL_FOOTER,
     build_dataset,
@@ -12,6 +13,8 @@ from clawbench_adapter.adapter import (
     kernel_instruction,
 )
 from clawbench_adapter.main import main as cli_main
+
+_PKG_DIR = Path(clawbench_adapter.email_provider.__file__).parent
 
 
 def test_kernel_env_config_has_no_start_url():
@@ -115,6 +118,24 @@ def test_tests_dir_has_grader_assets(cases_dir, tmp_path):
     # Executable bits set on the scripts.
     assert (tests / "test.sh").stat().st_mode & 0o111
     assert (tests / "interceptor.py").stat().st_mode & 0o111
+
+
+def test_generated_email_provider_matches_canonical(cases_dir, tmp_path):
+    """The in-VM grader's _email_provider.py is a copy of the live module.
+
+    The provider is bundled into each task's tests/ from the single canonical
+    source (clawbench_adapter.email_provider) rather than hand-maintained, so
+    live runs and unit tests can never drift.
+    """
+    out = tmp_path / "tasks"
+    build_dataset(cases_dir=cases_dir, output_dir=out)
+    generated = (
+        out / "v2-1010-rating-voting-review-myrecipes" / "tests" / "_email_provider.py"
+    )
+    canonical = _PKG_DIR / "email_provider.py"
+    assert generated.read_text() == canonical.read_text()
+    # The duplicate template asset is gone -- the copy is generated, not vendored.
+    assert not (_PKG_DIR / "task-template" / "tests" / "_email_provider.py").exists()
 
 
 def test_extra_info_copied_into_tests(cases_dir, tmp_path):

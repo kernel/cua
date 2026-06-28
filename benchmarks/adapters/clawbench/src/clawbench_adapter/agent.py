@@ -72,8 +72,7 @@ class ClawbenchCuaAgent(CuaHarborAgent):
         data_dir.mkdir(parents=True, exist_ok=True)
         (data_dir / "screenshots").mkdir(exist_ok=True)
         stop_file = data_dir / ".stop-requested"
-        if stop_file.exists():
-            stop_file.unlink()
+        self._reset_capture(data_dir, stop_file)
 
         myinfo_dir = self.logs_dir.parent / "clawbench-myinfo"
         state_file = data_dir / "task-state.json"
@@ -87,6 +86,26 @@ class ClawbenchCuaAgent(CuaHarborAgent):
             self._finalize_interceptor(proc, stop_file)
             await self._upload_capture(environment, data_dir)
             self._cleanup_my_info(state_file)
+
+    def _reset_capture(self, data_dir: Path, stop_file: Path) -> None:
+        """Clear the prior attempt's capture so each run starts clean.
+
+        ``run`` reuses ``clawbench-data`` across attempts. The interceptor opens
+        ``requests.jsonl``/``actions.jsonl`` in append mode and writes
+        ``interception.json`` only when it is *absent* (first match wins), so a
+        retry would otherwise upload a stale ``interception.json`` from an earlier
+        attempt -- and a genuinely new block could not overwrite it. Remove the
+        per-attempt capture files (and the stop sentinel) up front so the upload
+        only ever carries this attempt's block.
+        """
+        if stop_file.exists():
+            stop_file.unlink()
+        for name in ("interception.json", "requests.jsonl", "actions.jsonl"):
+            (data_dir / name).unlink(missing_ok=True)
+        shots = data_dir / "screenshots"
+        if shots.is_dir():
+            for shot in shots.glob("*.png"):
+                shot.unlink(missing_ok=True)
 
     def _inline_my_info(self, instruction: str, myinfo_dir: Path) -> str:
         """Splice the persona + email credentials into the instruction text.
