@@ -145,6 +145,8 @@ export class HarnessExtensionHost {
 	private reloading = false;
 	/** Set by `write_extension`; drained into a single reload at the next idle boundary. */
 	private reloadRequested = false;
+	/** Current reload invocation, so concurrent callers can await completion. */
+	private inFlightReload: Promise<void> | undefined;
 	/** The in-flight queued reload, so a drain can await one already running. */
 	private pendingReload: Promise<void> | undefined;
 	/** Sticky shutdown request raised by `ctx.shutdown()` or owner disposal. */
@@ -219,43 +221,53 @@ export class HarnessExtensionHost {
 		if (this.disposed) return;
 		// Reentrancy guard: a reload triggered (e.g. via ctx.reload()) while one is
 		// in flight must not run concurrently and double-tear-down the bridge. Re-arm
-		// the latch so the in-flight reload's drain picks up the newer request.
+		// the latch and wait for the in-flight reload before draining the follow-up.
 		if (this.reloading) {
 			this.reloadRequested = true;
+			if (this.inFlightReload) await this.inFlightReload;
+			await this.drainPendingReload();
 			return;
 		}
-		this.reloading = true;
-		try {
-			// Don't swap the runner/bridge mid-turn: wait for the agent loop to be
-			// idle first. All callers reach here at or after an idle point (the
-			// /reload command runs between prompts; the self-extend drain is scheduled
-			// off-stack at agent_end), so this resolves promptly and cannot deadlock
-			// on an awaited-in-loop reload.
-			await this.harness.waitForIdle();
-			if (this.disposed) return;
-			const flags = this.runner?.getFlagValues() ?? new Map<string, boolean | string>();
-			await this.runner?.emit({ type: "session_shutdown", reason: "reload" });
-			if (await this.disposeIfShutdownRequested()) return;
-			this.teardownBridge?.();
-			this.teardownBridge = undefined;
+		const inFlight = (async () => {
+			this.reloading = true;
 			try {
-				await this.buildRunner();
+				// Don't swap the runner/bridge mid-turn: wait for the agent loop to be
+				// idle first. All callers reach here at or after an idle point (the
+				// /reload command runs between prompts; the self-extend drain is scheduled
+				// off-stack at agent_end), so this resolves promptly and cannot deadlock
+				// on an awaited-in-loop reload.
+				await this.harness.waitForIdle();
+				if (this.disposed) return;
+				const flags = this.runner?.getFlagValues() ?? new Map<string, boolean | string>();
+				await this.runner?.emit({ type: "session_shutdown", reason: "reload" });
 				if (await this.disposeIfShutdownRequested()) return;
-				for (const [name, value] of flags) this.runner?.setFlagValue(name, value);
+				this.teardownBridge?.();
+				this.teardownBridge = undefined;
+				try {
+					await this.buildRunner();
+					if (await this.disposeIfShutdownRequested()) return;
+					for (const [name, value] of flags) this.runner?.setFlagValue(name, value);
 
-				await this.reapplyTools();
-				if (await this.disposeIfShutdownRequested()) return;
-				this.installBridge();
-				await this.runner?.emit({ type: "session_start", reason: "reload" });
-			} catch (error) {
-				// A failed rebuild left the bridge torn down; reinstall it over the
-				// current runner so extension events keep flowing rather than going
-				// silently dark for the rest of the session.
-				if (this.runner && !this.teardownBridge) this.installBridge();
-				throw error;
+					await this.reapplyTools();
+					if (await this.disposeIfShutdownRequested()) return;
+					this.installBridge();
+					await this.runner?.emit({ type: "session_start", reason: "reload" });
+				} catch (error) {
+					// A failed rebuild left the bridge torn down; reinstall it over the
+					// current runner so extension events keep flowing rather than going
+					// silently dark for the rest of the session.
+					if (this.runner && !this.teardownBridge) this.installBridge();
+					throw error;
+				}
+			} finally {
+				this.reloading = false;
 			}
+		})();
+		this.inFlightReload = inFlight;
+		try {
+			await inFlight;
 		} finally {
-			this.reloading = false;
+			if (this.inFlightReload === inFlight) this.inFlightReload = undefined;
 		}
 		// Honor a shutdown requested during the final emit, after `reloading` cleared.
 		if (this.shutdownRequested) await this.dispose();
@@ -419,20 +431,23 @@ export class HarnessExtensionHost {
 	 * latch for the next boundary. `disposed` makes this a no-op during teardown.
 	 */
 	async drainPendingReload(): Promise<void> {
-		// Await a reload already running (the bridge fires this fire-and-forget, so
-		// a caller that awaits the drain — e.g. a test asserting the new tool is
-		// live — must observe that reload settle).
-		if (this.pendingReload) {
-			await this.pendingReload;
-			return;
-		}
-		if (!this.reloadRequested || this.reloading || this.disposed) return;
-		this.reloadRequested = false;
-		this.pendingReload = this.reload();
-		try {
-			await this.pendingReload;
-		} finally {
-			this.pendingReload = undefined;
+		while (true) {
+			// Await a reload already running (the bridge fires this fire-and-forget,
+			// so a caller that awaits the drain — e.g. a test asserting the new tool
+			// is live — must observe that reload settle).
+			if (this.pendingReload) {
+				await this.pendingReload;
+				continue;
+			}
+			if (!this.reloadRequested || this.reloading || this.disposed) return;
+			this.reloadRequested = false;
+			const queuedReload = this.reload();
+			this.pendingReload = queuedReload;
+			try {
+				await queuedReload;
+			} finally {
+				if (this.pendingReload === queuedReload) this.pendingReload = undefined;
+			}
 		}
 	}
 

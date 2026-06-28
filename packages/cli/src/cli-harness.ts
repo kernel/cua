@@ -524,7 +524,13 @@ export async function runPrintCommand(prompt: string, flags: HarnessCliFlags): P
 	} finally {
 		// Dispose before closing the handle: extensions receive session_shutdown
 		// during dispose and may call back into the harness while the browser lives.
-		// Separate try blocks so a throwing extension shutdown never skips close().
+		// Drain queued reloads first so teardown can't race a bridge-started reload.
+		// Separate try blocks so one cleanup failure never skips the rest.
+		try {
+			await runtime.host?.drainPendingReload();
+		} catch (err) {
+			stderr.write(`[cua] cleanup warning: ${(err as Error).message}\n`);
+		}
 		try {
 			await runtime.host?.dispose();
 		} catch (err) {
@@ -565,6 +571,11 @@ export async function runInteractiveCommand(
 		});
 	} finally {
 		try {
+			await runtime.host?.drainPendingReload();
+		} catch (err) {
+			stderr.write(`[cua] cleanup warning: ${(err as Error).message}\n`);
+		}
+		try {
 			await runtime.host?.dispose();
 		} catch (err) {
 			stderr.write(`[cua] cleanup warning: ${(err as Error).message}\n`);
@@ -600,6 +611,11 @@ export async function runActionCommand(
 		}, screenshotOut);
 		return emitCompact(res);
 	} finally {
+		try {
+			await runtime.host?.drainPendingReload();
+		} catch (err) {
+			stderr.write(`[cua] cleanup warning: ${(err as Error).message}\n`);
+		}
 		try {
 			await runtime.host?.dispose();
 		} catch (err) {

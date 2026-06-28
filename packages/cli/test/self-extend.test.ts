@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -127,6 +127,31 @@ describe("self-extend: runtime tool authoring", () => {
 		});
 		expect(host).toBeDefined();
 		expect(toolNames(fx.harness)).not.toContain("write_extension");
+	});
+
+	it("drains follow-up reload requests queued during an in-flight drain", async () => {
+		fx = await buildTestHarness({ turns: [{ steps: [{ type: "text", text: "ok" }] }] });
+		const extDir = mkdtempSync(join(tmpdir(), "cua-ext-"));
+		host = new HarnessExtensionHost({
+			harness: fx.harness,
+			session: fx.session,
+			cwd: fx.cwd,
+			configuredPaths: [extDir],
+			agentDir: mkdtempSync(join(tmpdir(), "cua-agentdir-")),
+			selfExtend: true,
+		});
+		await host.load();
+
+		const internals = host as unknown as { reloadRequested: boolean };
+		internals.reloadRequested = true;
+		let reloadCalls = 0;
+		const reloadSpy = vi.spyOn(host, "reload").mockImplementation(async () => {
+			reloadCalls += 1;
+			if (reloadCalls === 1) internals.reloadRequested = true;
+		});
+
+		await host.drainPendingReload();
+		expect(reloadSpy).toHaveBeenCalledTimes(2);
 	});
 
 	it("writes the file and reports a valid trial load without a mid-turn swap", async () => {
