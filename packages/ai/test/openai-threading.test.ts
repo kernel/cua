@@ -77,6 +77,25 @@ describe("openai threadRequest", () => {
 		expect(((await onPayload({}, model)) as Record<string, unknown>).previous_response_id).toBeUndefined();
 	});
 
+	it("ignores a responseId from an errored turn so it never anchors previous_response_id", async () => {
+		const ctx = multiTurnContext();
+		// An error after response.created can capture a responseId for a response the server never stored.
+		ctx.messages.push({
+			role: "assistant",
+			content: [{ type: "text", text: "request failed" }],
+			api: OPENAI_CUA_RESPONSES_API,
+			provider: "openai",
+			model: "gpt-5.5",
+			responseId: "resp_failed",
+			usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+			stopReason: "error",
+			timestamp: 0,
+		});
+		const { context, onPayload } = threadRequest(ctx, undefined);
+		expect(context).toBe(ctx);
+		expect(((await onPayload({}, model)) as Record<string, unknown>).previous_response_id).toBeUndefined();
+	});
+
 	it("composes a caller onPayload on top of the threaded payload", async () => {
 		const { onPayload } = threadRequest(multiTurnContext(), {
 			onPayload: (payload) => ({ wrapped: payload }),

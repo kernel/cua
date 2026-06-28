@@ -528,16 +528,19 @@ export interface ResponseThreadingDelta {
  * Derive the `previous_response_id` continuation from a message history.
  *
  * Anchors on the most recent assistant turn: returns its `responseId` and the
- * messages after it (the delta). If that turn has no `responseId` — a failed or
- * aborted request the server never stored — or there is no assistant turn yet,
- * returns every message and no id so the caller replays the full history,
- * rather than chaining to a staler id and re-sending the items past it.
+ * messages after it (the delta). An errored or aborted turn may carry a
+ * `responseId` captured from an incomplete response the server never stored, so
+ * its id is ignored. When the anchor has no usable `responseId`, or there is no
+ * assistant turn yet, returns every message and no id so the caller replays the
+ * full history, rather than chaining to a phantom id and pruning past it.
  */
 export function responseThreadingDelta(messages: readonly Message[]): ResponseThreadingDelta {
 	for (let index = messages.length - 1; index >= 0; index -= 1) {
 		const message = messages[index]!;
 		if (message.role !== "assistant") continue;
-		const responseId = (message as AssistantMessage).responseId;
+		const assistant = message as AssistantMessage;
+		const failed = assistant.stopReason === "error" || assistant.stopReason === "aborted";
+		const responseId = failed ? undefined : assistant.responseId;
 		return responseId ? { previousResponseId: responseId, deltaMessages: messages.slice(index + 1) } : { deltaMessages: [...messages] };
 	}
 	return { deltaMessages: [...messages] };
