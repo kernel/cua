@@ -77,27 +77,29 @@ function writeReward(path: string, reward: 0 | 1): void {
 
 /**
  * Read the artifacts, grade through `makeJudge()`, and write reward.txt (+
- * optional grading_details.json). Both model resolution and the judge call run
- * inside the try, so a missing key or a transient API error fails closed to
- * reward 0 with the error recorded in the details rather than crashing the
- * verifier. Takes a factory so the file contract is testable without a live
- * provider call.
+ * optional grading_details.json). Artifact reads, model resolution, and the
+ * judge call all run inside the try so parse/fs errors or API failures fail
+ * closed to reward 0 with the error recorded in details instead of crashing
+ * the verifier. Takes a factory so the file contract is testable without a
+ * live provider call.
  */
 export async function run(args: Args, makeJudge: () => JudgeModel): Promise<void> {
-  const task = loadGroundTruth(args.groundTruth).task;
-  const answer = loadAnswer(args.answer);
-  const shots = lastShots(args.shots, args.maxImages);
-
-  // No answer and no screenshots: nothing to judge, fail closed without details.
-  if (!answer && shots.length === 0) {
-    writeReward(args.rewardOut, 0);
-    return;
-  }
-
+  let answer = "";
+  let shots = [] as ReturnType<typeof lastShots>;
   let verdict = "";
   let reward: 0 | 1 = 0;
   let error: string | null = null;
   try {
+    const task = loadGroundTruth(args.groundTruth).task;
+    answer = loadAnswer(args.answer);
+    shots = lastShots(args.shots, args.maxImages);
+
+    // No answer and no screenshots: nothing to judge, fail closed without details.
+    if (!answer && shots.length === 0) {
+      writeReward(args.rewardOut, 0);
+      return;
+    }
+
     ({ verdict, reward } = await gradeWithWebJudge({ task, answer, shots, judge: makeJudge() }));
   } catch (err) {
     error = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
