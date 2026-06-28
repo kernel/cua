@@ -351,6 +351,13 @@ interface HarnessRuntime {
 	harness: ReturnType<typeof buildCuaHarness>;
 	provider: string;
 	modelRef: CuaModelRef;
+	/**
+	 * Whether the first prompt should skip the initial browser screenshot.
+	 * Decided once here, before extensions load, so an extension that sends a
+	 * user message during startup can't flip the live prior-turn check and leave
+	 * the user's real first prompt without the screenshot.
+	 */
+	skipInitialScreenshot: boolean;
 	/** Loaded pi-extension host. Undefined with --no-extensions or an untrusted project + no global extensions. */
 	host?: HarnessExtensionHost;
 }
@@ -432,6 +439,11 @@ async function setupHarnessRuntime(
 		const png = await captureScreenshot(handle.client, handle.browser.session_id);
 		return png ? [{ type: "image", data: png.toString("base64"), mimeType: "image/png" }] : undefined;
 	};
+	// Decide the first-turn screenshot before extensions load: a resumed session
+	// already has turns, and capturing it now (rather than re-reading the live
+	// transcript at prompt time) keeps an extension's startup sendUserMessage from
+	// flipping the check and leaving the user's real first prompt without it.
+	const skipInitialScreenshot = resolved?.resumed === true || (await sessionHasPriorTurn(session));
 	// A throwing extension load (e.g. a tool name colliding with a base tool)
 	// must not leak the already-provisioned browser handle: the caller's finally
 	// only runs once this returns, so close the handle here before rethrowing.
@@ -459,8 +471,18 @@ async function setupHarnessRuntime(
 		harness,
 		provider,
 		modelRef: auth.modelRef,
+		skipInitialScreenshot,
 		host,
 	};
+}
+
+async function sessionHasPriorTurn(session: Session): Promise<boolean> {
+	const entries = await session.getBranch();
+	return entries.some(
+		(entry) =>
+			entry.type === "message" &&
+			(entry.message.role === "user" || entry.message.role === "assistant"),
+	);
 }
 
 function hasExplicitSessionFlag(flags: HarnessCliFlags): boolean {
@@ -515,7 +537,7 @@ export async function runPrintCommand(prompt: string, flags: HarnessCliFlags): P
 			provider: runtime.provider,
 			prompt,
 			skills: runtime.skills,
-			skipInitialScreenshot: runtime.resolved?.resumed === true,
+			skipInitialScreenshot: runtime.skipInitialScreenshot,
 			verbose: flags.verbose,
 			jsonlMode,
 			jsonlIncludeDeltas: flags.jsonlIncludeDeltas,
@@ -560,7 +582,7 @@ export async function runInteractiveCommand(
 			debugTui: flags.debugTui,
 			resumed: runtime.resolved?.resumed === true,
 			transcriptPath: runtime.resolved?.transcriptPath,
-			skipInitialScreenshot: runtime.resolved?.resumed === true,
+			skipInitialScreenshot: runtime.skipInitialScreenshot,
 			host: runtime.host,
 		});
 	} finally {
@@ -596,7 +618,7 @@ export async function runActionCommand(
 			harness: runtime.harness,
 			browserHandle: runtime.handle,
 			session: runtime.session,
-			skipInitialScreenshot: runtime.resolved?.resumed === true,
+			skipInitialScreenshot: runtime.skipInitialScreenshot,
 		}, screenshotOut);
 		return emitCompact(res);
 	} finally {

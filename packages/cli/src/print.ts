@@ -93,9 +93,9 @@ export async function runPrint(opts: RunPrintOptions): Promise<number> {
 }
 
 async function maybeInitialScreenshot(opts: RunPrintOptions): Promise<ImageContent[] | undefined> {
+	// `skipInitialScreenshot` is decided once at startup (before extensions load),
+	// so an extension's startup message can't suppress the user's first-turn frame.
 	if (opts.skipInitialScreenshot) return undefined;
-	const hasPriorTurn = await sessionHasPriorTurn(opts.session);
-	if (hasPriorTurn) return undefined;
 	const png = await captureScreenshot(opts.browserHandle.client, opts.browserHandle.browser.session_id);
 	if (!png) return undefined;
 	return [
@@ -105,14 +105,4 @@ async function maybeInitialScreenshot(opts: RunPrintOptions): Promise<ImageConte
 			mimeType: "image/png",
 		},
 	];
-}
-
-async function sessionHasPriorTurn(session: Session): Promise<boolean> {
-	const entries = await session.getBranch();
-	for (const entry of entries) {
-		if (entry.type === "message" && (entry.message.role === "user" || entry.message.role === "assistant")) {
-			return true;
-		}
-	}
-	return false;
 }
