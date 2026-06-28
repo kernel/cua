@@ -41,7 +41,9 @@ REQUESTS_FILE = DATA_DIR / "requests.jsonl"
 ACTIONS_FILE = DATA_DIR / "actions.jsonl"
 INTERCEPTION_FILE = DATA_DIR / "interception.json"
 STOP_FILE = DATA_DIR / ".stop-requested"
-EVAL_SCHEMA_PATH = Path(os.environ.get("CLAWBENCH_EVAL_SCHEMA", "/tests/eval_schema.json"))
+EVAL_SCHEMA_PATH = Path(
+    os.environ.get("CLAWBENCH_EVAL_SCHEMA", "/tests/eval_schema.json")
+)
 CONNECTION_FILE = Path(
     os.environ.get("KERNEL_CONNECTION_FILE", "/harbor/kernel/connection.json")
 )
@@ -161,6 +163,31 @@ def _log_request(log_file, params) -> None:
     }
     log_file.write(json.dumps(entry) + "\n")
     log_file.flush()
+
+
+def _write_interception(
+    *,
+    eval_schema: dict,
+    request_url: str,
+    method: str,
+    query_params: dict,
+    body,
+) -> None:
+    INTERCEPTION_FILE.write_text(
+        json.dumps(
+            {
+                "intercepted": True,
+                "request": {
+                    "url": request_url,
+                    "method": method,
+                    "params": query_params,
+                    "body": body,
+                },
+                "schema": eval_schema,
+            },
+            indent=2,
+        )
+    )
 
 
 def resolve_cdp_ws_url() -> str:
@@ -318,12 +345,20 @@ def run() -> int:
                             {"source": ACTION_CAPTURE_SCRIPT},
                             child,
                         )
-                        send("Runtime.evaluate", {"expression": ACTION_CAPTURE_SCRIPT}, child)
+                        send(
+                            "Runtime.evaluate",
+                            {"expression": ACTION_CAPTURE_SCRIPT},
+                            child,
+                        )
                         instrumented.add(child)
                     if child not in fetch_sessions:
                         send(
                             "Fetch.enable",
-                            {"patterns": [{"urlPattern": "*", "requestStage": "Request"}]},
+                            {
+                                "patterns": [
+                                    {"urlPattern": "*", "requestStage": "Request"}
+                                ]
+                            },
                             child,
                         )
                         fetch_sessions.add(child)
@@ -378,22 +413,13 @@ def run() -> int:
                 {"requestId": request_id, "errorReason": "BlockedByClient"},
                 session_id,
             )
-            if not INTERCEPTION_FILE.exists():
-                INTERCEPTION_FILE.write_text(
-                    json.dumps(
-                        {
-                            "intercepted": True,
-                            "request": {
-                                "url": request_url,
-                                "method": params["request"]["method"],
-                                "params": query_params,
-                                "body": body,
-                            },
-                            "schema": eval_schema,
-                        },
-                        indent=2,
-                    )
-                )
+            _write_interception(
+                eval_schema=eval_schema,
+                request_url=request_url,
+                method=params["request"]["method"],
+                query_params=query_params,
+                body=body,
+            )
             break
     finally:
         requests_log.close()

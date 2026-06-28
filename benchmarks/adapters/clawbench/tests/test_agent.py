@@ -180,6 +180,32 @@ async def test_run_survives_no_session(tmp_path, monkeypatch):
     assert drove["ok"] is True
 
 
+async def test_run_clears_stale_capture_before_retry(tmp_path, monkeypatch):
+    agent = _make_agent(tmp_path)
+    env = FakeEnv(session=False, environment_dir=_task_env_dir(tmp_path, {}))
+    _stub_my_info(monkeypatch)
+
+    data_dir = agent.logs_dir.parent / "clawbench-data"
+    (data_dir / "screenshots").mkdir(parents=True)
+    (data_dir / "interception.json").write_text('{"intercepted": true}')
+    (data_dir / "requests.jsonl").write_text('{"url":"https://old"}\n')
+    (data_dir / "actions.jsonl").write_text('{"type":"click"}\n')
+    (data_dir / ".stop-requested").write_text("stop")
+    (data_dir / "screenshots" / "old.png").write_text("img")
+
+    async def fake_super_run(self, instruction, environment, context):
+        return None
+
+    monkeypatch.setattr("clawbench_adapter.agent.CuaHarborAgent.run", fake_super_run)
+
+    await agent.run("retry", env, context=object())
+
+    assert not (data_dir / "interception.json").exists()
+    assert not (data_dir / ".stop-requested").exists()
+    assert not any((data_dir / "screenshots").iterdir())
+    assert ("interception.json", "/data/interception.json") not in env.uploaded
+
+
 async def test_run_survives_interceptor_early_exit(tmp_path, monkeypatch):
     agent = _make_agent(tmp_path)
     env = FakeEnv(

@@ -1,5 +1,6 @@
 import io
 import json
+from pathlib import Path
 
 import pytest
 
@@ -126,3 +127,15 @@ def test_email_account_credentials_shape():
         "login_url": "",
         "provider": "agentmail",
     }
+
+
+def test_email_provider_modules_stay_in_sync():
+    template_provider = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "clawbench_adapter"
+        / "task-template"
+        / "tests"
+        / "_email_provider.py"
+    )
+    assert Path(ep.__file__).read_text() == template_provider.read_text()

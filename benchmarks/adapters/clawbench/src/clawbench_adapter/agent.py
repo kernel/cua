@@ -26,6 +26,7 @@ over a sidecar failure.
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -69,11 +70,8 @@ class ClawbenchCuaAgent(CuaHarborAgent):
 
     async def run(self, instruction, environment, context) -> None:  # type: ignore[override]
         data_dir = self.logs_dir.parent / "clawbench-data"
-        data_dir.mkdir(parents=True, exist_ok=True)
-        (data_dir / "screenshots").mkdir(exist_ok=True)
+        self._reset_capture_dir(data_dir)
         stop_file = data_dir / ".stop-requested"
-        if stop_file.exists():
-            stop_file.unlink()
 
         myinfo_dir = self.logs_dir.parent / "clawbench-myinfo"
         state_file = data_dir / "task-state.json"
@@ -87,6 +85,23 @@ class ClawbenchCuaAgent(CuaHarborAgent):
             self._finalize_interceptor(proc, stop_file)
             await self._upload_capture(environment, data_dir)
             self._cleanup_my_info(state_file)
+
+    def _reset_capture_dir(self, data_dir: Path) -> None:
+        """Clear prior trial artifacts so retries cannot reuse stale capture data."""
+        data_dir.mkdir(parents=True, exist_ok=True)
+        for name in (
+            "interception.json",
+            "requests.jsonl",
+            "actions.jsonl",
+            ".stop-requested",
+        ):
+            path = data_dir / name
+            if path.is_file():
+                path.unlink()
+        screenshots = data_dir / "screenshots"
+        if screenshots.exists():
+            shutil.rmtree(screenshots)
+        screenshots.mkdir(parents=True, exist_ok=True)
 
     def _inline_my_info(self, instruction: str, myinfo_dir: Path) -> str:
         """Splice the persona + email credentials into the instruction text.

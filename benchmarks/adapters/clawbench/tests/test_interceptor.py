@@ -42,7 +42,9 @@ def test_const_fields_match_subset():
 
 def test_const_fields_match_list_body_any():
     # Batched GraphQL: match if any item matches.
-    assert interceptor._const_fields_match({"op": "x"}, [{"op": "y"}, {"op": "x"}]) is True
+    assert (
+        interceptor._const_fields_match({"op": "x"}, [{"op": "y"}, {"op": "x"}]) is True
+    )
     assert interceptor._const_fields_match({"op": "x"}, [{"op": "y"}]) is False
 
 
@@ -99,3 +101,21 @@ def test_log_request_filters_internal_schemes(tmp_path):
     assert len(lines) == 1
     assert lines[0]["url"] == "https://site.com/api"
     assert lines[0]["body"] == {"k": 1}
+
+
+def test_write_interception_overwrites_stale_file(monkeypatch, tmp_path):
+    interception = tmp_path / "interception.json"
+    interception.write_text('{"intercepted": true, "request": {"url": "https://old"}}')
+    monkeypatch.setattr(interceptor, "INTERCEPTION_FILE", interception)
+
+    interceptor._write_interception(
+        eval_schema={"url_pattern": "api/new", "method": "POST"},
+        request_url="https://site.com/api/new",
+        method="POST",
+        query_params={"id": "2"},
+        body={"ok": True},
+    )
+
+    payload = json.loads(interception.read_text())
+    assert payload["request"]["url"] == "https://site.com/api/new"
+    assert payload["request"]["params"] == {"id": "2"}
