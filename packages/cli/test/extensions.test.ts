@@ -185,6 +185,41 @@ describe("HarnessExtensionHost", () => {
 		expect(new Set(names).size).toBe(names.length);
 	});
 
+	it("waits for an in-flight manual reload before disposing", async () => {
+		const created = await loadHost();
+		const originalWaitForIdle = fx!.harness.waitForIdle.bind(fx!.harness);
+		let releaseGate: (() => void) | undefined;
+		const gate = new Promise<void>((resolve) => {
+			releaseGate = resolve;
+		});
+		let firstWaitResolve: (() => void) | undefined;
+		const firstWait = new Promise<void>((resolve) => {
+			firstWaitResolve = resolve;
+		});
+		let first = true;
+		fx!.harness.waitForIdle = async () => {
+			if (first) {
+				first = false;
+				firstWaitResolve?.();
+				await gate;
+			}
+			return originalWaitForIdle();
+		};
+
+		const reload = created.reload();
+		await firstWait;
+		const dispose = created.dispose();
+		const status = await Promise.race([
+			dispose.then(() => "disposed"),
+			new Promise<"pending">((resolve) => setTimeout(() => resolve("pending"), 20)),
+		]);
+		expect(status).toBe("pending");
+		releaseGate?.();
+		expect(await reload).toBe("disposed");
+		await dispose;
+		expect(created.isDisposed()).toBe(true);
+	});
+
 	it("does not let a startup extension message consume the first-turn screenshot", async () => {
 		const extDir = mkdtempSync(join(tmpdir(), "cua-ext-"));
 		writeFileSync(join(extDir, "startup-msg.ts"), SEND_ON_STARTUP_EXTENSION);

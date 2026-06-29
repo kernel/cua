@@ -157,6 +157,8 @@ export class HarnessExtensionHost {
 	private reloadRequested = false;
 	/** The in-flight queued reload, so a drain can await one already running. */
 	private pendingReload: Promise<ReloadOutcome> | undefined;
+	/** Any in-flight reload (queued or manual), awaited during dispose. */
+	private activeReload: Promise<ReloadOutcome> | undefined;
 	/** Sticky shutdown request raised by `ctx.shutdown()` or owner disposal. */
 	private shutdownRequested = false;
 	/** Guards `dispose` so `ctx.shutdown()` and an owner call don't double-tear-down. */
@@ -218,21 +220,26 @@ export class HarnessExtensionHost {
 		// the supported way to re-discover extensions.
 		if (this.disposed) throw new Error("cannot load a disposed extension host");
 		if (this.loaded) return;
-		await this.buildRunner();
-		await this.reapplyTools();
-		this.installBridge();
-		await this.runner?.emit({ type: "session_start", reason: "startup" });
-		// Mark loaded only after wiring succeeds: an earlier throw leaves `loaded`
-		// false so a half-built host (no bridge or tool union) isn't mistaken for
-		// ready by a later load() call.
-		this.loaded = true;
-		// Startup is over: from here an extension sendUserMessage may carry the
-		// first-turn screenshot (it can no longer steal it from the user's first
-		// prompt, which the CLI captured before extensions loaded).
-		this.startedUp = true;
-		// An extension that calls ctx.shutdown() during session_start disposes via
-		// requestShutdown; honor it so load doesn't resolve a torn-down host as ready.
-		if (this.shutdownRequested) await this.dispose();
+		try {
+			await this.buildRunner();
+			await this.reapplyTools();
+			this.installBridge();
+			await this.runner?.emit({ type: "session_start", reason: "startup" });
+			// Mark loaded only after wiring succeeds.
+			this.loaded = true;
+			// Startup is over: from here an extension sendUserMessage may carry the
+			// first-turn screenshot (it can no longer steal it from the user's first
+			// prompt, which the CLI captured before extensions loaded).
+			this.startedUp = true;
+			// An extension that calls ctx.shutdown() during session_start disposes via
+			// requestShutdown; honor it so load doesn't resolve a torn-down host as ready.
+			if (this.shutdownRequested) await this.dispose();
+		} catch (error) {
+			// load can fail after reapply/bridge install (e.g. during session_start);
+			// tear down the partially wired host before surfacing the startup error.
+			await this.disposeNow().catch(() => {});
+			throw error;
+		}
 	}
 
 	/**
@@ -254,53 +261,61 @@ export class HarnessExtensionHost {
 			return "coalesced";
 		}
 		this.reloading = true;
-		try {
-			// Loop so a reload requested mid-reload — via the reentrancy guard above,
-			// or a write_extension during this reload — is applied before reload()
-			// resolves, instead of waiting for the next idle boundary. The latch is
-			// cleared at the top of each pass and re-checked at the bottom.
-			do {
-				this.reloadRequested = false;
-				// Don't swap the runner/bridge mid-turn: wait for the agent loop to be
-				// idle first. All callers reach here at or after an idle point (the
-				// /reload command runs between prompts; the self-extend drain is
-				// scheduled off-stack at agent_end), so this resolves promptly and
-				// cannot deadlock on an awaited-in-loop reload.
-				await this.harness.waitForIdle();
-				if (this.disposed) return "disposed";
-				const flags = this.runner?.getFlagValues() ?? new Map<string, boolean | string>();
-				await this.runner?.emit({ type: "session_shutdown", reason: "reload" });
-				if (await this.disposeIfShutdownRequested()) return "disposed";
-				this.teardownBridge?.();
-				this.teardownBridge = undefined;
-				try {
-					await this.buildRunner();
+		const run = (async (): Promise<ReloadOutcome> => {
+			try {
+				// Loop so a reload requested mid-reload — via the reentrancy guard above,
+				// or a write_extension during this reload — is applied before reload()
+				// resolves, instead of waiting for the next idle boundary. The latch is
+				// cleared at the top of each pass and re-checked at the bottom.
+				do {
+					this.reloadRequested = false;
+					// Don't swap the runner/bridge mid-turn: wait for the agent loop to be
+					// idle first. All callers reach here at or after an idle point (the
+					// /reload command runs between prompts; the self-extend drain is
+					// scheduled off-stack at agent_end), so this resolves promptly and
+					// cannot deadlock on an awaited-in-loop reload.
+					await this.harness.waitForIdle();
+					if (this.disposed) return "disposed";
+					const flags = this.runner?.getFlagValues() ?? new Map<string, boolean | string>();
+					await this.runner?.emit({ type: "session_shutdown", reason: "reload" });
 					if (await this.disposeIfShutdownRequested()) return "disposed";
-					for (const [name, value] of flags) this.runner?.setFlagValue(name, value);
+					this.teardownBridge?.();
+					this.teardownBridge = undefined;
+					try {
+						await this.buildRunner();
+						if (await this.disposeIfShutdownRequested()) return "disposed";
+						for (const [name, value] of flags) this.runner?.setFlagValue(name, value);
 
-					await this.reapplyTools();
-					if (await this.disposeIfShutdownRequested()) return "disposed";
-					this.installBridge();
-					await this.runner?.emit({ type: "session_start", reason: "reload" });
-				} catch (error) {
-					// A failed rebuild left the bridge torn down; reinstall it over the
-					// current runner so extension events keep flowing rather than going
-					// silently dark for the rest of the session.
-					if (this.runner && !this.teardownBridge) this.installBridge();
-					throw error;
-				}
-			} while (this.reloadRequested && !this.disposed);
+						await this.reapplyTools();
+						if (await this.disposeIfShutdownRequested()) return "disposed";
+						this.installBridge();
+						await this.runner?.emit({ type: "session_start", reason: "reload" });
+					} catch (error) {
+						// A failed rebuild left the bridge torn down; reinstall it over the
+						// current runner so extension events keep flowing rather than going
+						// silently dark for the rest of the session.
+						if (this.runner && !this.teardownBridge) this.installBridge();
+						throw error;
+					}
+				} while (this.reloadRequested && !this.disposed);
+			} finally {
+				this.reloading = false;
+			}
+			// Honor a shutdown requested during the final emit, after `reloading` cleared.
+			// Still inside reload() (pendingReload may point at us), so tear down via
+			// disposeNow rather than dispose to avoid awaiting our own reload.
+			if (this.shutdownRequested) {
+				await this.disposeNow();
+				return "disposed";
+			}
+			return "reloaded";
+		})();
+		this.activeReload = run;
+		try {
+			return await run;
 		} finally {
-			this.reloading = false;
+			if (this.activeReload === run) this.activeReload = undefined;
 		}
-		// Honor a shutdown requested during the final emit, after `reloading` cleared.
-		// Still inside reload() (pendingReload may point at us), so tear down via
-		// disposeNow rather than dispose to avoid awaiting our own reload.
-		if (this.shutdownRequested) {
-			await this.disposeNow();
-			return "disposed";
-		}
-		return "reloaded";
 	}
 
 	/**
@@ -322,8 +337,10 @@ export class HarnessExtensionHost {
 		// doesn't race a live reload. Shutdowns raised from inside reload() use
 		// `disposeNow` directly, since awaiting the running reload from within its own
 		// call stack would deadlock.
-		const inFlight = this.pendingReload;
-		if (inFlight) await inFlight.catch(() => {});
+		const inFlight = new Set<Promise<ReloadOutcome>>();
+		if (this.pendingReload) inFlight.add(this.pendingReload);
+		if (this.activeReload) inFlight.add(this.activeReload);
+		for (const reload of inFlight) await reload.catch(() => {});
 		await this.disposeNow();
 	}
 
@@ -345,7 +362,11 @@ export class HarnessExtensionHost {
 		// runner binding is gone. (Moot at process exit, but `ctx.shutdown()` from
 		// an extension disposes the host while the CLI keeps running.)
 		await this.removeMergedTools();
-		await this.runner?.emit({ type: "session_shutdown", reason: "quit" });
+		// A startup failure can dispose before `session_start` finished, so there is
+		// no live session to shut down yet.
+		if (this.startedUp) {
+			await this.runner?.emit({ type: "session_shutdown", reason: "quit" });
+		}
 		this.runner = undefined;
 	}
 
@@ -583,9 +604,8 @@ export class HarnessExtensionHost {
 				await writeFile(target, code, "utf8");
 
 				const trial = await this.trialLoadExtension(target);
-				this.reloadRequested = true;
-
 				const valid = trial.errors.length === 0 && trial.registeredTools.length > 0;
+				if (valid) this.reloadRequested = true;
 				const summary = valid
 					? `wrote ${target}; registered tool(s): ${trial.registeredTools.join(", ")}. it will be available on your next prompt.`
 					: `wrote ${target} but it did not load: ${

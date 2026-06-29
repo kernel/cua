@@ -213,6 +213,11 @@ describe("self-extend: runtime tool authoring", () => {
 		expect(text).toContain("did not load");
 		// The live toolset is unchanged.
 		expect(toolNames(fx.harness)).toEqual(before);
+		// Invalid authoring should not queue a full reload; the host's discover
+		// errors stay untouched unless a reload actually runs.
+		expect(host!.loadErrors).toHaveLength(0);
+		const reloadedBrokenFile = await waitFor(() => host!.loadErrors.length > 0, 200);
+		expect(reloadedBrokenFile).toBe(false);
 	});
 
 	it("makes the authored tool callable after the queued reload drains at idle", async () => {
