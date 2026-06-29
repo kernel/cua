@@ -29,8 +29,12 @@ export interface BuildTestHarnessOptions {
 	api?: string;
 }
 
+// pi-coding-agent re-resolves the model from pi-ai's registry at stream time, so
+// it drives the provider under pi-ai's *base* api for the model — not cua's routed
+// api (e.g. openai-cua-responses). The scripted provider must register under that
+// base api to intercept the call.
 const DEFAULT_API_FOR_MODEL: Record<string, string> = {
-	"openai:gpt-5.5": "openai-cua-responses",
+	"openai:gpt-5.5": "openai-responses",
 	"anthropic:claude-opus-4-7": "anthropic-messages",
 	"google:gemini-3-flash-preview": "google-generative-ai",
 };
