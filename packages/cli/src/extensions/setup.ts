@@ -38,6 +38,11 @@ export async function loadHarnessExtensions(args: {
 		initialScreenshot: args.initialScreenshot,
 		selfExtend: args.selfExtend,
 	});
-	await host.load();
-	return host;
+	try {
+		await host.load();
+		return host;
+	} catch (error) {
+		await host.dispose().catch(() => {});
+		throw error;
+	}
 }

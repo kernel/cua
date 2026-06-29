@@ -33,6 +33,24 @@ function makeToolExtension(toolName: string): string {
 	].join("\n");
 }
 
+function makeFailOnStartupExtension(toolName: string): string {
+	return [
+		"export default function (pi) {",
+		'  pi.on("session_start", (event) => {',
+		'    if (event.reason === "startup") throw new Error("startup boom");',
+		"  });",
+		"  pi.registerTool({",
+		`    name: ${JSON.stringify(toolName)},`,
+		`    label: ${JSON.stringify(toolName)},`,
+		`    description: ${JSON.stringify(toolName)},`,
+		'    parameters: { type: "object", properties: {}, additionalProperties: false },',
+		'    async execute() { return { content: [{ type: "text", text: "ok" }], details: {} }; },',
+		"  });",
+		"}",
+		"",
+	].join("\n");
+}
+
 function tempAgentDir(): string {
 	return mkdtempSync(join(tmpdir(), "cua-agentdir-"));
 }
@@ -54,6 +72,26 @@ describe("loadHarnessExtensions", () => {
 
 		expect(host).toBeDefined();
 		expect(fx.harness.getTools().map((t) => t.name)).toContain("loader_probe");
+	});
+
+	it("tears down host wiring when extension startup load fails", async () => {
+		fx = await buildTestHarness({ turns: [{ steps: [{ type: "text", text: "ok" }] }] });
+		const baseTools = fx.harness.getTools().map((t) => t.name);
+		const extDir = mkdtempSync(join(tmpdir(), "cua-ext-"));
+		writeFileSync(join(extDir, "bad-startup.ts"), makeFailOnStartupExtension("startup_probe"));
+
+		await expect(
+			loadHarnessExtensions({
+				harness: fx.harness,
+				session: fx.session,
+				cwd: fx.cwd,
+				noExtensions: false,
+				agentDir: tempAgentDir(),
+				configuredPaths: [extDir],
+			}),
+		).rejects.toThrow("startup boom");
+
+		expect(fx.harness.getTools().map((t) => t.name)).toEqual(baseTools);
 	});
 
 	it("returns undefined when extensions are disabled", async () => {
