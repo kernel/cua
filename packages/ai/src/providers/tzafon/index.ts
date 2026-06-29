@@ -12,6 +12,7 @@ export type {
 	ComputerToolsOptions,
 } from "../common";
 export {
+	buildTzafonRequestInput,
 	TZAFON_RESPONSES_API,
 	streamSimpleTzafonResponses,
 	streamTzafonResponses,
@@ -19,7 +20,7 @@ export {
 	tzafonComputerUseOnPayload,
 	tzafonToolCallId,
 } from "./provider";
-export type { TzafonCanonicalAction, TzafonResponsesOptions } from "./provider";
+export type { TzafonCanonicalAction, TzafonRequestBody, TzafonRequestOptions, TzafonResponsesOptions } from "./provider";
 
 // Provider-native action vocabulary. The model card lists supported actions;
 // the Responses API loop dispatches on `action.type` and adds terminal control

@@ -4,6 +4,7 @@ import {
 	getModel,
 	getModels,
 } from "@earendil-works/pi-ai";
+import { OPENAI_CUA_RESPONSES_API } from "./providers/openai/provider";
 
 /** Providers with curated computer-use model support. */
 export type CuaProvider = "openai" | "anthropic" | "google" | "tzafon" | "yutori";
@@ -187,10 +188,19 @@ export function getCuaModel(ref: CuaModelRef): Model<Api> {
 		throw new Error(`unsupported CUA model "${ref}"`);
 	}
 	const fromRegistry = getModel(provider as never, modelId as never) as Model<Api> | undefined;
-	if (fromRegistry) return fromRegistry;
+	if (fromRegistry) return routeCuaApi(fromRegistry);
 	const override = CUA_MODEL_OVERRIDES[provider].find((m) => m.id === modelId);
-	if (override) return override;
+	if (override) return routeCuaApi(override);
 	throw new Error(`CUA model "${ref}" is supported but not registered. Add it to pi-ai (models.dev) or CUA_MODEL_OVERRIDES.`);
+}
+
+// Route OpenAI CUA models to cua's own openai-cua-responses stream provider,
+// which threads previous_response_id. Registry-resolved models (gpt-5.4,
+// gpt-5.4-mini, gpt-5.5) otherwise carry pi-ai's builtin "openai-responses" api.
+export function routeCuaApi(model: Model<Api>): Model<Api> {
+	return model.provider === "openai" && model.api !== OPENAI_CUA_RESPONSES_API
+		? { ...model, api: OPENAI_CUA_RESPONSES_API }
+		: model;
 }
 
 /** Return the {@link CuaProvider} for a concrete model, or throw when it is not a CUA provider. */
@@ -249,7 +259,7 @@ function cuaModel(provider: CuaProvider, id: string, name: string): Model<Api> {
 
 	switch (provider) {
 		case "openai":
-			return { ...base, api: "openai-responses", baseUrl: "https://api.openai.com/v1", contextWindow: 400_000, maxTokens: 32_768 } as Model<Api>;
+			return { ...base, api: OPENAI_CUA_RESPONSES_API, baseUrl: "https://api.openai.com/v1", contextWindow: 400_000, maxTokens: 32_768 } as Model<Api>;
 		case "anthropic":
 			return { ...base, api: "anthropic-messages", baseUrl: "https://api.anthropic.com", contextWindow: 200_000, maxTokens: 64_000 } as Model<Api>;
 		case "google":

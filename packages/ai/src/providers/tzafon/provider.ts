@@ -4,6 +4,7 @@ import {
 	type AssistantMessage,
 	type Context,
 	type ImageContent,
+	type Message,
 	type Model,
 	type SimpleStreamOptions,
 	type StreamFunction,
@@ -13,7 +14,16 @@ import {
 	type ToolCall,
 } from "@earendil-works/pi-ai";
 import Lightcone from "@tzafon/lightcone";
-import { canonicalToolCallArguments, canonicalToolCallName, CUA_ACTION_TYPES, type CuaAction, type CuaPayloadContext } from "../common";
+import {
+	canonicalToolCallArguments,
+	canonicalToolCallName,
+	CUA_ACTION_TYPES,
+	responseThreadingDelta,
+	responseThreadingEnabled,
+	type CuaAction,
+	type CuaPayloadContext,
+	type ResponseThreadingOptions,
+} from "../common";
 
 export const TZAFON_RESPONSES_API = "tzafon-responses";
 const TZAFON_COMPUTER_USE_TOOL = {
@@ -25,9 +35,50 @@ const TZAFON_COMPUTER_USE_TOOL = {
 const TZAFON_LOCAL_ACTION_TOOL_NAMES = new Set<string>(CUA_ACTION_TYPES);
 
 /** Stream options accepted by {@link streamTzafonResponses}. */
-export interface TzafonResponsesOptions extends StreamOptions {
+export interface TzafonResponsesOptions extends StreamOptions, ResponseThreadingOptions {
 	/** Tool names to keep in the outbound payload even though they collide with local CUA action tool names. */
 	keepToolNames?: readonly string[];
+}
+
+/** Inputs {@link buildTzafonRequestInput} reads to shape the Responses API request body. */
+export interface TzafonRequestOptions extends ResponseThreadingOptions {
+	temperature?: number;
+	maxTokens?: number;
+}
+
+/** Responses API request body for {@link Lightcone.responses.create}, including optional threading fields. */
+export interface TzafonRequestBody {
+	model: string;
+	input: Array<Record<string, unknown>>;
+	tools: Array<Record<string, unknown>>;
+	instructions?: string;
+	temperature: number;
+	max_output_tokens?: number;
+	previous_response_id?: string;
+	store?: boolean;
+}
+
+/**
+ * Build the Tzafon Responses API request body from a context.
+ *
+ * Pure and network-free. When response threading is enabled and a prior
+ * assistant `responseId` exists, the body chains via `previous_response_id`
+ * with `store: true` and sends only the delta messages; otherwise it replays
+ * the full message history.
+ */
+export function buildTzafonRequestInput(model: Model<Api>, context: Context, options?: TzafonRequestOptions): TzafonRequestBody {
+	const body: TzafonRequestBody = {
+		model: model.id,
+		input: convertMessages(context.messages),
+		tools: convertTools(context.tools ?? []),
+		instructions: context.systemPrompt,
+		temperature: options?.temperature ?? 0,
+		max_output_tokens: options?.maxTokens ?? model.maxTokens,
+	};
+	if (!responseThreadingEnabled(options)) return body;
+	const { previousResponseId, deltaMessages } = responseThreadingDelta(context.messages);
+	if (!previousResponseId) return body;
+	return { ...body, input: convertMessages(deltaMessages), previous_response_id: previousResponseId, store: true };
 }
 
 export const streamSimpleTzafonResponses: StreamFunction<typeof TZAFON_RESPONSES_API, SimpleStreamOptions> = (model, context, options) => {
@@ -43,14 +94,7 @@ export const streamTzafonResponses: StreamFunction<typeof TZAFON_RESPONSES_API, 
 			const apiKey = options?.apiKey || process.env.TZAFON_API_KEY;
 			if (!apiKey) throw new Error(`No API key for provider: ${model.provider}`);
 			const client = new Lightcone({ apiKey });
-			const payload = {
-				model: model.id,
-				input: convertContextMessages(context),
-				tools: convertTools(context.tools ?? []),
-				instructions: context.systemPrompt,
-				temperature: options?.temperature ?? 0,
-				max_output_tokens: options?.maxTokens ?? model.maxTokens,
-			};
+			const payload = buildTzafonRequestInput(model as Model<Api>, context, options);
 			const tzafonPayload = tzafonComputerUseOnPayload(payload, model as Model<Api>, {
 				keepToolNames: [...keepToolNamesFromContext(context), ...(options?.keepToolNames ?? [])],
 			});
@@ -292,9 +336,9 @@ function readToolName(tool: unknown): string | undefined {
 	return getString(fn, "name");
 }
 
-function convertContextMessages(context: Context): Array<Record<string, unknown>> {
+function convertMessages(messages: readonly Message[]): Array<Record<string, unknown>> {
 	const items: Array<Record<string, unknown>> = [];
-	for (const message of context.messages) {
+	for (const message of messages) {
 		if (message.role === "user") {
 			items.push({ role: "user", content: convertUserContent(message.content) });
 			continue;

@@ -223,7 +223,7 @@ describe("CuaAgent", () => {
 
 		await agent.prompt("hello");
 
-		expect(payloads).toEqual([{ payload: { provider: "openai", store: true }, userHook: true }]);
+		expect(payloads).toEqual([{ payload: { provider: "openai" }, userHook: true }]);
 	});
 
 	it("uses yutori runtime hooks to append screenshots while stripping local executor tools", async () => {

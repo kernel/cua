@@ -40,7 +40,7 @@ describe("buildCuaHarness", () => {
 	});
 
 	it("composes the cua-ai default system prompt with the skill block", async () => {
-		provider = registerScriptedProvider("openai-responses", [
+		provider = registerScriptedProvider("openai-cua-responses", [
 			{ steps: [{ type: "text", text: "ok" }] },
 		]);
 		const cwd = mkdtempSync(join(tmpdir(), "cua-cli-harness-"));
@@ -75,7 +75,7 @@ describe("buildCuaHarness", () => {
 	});
 
 	it("injects loaded context files into the system prompt", async () => {
-		provider = registerScriptedProvider("openai-responses", [
+		provider = registerScriptedProvider("openai-cua-responses", [
 			{ steps: [{ type: "text", text: "ok" }] },
 		]);
 		const cwd = mkdtempSync(join(tmpdir(), "cua-cli-harness-"));
@@ -102,7 +102,7 @@ describe("buildCuaHarness", () => {
 	});
 
 	it("delivers the first prompt with an image attached via harness.prompt({ images })", async () => {
-		provider = registerScriptedProvider("openai-responses", [
+		provider = registerScriptedProvider("openai-cua-responses", [
 			{ steps: [{ type: "text", text: "done" }] },
 		]);
 

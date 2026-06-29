@@ -6,6 +6,7 @@ import {
 	formatCuaModelRef,
 	getCuaModel,
 	listCuaModels,
+	openai,
 	parseCuaModelRef,
 } from "../src/index";
 
@@ -54,6 +55,15 @@ describe("CUA model refs", () => {
 	it("loads supported custom provider models without explicit registration", () => {
 		expect(getCuaModel("tzafon:tzafon.northstar-cua-fast").api).toBe("tzafon-responses");
 		expect(getCuaModel("yutori:n1.5-latest").api).toBe("yutori-chat-completions");
+	});
+
+	it("routes OpenAI CUA models to the threading-aware openai-cua-responses api", () => {
+		// gpt-5.5 resolves from pi-ai's registry (carrying its builtin
+		// "openai-responses" api) while gpt-5.5-2026-04-23 is a local override;
+		// both must be routed to cua's own previous_response_id-threading provider.
+		expect(getCuaModel("openai:gpt-5.5").api).toBe(openai.OPENAI_CUA_RESPONSES_API);
+		expect(getCuaModel("openai:gpt-5.5-2026-04-23").api).toBe(openai.OPENAI_CUA_RESPONSES_API);
+		expect(getCuaModel("openai:gpt-5.4-mini").api).toBe(openai.OPENAI_CUA_RESPONSES_API);
 	});
 
 	it("rejects supported model IDs that are not in pi-ai or overrides", () => {
