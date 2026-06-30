@@ -136,6 +136,10 @@ class CuaRuntimeController {
 		this.translator = this.createTranslator();
 	}
 
+	setPlaywright(enabled: boolean): void {
+		this.options.playwright = enabled;
+	}
+
 	tools(): AgentTool[] {
 		return [
 			...buildCuaComputerTools(
@@ -312,6 +316,16 @@ export class CuaAgent extends Agent {
 			state.systemPrompt = this.runtime.systemPrompt;
 		}
 	}
+
+	/**
+	 * Toggle the `playwright_execute` tool mid-session. Refreshes
+	 * `state.tools` so the next turn sees the updated set.
+	 */
+	setPlaywright(enabled: boolean): void {
+		this.runtime.setPlaywright(enabled);
+		this.runtimeDirty = true;
+		super.state.tools = this.runtime.tools();
+	}
 }
 
 /**
@@ -389,6 +403,16 @@ export class CuaAgentHarness<
 	override async setActiveTools(toolNames: string[]): Promise<void> {
 		await super.setActiveTools(toolNames);
 		this.requestedActiveToolNames = [...toolNames];
+	}
+
+	/**
+	 * Toggle the `playwright_execute` tool mid-session. Re-resolves the CUA
+	 * tool set and pushes it through `setTools` so the next turn sees it.
+	 */
+	async setPlaywright(enabled: boolean): Promise<void> {
+		this.runtime.setPlaywright(enabled);
+		const tools = this.runtime.tools();
+		await super.setTools(tools, this.requestedActiveToolNames ?? tools.map((tool) => tool.name));
 	}
 }
 
