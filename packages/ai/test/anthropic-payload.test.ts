@@ -17,10 +17,27 @@ describe("anthropicAdaptiveThinkingOnPayload", () => {
 		});
 	});
 
-	it("leaves older Anthropic CUA models unchanged", () => {
+	it("converts adaptive-thinking Anthropic CUA models", () => {
 		const payload = { thinking: { type: "enabled", budget_tokens: 8_192 } };
 
-		expect(anthropicAdaptiveThinkingOnPayload(payload, getCuaModel("anthropic:claude-sonnet-4-6"))).toBeUndefined();
+		for (const ref of [
+			"anthropic:claude-sonnet-5",
+			"anthropic:claude-sonnet-4-6",
+			"anthropic:claude-opus-4-8",
+			"anthropic:claude-opus-4-7",
+			"anthropic:claude-fable-5",
+		] as const) {
+			expect(anthropicAdaptiveThinkingOnPayload(payload, getCuaModel(ref))).toMatchObject({
+				thinking: { type: "adaptive" },
+				output_config: { effort: "medium" },
+			});
+		}
+	});
+
+	it("leaves older manual-thinking Anthropic CUA models unchanged", () => {
+		const payload = { thinking: { type: "enabled", budget_tokens: 8_192 } };
+
+		expect(anthropicAdaptiveThinkingOnPayload(payload, getCuaModel("anthropic:claude-sonnet-4-5"))).toBeUndefined();
 	});
 
 	it("maps old budget levels to supported Sonnet 5 effort levels", () => {

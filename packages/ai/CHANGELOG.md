@@ -2,7 +2,7 @@
 
 ## 0.3.4 - 2026-06-30
 
-- Adapt `claude-sonnet-5` requests to Anthropic's adaptive thinking payload format.
+- Adapt newer Anthropic models to the adaptive thinking payload format, including `claude-sonnet-5`, `claude-opus-4-8`, and `claude-opus-4-7`.
 
 ## 0.3.3 - 2026-06-30
 
