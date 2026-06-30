@@ -34,6 +34,7 @@ Family matches (root + numeric revision/dated-snapshot suffixes):
 - `claude-3-7-sonnet`
 - `claude-opus-4`
 - `claude-sonnet-4`
+- `claude-sonnet-5`
 - `claude-haiku-4`
 - `claude-fable-5`
 
