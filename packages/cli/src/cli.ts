@@ -35,7 +35,7 @@ Options:
                                  match exactly one entry in \`cua models\`.
                                  Recommended:
                                    openai:    openai:gpt-5.5
-                                   anthropic: anthropic:claude-opus-4-7
+                                   anthropic: anthropic:claude-opus-4-8
                                    google:    google:gemini-3-flash-preview
                                    tzafon:    tzafon:tzafon.northstar-cua-fast
                                    yutori:    yutori:n1.5-latest
@@ -47,6 +47,9 @@ Options:
       --max-steps <n>            Max turns for action subcommands (default 3)
       --playwright               Add the playwright_execute tool so the model can run
                                  Playwright code against the browser session
+      --self-extend              Allow the agent to author its own tools at runtime;
+                                 an authored tool joins the toolset at the next idle
+                                 boundary (no manual reload)
       --out <file|->             Output file for screenshot subcommand
   -o, --output <fmt>             Output format for --print: text (default) | jsonl
       --jsonl-include-deltas     Include assistant_text_delta events (default off)
@@ -65,6 +68,9 @@ Options:
                                  <cwd>/.agents/skills/, the pi agent dir
                                  (~/.pi/agent/), and pi-installed packages.
   -ns, --no-skills               Disable skill discovery entirely
+      --no-extensions            Disable pi extensions, which otherwise load from
+                                 <cwd>/.agents/extensions, <cwd>/.pi/extensions,
+                                 and the pi agent dir (~/.pi/agent/extensions/)
       --debug-tui                Enable TUI render diagnostics for manual repros
   -v, --verbose                  Verbose progress output to stderr
   -h, --help                     Show this help
@@ -97,10 +103,12 @@ interface CliFlags {
 	resumePicker: boolean;
 	noSession: boolean;
 	noSkills: boolean;
+	noExtensions: boolean;
 	debugTui: boolean;
 	jsonlIncludeDeltas: boolean;
 	jsonlIncludeImages: boolean;
 	playwright: boolean;
+	selfExtend: boolean;
 	model?: string;
 	thinking?: string;
 	browserProfile?: string;
@@ -145,11 +153,13 @@ function parseCliArgs(argv: string[]): CliFlags {
 				"no-session": { type: "boolean", default: false },
 				skill: { type: "string", multiple: true, default: [] },
 				"no-skills": { type: "boolean", default: false },
+				"no-extensions": { type: "boolean", default: false },
 				"debug-tui": { type: "boolean", default: false },
 				output: { type: "string", short: "o" },
 				"jsonl-include-deltas": { type: "boolean", default: false },
 				"jsonl-include-images": { type: "boolean", default: false },
 				playwright: { type: "boolean", default: false },
+				"self-extend": { type: "boolean", default: false },
 			},
 			allowPositionals: true,
 			strict: true,
@@ -181,6 +191,7 @@ function parseCliArgs(argv: string[]): CliFlags {
 		resumePicker: !!parsed.values.resume,
 		noSession: !!parsed.values["no-session"],
 		noSkills: !!parsed.values["no-skills"],
+		noExtensions: !!parsed.values["no-extensions"],
 		debugTui: !!parsed.values["debug-tui"],
 		model: parsed.values.model as string | undefined,
 		thinking: parsed.values.thinking as string | undefined,
@@ -197,6 +208,7 @@ function parseCliArgs(argv: string[]): CliFlags {
 		jsonlIncludeDeltas: !!parsed.values["jsonl-include-deltas"],
 		jsonlIncludeImages: !!parsed.values["jsonl-include-images"],
 		playwright: !!parsed.values.playwright,
+		selfExtend: !!parsed.values["self-extend"],
 		positionals: parsed.positionals,
 	};
 }
@@ -209,10 +221,12 @@ function toHarnessFlags(flags: CliFlags): HarnessCliFlags {
 		resumePicker: flags.resumePicker,
 		noSession: flags.noSession,
 		noSkills: flags.noSkills,
+		noExtensions: flags.noExtensions,
 		debugTui: flags.debugTui,
 		jsonlIncludeDeltas: flags.jsonlIncludeDeltas,
 		jsonlIncludeImages: flags.jsonlIncludeImages,
 		playwright: flags.playwright,
+		selfExtend: flags.selfExtend,
 		model: flags.model,
 		thinking: flags.thinking,
 		browserProfile: flags.browserProfile,
