@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.3 - 2026-06-30
+
+- Add computer-use support for the `claude-sonnet-5` Anthropic model.
+
 ## 0.3.2 - 2026-06-24
 
 - Add computer-use support for the `gemini-3.5-flash` Google model.
