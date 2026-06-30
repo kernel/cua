@@ -1,4 +1,5 @@
-import type { ComputerToolCoordinateSystem, CuaProviderModule } from "../common";
+import type { Api, Model } from "@earendil-works/pi-ai";
+import type { ComputerToolCoordinateSystem, CuaPayloadHook, CuaProviderModule } from "../common";
 import { computerToolExecutors, computerTools } from "./actions";
 
 export {
@@ -27,9 +28,40 @@ export function buildAnthropicSystemPrompt(opts: { suffix?: string } = {}): stri
 	return [ANTHROPIC_COMPUTER_INSTRUCTIONS, opts.suffix].filter(Boolean).join("\n\n");
 }
 
+export const anthropicAdaptiveThinkingOnPayload: CuaPayloadHook = (payload, model) => {
+	if (!isAdaptiveThinkingModel(model)) return undefined;
+	if (!isRecord(payload)) return undefined;
+	const thinking = payload.thinking;
+	if (!isRecord(thinking) || thinking.type !== "enabled") return undefined;
+
+	const next = { ...payload };
+	next.thinking = { type: "adaptive" };
+	const outputConfig = isRecord(payload.output_config) ? { ...payload.output_config } : {};
+	outputConfig.effort = effortFromBudgetTokens(thinking.budget_tokens);
+	next.output_config = outputConfig;
+	return next;
+};
+
+function isAdaptiveThinkingModel(model: Model<Api>): boolean {
+	return model.provider === "anthropic" && model.id.toLowerCase().startsWith("claude-sonnet-5");
+}
+
+function effortFromBudgetTokens(budgetTokens: unknown): "low" | "medium" | "high" | "xhigh" {
+	if (typeof budgetTokens !== "number" || !Number.isFinite(budgetTokens)) return "high";
+	if (budgetTokens <= 4_096) return "low";
+	if (budgetTokens <= 8_192) return "medium";
+	if (budgetTokens <= 20_000) return "high";
+	return "xhigh";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 export const providerModule = {
 	toolDefinitions: computerTools,
 	toolExecutors: computerToolExecutors,
 	coordinateSystem,
 	buildSystemPrompt: buildAnthropicSystemPrompt,
+	onPayload: anthropicAdaptiveThinkingOnPayload,
 } satisfies CuaProviderModule;

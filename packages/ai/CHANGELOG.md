@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.4 - 2026-06-30
+
+- Adapt `claude-sonnet-5` requests to Anthropic's adaptive thinking payload format.
+
 ## 0.3.3 - 2026-06-30
 
 - Add computer-use support for the `claude-sonnet-5` Anthropic model.

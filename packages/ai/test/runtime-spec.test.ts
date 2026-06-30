@@ -38,10 +38,11 @@ describe("resolveCuaRuntimeSpec", () => {
 		const anthropicSpec = resolveCuaRuntimeSpec("anthropic:claude-opus-4-7");
 		expect(yutoriSpec.onPayload).toBeTypeOf("function");
 		expect(tzafonSpec.onPayload).toBeTypeOf("function");
-		// OpenAI and Anthropic need no payload middleware: openai-cua-responses
-		// sets store:true in its own request builder.
+		// OpenAI needs no payload middleware: openai-cua-responses sets store:true
+		// in its own request builder. Anthropic uses middleware to adapt newer
+		// adaptive-thinking models without changing callers.
 		expect(openaiSpec.onPayload).toBeUndefined();
-		expect(anthropicSpec.onPayload).toBeUndefined();
+		expect(anthropicSpec.onPayload).toBeTypeOf("function");
 	});
 
 	it("routes a concrete OpenAI Model input (not just a string ref) to openai-cua-responses", () => {
