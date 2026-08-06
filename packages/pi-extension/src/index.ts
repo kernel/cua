@@ -133,7 +133,9 @@ export default function cuaPiExtension(pi: ExtensionAPI): void {
 	});
 
 	pi.on("session_start", async (_event, ctx) => {
-		await runtime?.close();
+		const priorRuntime = runtime;
+		await priorRuntime?.close();
+		if (runtime === priorRuntime) runtime = undefined;
 		const flags = readFlags(pi);
 		selection = flags.selection;
 		browserOptions = flags.browserOptions;
@@ -141,7 +143,6 @@ export default function cuaPiExtension(pi: ExtensionAPI): void {
 		if (saved) selection = parseSelection(saved.selectors.join(","), saved.coordinates);
 		configureDeclarations();
 		installTools();
-		runtime = undefined;
 		initialized = false;
 		forcedInactive = false;
 		reconcile(ctx, true);
