@@ -48,7 +48,7 @@ export interface CuaSelection {
 	coordinates: Coordinates;
 }
 
-export const DEFAULT_VIEWPORT = Object.freeze({ width: 1920, height: 1080 });
+export const DEFAULT_VIEWPORT: Readonly<{ width: number; height: number }> = Object.freeze({ width: 1920, height: 1080 });
 
 const generalTools = Object.freeze({
 	browser_snapshot: () => cua.tools.browser.snapshot(),
