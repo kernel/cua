@@ -1,12 +1,10 @@
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createCuaModels, type CuaToolSpec } from "@onkernel/cua-ai";
-import { allSelectableSpecs, compileSpecs, expandSelection, parseSelection, type CuaSelection } from "./catalog";
+import { allSelectableSpecs, compileSpecs, DEFAULT_VIEWPORT, expandSelection, parseSelection, type CuaSelection } from "./catalog";
 import { CuaBrowserRuntime, type BrowserOptions } from "./browser-runtime";
 import { CONFIG_ENTRY, restoreConfig, type PersistedConfig } from "./state";
 import { statusText } from "./render";
-
-const VIEWPORT = { width: 1920, height: 1080 };
 
 export default function cuaPiExtension(pi: ExtensionAPI): void {
 	pi.registerFlag("cua-tools", { type: "string", description: "Comma-separated explicit CUA tool selectors" });
@@ -58,11 +56,23 @@ export default function cuaPiExtension(pi: ExtensionAPI): void {
 	function ensureRuntime(): CuaBrowserRuntime {
 		return (runtime ??= new CuaBrowserRuntime(browserOptions));
 	}
-	function currentSpecs(): CuaToolSpec[] {
-		return expandSelection(selection);
+	function currentSpecs(viewport = DEFAULT_VIEWPORT): CuaToolSpec[] {
+		return expandSelection(selection, viewport);
 	}
-	function activeSpecs(): CuaToolSpec[] {
-		return currentSpecs().filter((spec) => activeNames.has(spec.name));
+	function activeSpecs(viewport = DEFAULT_VIEWPORT): CuaToolSpec[] {
+		return currentSpecs(viewport).filter((spec) => activeNames.has(spec.name));
+	}
+	function hasAnthropicNativeComputer(specs: readonly CuaToolSpec[]): boolean {
+		return specs.some((spec) => spec.name === "computer" && spec.providerBinding?.kind === "anthropic-native");
+	}
+	async function compilationViewport(specs: readonly CuaToolSpec[]): Promise<{ width: number; height: number }> {
+		if (!hasAnthropicNativeComputer(specs)) return DEFAULT_VIEWPORT;
+		try {
+			const resources = await ensureRuntime().get();
+			return resources.viewport;
+		} catch {
+			return DEFAULT_VIEWPORT;
+		}
 	}
 	function persistCommandSelection(): void {
 		const state: PersistedConfig = {
@@ -89,7 +99,7 @@ export default function cuaPiExtension(pi: ExtensionAPI): void {
 				compileSpecs(
 					ctx.model,
 					specs.filter((spec) => desired.includes(spec.name)),
-					VIEWPORT,
+					DEFAULT_VIEWPORT,
 				);
 			compatibilityError = undefined;
 			forcedInactive = false;
@@ -152,7 +162,7 @@ export default function cuaPiExtension(pi: ExtensionAPI): void {
 	pi.on("before_agent_start", (_event, ctx) => reconcile(ctx));
 	pi.on("before_provider_headers", (event, ctx) => {
 		if (!activeNames.size || compatibilityError || !ctx.model) return;
-		const catalog = compileSpecs(ctx.model, activeSpecs(), VIEWPORT);
+		const catalog = compileSpecs(ctx.model, activeSpecs(), DEFAULT_VIEWPORT);
 		Object.assign(event.headers, catalog.headers.merge(event.headers));
 	});
 	pi.on("before_provider_request", async (event, ctx) => {
@@ -163,7 +173,8 @@ export default function cuaPiExtension(pi: ExtensionAPI): void {
 			// a catalog after pi has already built a payload for the turn.
 			return currentSpecs().length ? withoutCuaToolSchemas(event.payload, allSpecs) : undefined;
 		}
-		return compileSpecs(ctx.model, activeSpecs(), VIEWPORT).payload.apply(event.payload, ctx.model);
+		const viewport = await compilationViewport(activeSpecs());
+		return compileSpecs(ctx.model, activeSpecs(viewport), viewport).payload.apply(event.payload, ctx.model);
 	});
 	pi.on("tool_call", (event) => {
 		if (!allSpecs.has(event.toolName)) return;
