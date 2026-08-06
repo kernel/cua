@@ -40,7 +40,7 @@ export default function cuaPiExtension(pi: ExtensionAPI): void {
 			if (conflict && conflict.sourceInfo.path !== extensionPath) {
 				throw new Error(`cannot register CUA tool "${name}": already owned by ${conflict.sourceInfo.source}`);
 			}
-			if (conflict) continue;
+			// Re-register our own names so restored coordinate mode updates declarations.
 			pi.registerTool({
 				name: spec.name,
 				label: spec.name,
@@ -132,7 +132,9 @@ export default function cuaPiExtension(pi: ExtensionAPI): void {
 		},
 	});
 
-	pi.on("session_start", (_event, ctx) => {
+	pi.on("session_start", async (_event, ctx) => {
+		await runtime?.close();
+		runtime = undefined;
 		const flags = readFlags(pi);
 		selection = flags.selection;
 		browserOptions = flags.browserOptions;
@@ -140,7 +142,6 @@ export default function cuaPiExtension(pi: ExtensionAPI): void {
 		if (saved) selection = parseSelection(saved.selectors.join(","), saved.coordinates);
 		configureDeclarations();
 		installTools();
-		runtime = undefined;
 		initialized = false;
 		forcedInactive = false;
 		reconcile(ctx, true);
@@ -218,13 +219,28 @@ function positiveSeconds(value: string | undefined): number {
 function withoutCuaToolSchemas(payload: unknown, cuaSpecs: ReadonlyMap<string, CuaToolSpec>): unknown {
 	if (!payload || typeof payload !== "object" || !Array.isArray((payload as { tools?: unknown }).tools)) return payload;
 	const typed = payload as { tools: unknown[] };
+	const tools: unknown[] = [];
+	for (const tool of typed.tools) {
+		if (tool && typeof tool === "object" && Array.isArray((tool as { functionDeclarations?: unknown[] }).functionDeclarations)) {
+			const functionDeclarations = (tool as { functionDeclarations: unknown[] }).functionDeclarations.filter((declaration) => {
+				const name = serializedToolName(declaration);
+				return typeof name !== "string" || !cuaSpecs.has(name);
+			});
+			if (functionDeclarations.length > 0) tools.push({ ...tool, functionDeclarations });
+			continue;
+		}
+		const name = serializedToolName(tool);
+		if (typeof name !== "string" || !cuaSpecs.has(name)) tools.push(tool);
+	}
 	return {
 		...typed,
-		tools: typed.tools.filter((tool) => {
-			if (!tool || typeof tool !== "object") return true;
-			const candidate = tool as { name?: unknown; function?: { name?: unknown } };
-			const name = typeof candidate.name === "string" ? candidate.name : candidate.function?.name;
-			return typeof name !== "string" || !cuaSpecs.has(name);
-		}),
+		tools,
 	};
+}
+
+function serializedToolName(tool: unknown): string | undefined {
+	if (!tool || typeof tool !== "object") return undefined;
+	const candidate = tool as { name?: unknown; function?: { name?: unknown } };
+	if (typeof candidate.name === "string") return candidate.name;
+	return typeof candidate.function?.name === "string" ? candidate.function.name : undefined;
 }
